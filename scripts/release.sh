@@ -6,6 +6,9 @@
 #   make release VERSION=v1.1.0                   # 根模块升到指定版本
 #   make release MODULES="transport/http=v1.2.0"  # 指定子模块版本
 #   make release DRY_RUN=1                        # 只打印,不执行
+#
+# 兼容性:仅使用 bash 3.2 语法(macOS 自带 /bin/bash),不用关联数组(declare -A)
+# 与 readarray(均为 bash 4+ 特性);模块→版本映射用 "mod=ver" 多行文本 + awk 实现。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,6 +26,11 @@ fail() {
   exit 1
 }
 
+# 从 "mod=ver" 多行文本中按模块名取版本;未命中输出空。
+ver_of() {
+  awk -v m="$1" -F= '$1 == m { print $2; exit }' <<<"$2"
+}
+
 # --- 预检:干净工作区 + 在分支上。所有预检都在任何仓库变更之前,失败不留痕迹 ---
 if [ -n "$(git status --porcelain)" ]; then
   fail "工作区有未提交的改动,请先 commit 或 stash"
@@ -35,15 +43,15 @@ fi
 # --- 已知模块列表(与 detect-changed-modules.sh 的归属规则一致) ---
 KNOWN_MODS="$( { find . -name go.mod -not -path './go.mod' | sed 's|^\./||; s|/go\.mod$||' | sort; echo .; } )"
 
-# --- 解析 MODULES="path=v1.2.0 ..." 覆盖 ---
-declare -A OVERRIDE=()
+# --- 解析 MODULES="path=v1.2.0 ..." 覆盖,存为 "mod=ver" 多行文本 ---
+OVERRIDE=""
 for pair in $MODULES; do
   mod="${pair%%=*}"
   ver="${pair#*=}"
   [ "$mod" != "$pair" ] || fail "MODULES 项 \"$pair\" 缺少 =版本,应为 path=v1.2.0"
   [[ "$ver" =~ $SEMVER_RE ]] || fail "MODULES 版本 \"$ver\" 不是合法 semver(应为 vX.Y.Z)"
   grep -Fqx "$mod" <<<"$KNOWN_MODS" || fail "MODULES 路径 \"$mod\" 不是已知模块"
-  OVERRIDE["$mod"]="$ver"
+  OVERRIDE="${OVERRIDE}${mod}=${ver}"$'\n'
 done
 if [ -n "$VERSION" ]; then
   [[ "$VERSION" =~ $SEMVER_RE ]] || fail "VERSION \"$VERSION\" 不是合法 semver(应为 vX.Y.Z)"
@@ -66,40 +74,46 @@ next_version() {
   fi
 }
 
-# --- 检测变更模块并计算版本 ---
+# --- 检测变更模块并计算版本,存为 "mod=ver" 多行文本 ---
 changed="$(./scripts/detect-changed-modules.sh)"
 
-declare -A RELEASE=()
+RELEASE=""
 for mod in $changed; do
   [ -z "$mod" ] && continue
-  if [ -n "${OVERRIDE[$mod]:-}" ]; then
-    RELEASE["$mod"]="${OVERRIDE[$mod]}"
-  else
-    RELEASE["$mod"]="$(next_version "$mod")"
+  ver="$(ver_of "$mod" "$OVERRIDE")"
+  if [ -z "$ver" ]; then
+    ver="$(next_version "$mod")"
   fi
+  RELEASE="${RELEASE}${mod}=${ver}"$'\n'
 done
 
-if [ "${#RELEASE[@]}" -eq 0 ]; then
+if [ -z "$RELEASE" ]; then
   echo "nothing to release: 自上次发布以来没有模块内容变更" >&2
   exit 1
 fi
 
 # 根模块版本:VERSION 优先于 MODULES 覆盖;根模块无变更时忽略 VERSION
-if [ -n "${RELEASE[.]:-}" ] && [ -n "$VERSION" ]; then
-  RELEASE["."]="$VERSION"
-elif [ -z "${RELEASE[.]:-}" ] && [ -n "$VERSION" ]; then
+root_ver="$(ver_of "." "$RELEASE")"
+if [ -n "$root_ver" ] && [ -n "$VERSION" ]; then
+  RELEASE="$(printf '%s\n' "$RELEASE" | awk -F= -v v="$VERSION" '$1 == "." { print $1"="v; next } { print }')"
+elif [ -z "$root_ver" ] && [ -n "$VERSION" ]; then
   echo "note: VERSION=$VERSION 指定了根模块版本,但根模块本次无变更,已忽略" >&2
 fi
+root_ver="$(ver_of "." "$RELEASE")"
 
-# 关联数组无序,先排序
-readarray -t keys < <(printf '%s\n' "${!RELEASE[@]}" | sort)
+# 排序后的模块名列表(索引数组)
+keys=()
+while IFS= read -r k; do
+  [ -n "$k" ] && keys+=("$k")
+done < <(printf '%s\n' "$RELEASE" | sed 's|=.*$||' | sort)
 
 # --- 预检:目标 tag 不能已存在(防止二次发布把版本跳过) ---
 for k in "${keys[@]}"; do
+  ver="$(ver_of "$k" "$RELEASE")"
   if [ "$k" = "." ]; then
-    t="${RELEASE[$k]}"
+    t="$ver"
   else
-    t="$k/${RELEASE[$k]}"
+    t="$k/$ver"
   fi
   if git rev-parse -q --verify "refs/tags/$t" >/dev/null; then
     fail "tag $t 已存在,请确认版本号(如需重发请先删掉该 tag)"
@@ -109,10 +123,11 @@ done
 # --- 组装提交信息 ---
 parts=()
 for k in "${keys[@]}"; do
+  ver="$(ver_of "$k" "$RELEASE")"
   if [ "$k" = "." ]; then
-    parts+=("root ${RELEASE[$k]}")
+    parts+=("root ${ver}")
   else
-    parts+=("${k} ${RELEASE[$k]}")
+    parts+=("${k} ${ver}")
   fi
 done
 joined="$(IFS=,; echo "${parts[*]}")"
@@ -128,7 +143,7 @@ CREATED_TAGS=()
 COMMITTED=0
 cleanup() {
   local code=$?
-  if [ "$COMMITTED" = 1 ]; then
+  if [ "$COMMITTED" = "1" ]; then
     git reset --hard -q HEAD~1 || true
   fi
   if [ "${#CREATED_TAGS[@]}" -gt 0 ]; then
@@ -147,8 +162,8 @@ for k in "${keys[@]}"; do
 done
 if [ "${#submods[@]}" -gt 0 ]; then
   # 优先用本次根发布的新版本;否则对齐当前最新根 tag
-  if [ -n "${RELEASE[.]:-}" ]; then
-    root_version="${RELEASE[.]}"
+  if [ -n "$root_ver" ]; then
+    root_version="$root_ver"
   else
     root_version="$(git tag -l 'v[0-9]*' | sort -V | tail -1)"
   fi
@@ -165,14 +180,15 @@ if [ -n "$(git diff --cached --name-only)" ]; then
 fi
 
 for k in "${keys[@]}"; do
+  ver="$(ver_of "$k" "$RELEASE")"
   if [ "$k" = "." ]; then
-    git tag "${RELEASE[$k]}"
-    CREATED_TAGS+=("${RELEASE[$k]}")
-    echo "tagged: ${RELEASE[$k]}"
+    git tag "$ver"
+    CREATED_TAGS+=("$ver")
+    echo "tagged: $ver"
   else
-    git tag "$k/${RELEASE[$k]}"
-    CREATED_TAGS+=("$k/${RELEASE[$k]}")
-    echo "tagged: $k/${RELEASE[$k]}"
+    git tag "$k/$ver"
+    CREATED_TAGS+=("$k/$ver")
+    echo "tagged: $k/$ver"
   fi
 done
 
