@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+// UserService holds the per-user business RPCs that the generic rest/v3
+// CRUD on sys_users cannot express: profile read/update, password change /
+// admin reset, avatar URL, and the permission-derived menus/permission
+// codes the SPA needs to render the side bar and the per-button guards.
+//
+// Caller identity is taken from the JWT claims in ctx (see
+// middleware/auth); requests intentionally do NOT carry target_uid for
+// self-targeted RPCs.
+service UserService {
+
+  rpc Profile(google.protobuf.Empty) returns (UserProfile) {
+    option (google.api.http) = {
+      get: "/user/profile"
+    };
+  }
+
+  rpc UpdateProfile(UpdateProfileRequest) returns (UserProfile) {
+    option (google.api.http) = {
+      patch: "/user/profile"
+      body : "*"
+    };
+  }
+
+  rpc ChangePassword(ChangePasswordRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/user/change-password"
+      body: "*"
+    };
+  }
+
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse) {
+    option (google.api.http) = {
+      post: "/user/reset-password"
+      body: "*"
+    };
+  }
+
+  rpc SetAvatarByURL(SetAvatarByURLRequest) returns (SetAvatarByURLResponse) {
+    option (google.api.http) = {
+      post: "/user/set-avatar"
+      body: "*"
+    };
+  }
+
+  rpc ListVisibleMenus(google.protobuf.Empty) returns (ListVisibleMenusResponse) {
+    option (google.api.http) = {
+      get: "/user/menus"
+    };
+  }
+
+  rpc ListPermissionCodes(google.protobuf.Empty) returns (ListPermissionCodesResponse) {
+    option (google.api.http) = {
+      get: "/user/permissions"
+    };
+  }
+}
+
+// ---------- profile ----------
+
+// UserProfile is the flattened wire view of the caller's sys_users row.
+// role is the Role.Key, dept_id the owning department.
+message UserProfile {
+  string uid         = 1;
+  string username    = 2;
+  string email       = 3;
+  string gender      = 4;
+  string description = 5;
+  string avatar      = 6;
+  string role        = 7;
+  int64  dept_id     = 8;
+}
+
+// UpdateProfileRequest is a partial update of the caller's profile:
+// username/email/gender are applied only when non-empty; description is
+// always applied (send "" to clear it).
+message UpdateProfileRequest {
+  string username    = 1;
+  string email       = 2;
+  string gender      = 3;
+  string description = 4;
+}
+
+// ---------- password / avatar ----------
+
+// ChangePasswordRequest changes the caller's own password; old_password
+// must match the current one.
+message ChangePasswordRequest {
+  string old_password = 1;
+  string new_password = 2;
+}
+
+// ResetPasswordRequest resets another user's password (admin-only:
+// the caller's role must be a super-admin role).
+message ResetPasswordRequest {
+  string target_uid   = 1;
+  string new_password = 2;
+}
+
+// ResetPasswordResponse echoes the uid whose password was reset.
+message ResetPasswordResponse {
+  string target_uid = 1;
+}
+
+// SetAvatarByURLRequest stores an avatar URL for the caller. The URL
+// must be non-empty and fit models.User.Avatar (size 1024).
+message SetAvatarByURLRequest {
+  string avatar_url = 1;
+}
+
+// SetAvatarByURLResponse echoes the stored avatar URL.
+message SetAvatarByURLResponse {
+  string avatar_url = 1;
+}
+
+// ---------- menus / permissions ----------
+
+// MenuEntry is intentionally flat: the frontend reconstructs the tree from
+// parent so a single RPC returns the whole visible subtree. parent mirrors
+// models.Menu.Parent (string name, not numeric FK). title is duplicated
+// from name for the common case where a frontend wants a display label
+// without re-mapping the row.
+//
+// view_path is the auto-derived "@/views/<module>/<singular-table>/Index.vue"
+// populated by Server.fillDerivedSpec at Setup time.  Empty means the
+// operator has not provided one and the frontend should fall back to its
+// own static mapping table for legacy components.
+message MenuEntry {
+  string name      = 1;
+  string component = 2;
+  string uri       = 3;
+  string parent    = 4;
+  string icon      = 5;
+  bool   public    = 6;
+  bool   hidden    = 7;
+  string view_path = 8;
+}
+
+// ListVisibleMenusResponse is the flat list of menus visible to the
+// caller's role (see MenuEntry); the frontend rebuilds the tree.
+message ListVisibleMenusResponse {
+  int64              total_count = 1;
+  repeated MenuEntry menus       = 2;
+}
+
+// ListPermissionCodesResponse carries the API permission codes
+// (Permission.Data) granted to the caller's role.
+message ListPermissionCodesResponse {
+  int64           total_count = 1;
+  repeated string permissions = 2;
+}

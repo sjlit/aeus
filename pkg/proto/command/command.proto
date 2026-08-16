@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/command";
+
+message CommandOptions {
+  string path        = 1;
+  string description = 2;
+}
+
+// Extend MethodOptions to add a custom 'command' option to RPC methods.
+extend google.protobuf.MethodOptions {
+  // The 'command' option will be a string.
+  // Choose a field number in the reserved range (50000-99999) to avoid conflicts.
+  optional CommandOptions command = 50001;
+}

@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+// TenantService holds the tenant-scoped business RPCs that the generic
+// rest/v3 CRUD on sys_tenants cannot express: the global tenant
+// dropdown and the per-tenant info read.  Tenant rows are global (the
+// model carries no tenant_id column), so every RPC here is
+// cross-tenant by design; access control is the caller's
+// responsibility (see admin/README.md).
+service TenantService {
+
+  // Global tenant dropdown.  Wire format: GET /tenant/options.
+  rpc ListTenantOptions(google.protobuf.Empty) returns (ListTenantOptionsResponse) {
+    option (google.api.http) = {
+      get: "/tenant/options"
+    };
+  }
+
+  // Tenant info by id, for UI display.  Wire format:
+  // GET /tenant/detail?id={id}.
+  rpc Tenant(TenantRequest) returns (TenantInfo) {
+    option (google.api.http) = {
+      get: "/tenant/detail"
+    };
+  }
+}
+
+message TenantRequest {
+  string id = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+}
+
+// TenantInfo is the stable wire shape of one tenant row.
+message TenantInfo {
+  string id     = 1;
+  string name   = 2;
+  string status = 3;
+  int64  created_at = 4;
+}
+
+// TenantOption is one (id, name) pair for dropdowns.
+message TenantOption {
+  string id   = 1;
+  string name = 2;
+}
+
+message ListTenantOptionsResponse {
+  repeated TenantOption items = 1;
+}

@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+import "permission.proto";
+import "user.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+service RoleService {
+
+  // Wire format: GET /role/permissions?role={role}[&type={0|1|2}].
+  // type UNSPECIFIED(0, default) returns the combined {menus, apis};
+  // MENU(1) returns menus only; API(2) returns apis only.  Absorbed
+  // PermissionService.ListRolePermissions (2026-08-10).
+  rpc RolePermissions(RolePermissionsRequest) returns (RolePermissionsResponse) {
+    option (google.api.http) = {
+      get: "/role/permissions"
+    };
+  }
+
+  // body: "*" — role travels in the JSON body; transport/http's
+  // non-GET bind is body-only (gin), a ?role= query would be ignored.
+  rpc ReplaceRolePermissions(ReplaceRolePermissionsRequest) returns (ReplaceRolePermissionsResponse) {
+    option (google.api.http) = {
+      put: "/role/permissions"
+      body: "*"
+    };
+  }
+
+  // Role dropdown options.  Wire format: GET /role/options.
+  rpc ListRoleOptions(google.protobuf.Empty) returns (ListRoleOptionsResponse) {
+    option (google.api.http) = {
+      get: "/role/options"
+    };
+  }
+
+  // Visible menus for a specific role (admin preview).
+  // Wire format: GET /role/menus?role={role}.
+  // Moved from MenuService.ListVisibleMenusByRole (2026-08-10) so every
+  // role-scoped endpoint lives under /role/*.
+  rpc RoleMenus(RoleMenusRequest) returns (ListVisibleMenusResponse) {
+    option (google.api.http) = {
+      get: "/role/menus"
+    };
+  }
+}
+
+// RolePermissionsRequest selects the role whose permissions are
+// read; type picks which side(s) to return (see RoleService).
+message RolePermissionsRequest {
+  string         role = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+  // UNSPECIFIED (default) = combined; MENU / API return only that side.
+  PermissionType type = 2;
+}
+
+// RolePermissionsResponse carries the role's menus (Menu.Component
+// values) and apis (Permission.Data values); only the side selected by
+// type is populated.
+message RolePermissionsResponse {
+  repeated string menus = 1;
+  repeated string apis  = 2;
+}
+
+// ReplaceRolePermissionsRequest fully replaces a role's permission
+// set. menus are Menu.Component values (sized 120), apis are catalog
+// Permission.Data values (sized 60) — see the field rules.
+message ReplaceRolePermissionsRequest {
+  string          role  = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+  // menus are Menu.Component values, which are sized 120 in the model;
+  // max_len must match (apis are catalog Permission.Data, sized 60).
+  repeated string menus = 2 [(validate.rules).repeated = {max_items: 1024, items: {string: {min_len: 1, max_len: 120}}}];
+  repeated string apis  = 3 [(validate.rules).repeated = {max_items: 1024, items: {string: {min_len: 1, max_len: 60}}}];
+}
+
+// ReplaceRolePermissionsResponse echoes the role and reports the
+// number of granted permissions (len(menus) + len(apis)).
+message ReplaceRolePermissionsResponse {
+  string role    = 1;
+  int32  affected = 2;
+}
+
+// ListRoleOptionsResponse carries role dropdown options (key → name),
+// sorted by role code.
+message ListRoleOptionsResponse {
+  repeated OptionEntry items = 1;
+}
+
+// OptionEntry is a generic value/label option pair.
+message OptionEntry {
+  string value = 1;
+  string label = 2;
+}
+
+// RoleMenusRequest selects the role whose visible menus to preview
+// (admin preview).
+message RoleMenusRequest {
+  string role = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+}
+
+// ListVisibleMenusResponse is reused from user.proto (same package pb) —
+// redefining it here would collide with protoc.

@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - .
+          - transport/http
+          - transport/grpc
+          - transport/cli
+          - registry/etcd
+          - infra/cache/redis
+          - infra/broker/nats
+          - infra/telemetry/otel
+          - infra/telemetry/prometheus
+          - middleware/auth
+    # etcd/nats 子模块的集成测试在本地无服务时会 t.Skip,这里用容器把
+    # 服务拉起来,配合就绪轮询让测试真正执行(避免 CI 假绿)。
+    # 注意:
+    #   - 不依赖容器内 healthcheck 工具(nc/etcdctl),改由 runner 侧轮询端口,
+    #     避免 nats 默认镜像(scratch 无 shell)healthcheck 永远失败导致 job 失败
+    #   - etcd 默认只监听容器内 loopback,端口映射到宿主会连不上,必须监听 0.0.0.0
+    services:
+      etcd:
+        image: quay.io/coreos/etcd:v3.5.18
+        ports:
+          - 2379:2379
+        env:
+          ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+          ETCD_ADVERTISE_CLIENT_URLS: http://127.0.0.1:2379
+      nats:
+        image: nats:2.11-alpine
+        ports:
+          - 4222:4222
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: "**/go.sum"
+      - name: 等待依赖服务就绪
+        if: matrix.module == 'registry/etcd' || matrix.module == 'infra/broker/nats'
+        run: |
+          if [ "${{ matrix.module }}" = "registry/etcd" ]; then
+            port=2379
+          else
+            port=4222
+          fi
+          for i in $(seq 1 30); do
+            if (echo > "/dev/tcp/127.0.0.1/${port}") 2>/dev/null; then
+              echo "service ready: 127.0.0.1:${port}"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "error: 等待 127.0.0.1:${port} 就绪超时(60s)" >&2
+          exit 1
+      - name: 校验 gofmt
+        working-directory: ${{ matrix.module }}
+        run: |
+          unformatted="$(gofmt -l $(find . -name '*.go'))"
+          if [ -n "$unformatted" ]; then
+            echo "以下文件未按 gofmt 格式化:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: 测试
+        working-directory: ${{ matrix.module }}
+        run: go test -race -count=1 ./...
+      - name: 静态检查
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...

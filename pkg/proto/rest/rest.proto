@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/rest";
+
+extend google.protobuf.FieldOptions {
+    // ormable will cause orm code to be generated for this field
+  RestFieldOptions field = 52118;
+}
+
+message RestFieldOptions {
+  string gorm            = 1;
+  string comment         = 2;
+  string scenarios       = 3;
+  string position        = 4;
+  string format          = 5;
+  string props           = 6;
+  string rule            = 7;
+  string live            = 8;
+  string dropdown        = 9;
+  string enum            = 10;
+  string match           = 11;
+  string invisible       = 12;
+  string tooltip         = 13;
+  string uploaduri       = 14;
+  string description     = 15;
+  string readonly        = 16;
+  string endofnow        = 17;
+  string condition       = 18;
+  string timesearchrange = 19;
+  string label           = 20;
+}
+
+extend google.protobuf.MessageOptions {
+    // ormable will cause orm code to be generated for this message/object
+  RestMessageOptions rest = 52119;
+}
+
+message RestMessageOptions {
+  string          table     = 1;
+  string          module    = 3;
+  repeated string scenarios = 4;
+}

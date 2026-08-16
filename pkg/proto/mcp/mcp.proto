@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/mcp";
+
+extend google.protobuf.MethodOptions {
+  McpMessageOptions mcp = 52120;
+}
+
+message McpMessageOptions {
+  string name        = 1;
+  string title       = 2;
+  string description = 3;
+}

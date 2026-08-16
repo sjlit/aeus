@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+// PermissionService exposes the global permission catalog
+// (sys_permissions).
+service PermissionService {
+
+  // Lists the global permission catalog (sys_permissions), optionally
+  // filtered by type.
+  // Wire format: GET /permission/catalog?type={0|1|2|3|4}.
+  rpc ListCatalog(ListCatalogRequest) returns (ListCatalogResponse) {
+    option (google.api.http) = {
+      get: "/permission/catalog"
+    };
+  }
+}
+
+// PermissionType discriminates the permission catalog entries and the
+// role-permission queries.
+enum PermissionType {
+  PERMISSION_TYPE_UNSPECIFIED = 0;
+  PERMISSION_TYPE_MENU         = 1;
+  PERMISSION_TYPE_API          = 2;
+  // Catalog types (see models.PermissionType).  Appended in 2026-08-07;
+  // wire-safe: existing values 0-2 are unchanged.
+  PERMISSION_TYPE_BUTTON       = 3;
+  PERMISSION_TYPE_DATA_SCOPE   = 4;
+}
+
+// ListCatalogRequest optionally filters the catalog by type;
+// UNSPECIFIED (default) returns every entry.
+message ListCatalogRequest {
+  PermissionType type = 1;
+}
+
+// ListCatalogResponse carries the catalog entries as permission codes
+// (Permission.Data), one string per entry.
+message ListCatalogResponse {
+  repeated string items = 1;
+}

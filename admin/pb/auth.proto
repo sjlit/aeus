@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+// LoginRequest carries the credentials for a password login. username
+// may be either the account's uid or its username (the lookup matches
+// both).
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+// LoginResponse returns the issued token pair and the identity of the
+// authenticated account. expires is the access-token TTL in seconds
+// (default 2h; refresh tokens live 48h).
+//
+// tenant_id / tenant_name expose the caller's tenant for UI display
+// (MVP is single-tenant per integration spec §1.6 — the field is
+// populated but the UI does not show a switcher yet).
+message LoginResponse {
+  string uid           = 1;
+  string username      = 2;
+  int64  expires       = 3;
+  string access_token  = 4;
+  string refresh_token = 5;
+  string tenant_id     = 6;
+  string tenant_name   = 7;
+}
+
+// RefreshTokenRequest carries the refresh token to exchange for a fresh
+// access token. The refresh token itself is NOT rotated.
+message RefreshTokenRequest{
+  string refresh_token = 1;
+}
+
+// RefreshTokenResponse mirrors LoginResponse in shape; the server
+// populates uid, expires and access_token only.
+message RefreshTokenResponse{
+  string uid           = 1;
+  string username      = 2;
+  int64  expires       = 3;
+  string access_token  = 4;
+  string refresh_token = 5;
+}
+
+// LogoutRequest carries the access token to revoke. The token is
+// deleted from the TokenStore so it can no longer be used; AuthService
+// defaults to an in-memory store unless the application overrides it.
+message LogoutRequest {
+  string access_token = 1;
+}
+
+// LogoutResponse acknowledges the logout and echoes the uid of the
+// revoked session.
+message LogoutResponse{
+  string uid = 1;
+}
+
+// AuthService implements the login lifecycle: password login, refresh
+// token exchange, and logout (token revocation).
+service AuthService {
+
+  // Authenticates uid/username + password and issues an access token
+  // (TTL default 2h) plus a refresh token (48h).
+  // Wire format: POST /auth/login.
+  rpc Login(LoginRequest) returns (LoginResponse) {
+    option (google.api.http) = {
+      post: "/auth/login"
+      body: "*"
+    };
+  }
+
+  // Exchanges a valid refresh token for a fresh access token without
+  // rotating the refresh token.
+  // Wire format: POST /auth/refresh-token.
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
+    option (google.api.http) = {
+      post: "/auth/refresh-token"
+      body: "*"
+    };
+  }
+
+  // Revokes the access token in the TokenStore and returns the uid of
+  // the ended session.
+  // Wire format: POST /auth/logout.
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/auth/logout"
+      body: "*"
+    };
+  }
+
+}

@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package pb;
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "github.com/sjlit/aeus/admin/pb;pb";
+
+// MenuService exposes the admin menu manager's read endpoints.
+service MenuService {
+
+  // Full menu tree of all menus, including hidden and public ones; the
+  // admin menu manager's read endpoint.
+  // Wire format: GET /menu/tree.
+  rpc MenuTree(google.protobuf.Empty) returns (MenuTreeResponse) {
+    option (google.api.http) = {
+      get: "/menu/tree"
+    };
+  }
+
+  // Menu cascader options (value = Menu.Component, usable directly as
+  // Menu.Parent).  Wire format: GET /menu/options.
+  rpc MenuOptions(google.protobuf.Empty) returns (MenuOptionsResponse) {
+    option (google.api.http) = {
+      get: "/menu/options"
+    };
+  }
+
+  // Breadcrumb: the Component chain from the node to the root.
+  // Wire format: GET /menu/breadcrumb?id={id} — transport/http's ctx.Bind
+  // binds the id from the query string. The annotation deliberately
+  // omits the query part: protoc-gen-go-aeus emits the template
+  // verbatim and gin treats "?" as a literal path char (dead route).
+  rpc MenuBreadcrumb(MenuBreadcrumbRequest) returns (MenuBreadcrumbResponse) {
+    option (google.api.http) = {
+      get: "/menu/breadcrumb"
+    };
+  }
+}
+
+// MenuTreeResponse carries the root-level MenuNode items; children
+// nest the full tree.
+message MenuTreeResponse {
+  repeated MenuNode items = 1;
+}
+
+// MenuNode is one menu row plus its children. component mirrors
+// models.Menu.Component (also what Menu.Parent references); hidden and
+// public mirror the row flags.
+message MenuNode {
+  string           name      = 1;
+  string           title     = 2;
+  string           component = 3;
+  string           uri       = 4;
+  string           icon      = 5;
+  bool             hidden    = 6;
+  bool             public    = 7;
+  repeated MenuNode children = 8;
+}
+
+// MenuOptionsResponse carries cascader options; value is the
+// Menu.Component, usable directly as Menu.Parent (see MenuOptions).
+message MenuOptionsResponse {
+  repeated OptionNode items = 1;
+}
+
+// OptionNode is one cascader tier: value = Menu.Component,
+// label = Menu.Name, parent = the parent's Component.
+message OptionNode {
+  string            value    = 1;
+  string            label    = 2;
+  string            parent   = 3;
+  repeated OptionNode children = 4;
+}
+
+// MenuBreadcrumbRequest selects the menu whose Component chain to
+// the root is returned.
+message MenuBreadcrumbRequest {
+  uint32 id = 1 [(validate.rules).uint32 = {gte: 1}];
+}
+
+// MenuBreadcrumbResponse carries the Component chain from the node
+// to the root.
+message MenuBreadcrumbResponse {
+  // Component chain to root (breadcrumb). Field name kept for wire
+  // stability; "path" here is the component chain, not Menu.uri.
+  repeated string path = 1;
+}

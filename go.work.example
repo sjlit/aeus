@@ -1,0 +1,14 @@
+go 1.25.0
+
+use (
+	.
+	./transport/http
+	./transport/grpc
+	./transport/cli
+	./registry/etcd
+	./infra/cache/redis
+	./infra/broker/nats
+	./infra/telemetry/otel
+	./infra/telemetry/prometheus
+	./admin
+)
