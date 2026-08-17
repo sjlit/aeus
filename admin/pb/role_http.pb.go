@@ -8,18 +8,34 @@ import (
 	"github.com/sjlit/aeus/transport/http"
 )
 
+// RoleService owns every role-scoped endpoint.  The generic rest/v3 CRUD
+// on sys_roles covers create/update/delete/list, so this service stays
+// narrow: read/replace a role's permission grants, dropdown options for
+// the role picker, and admin preview of a role's visible menu tree.
+//
+// History: RolePermissions absorbed PermissionService.ListRolePermissions
+// and RoleMenus absorbed MenuService.ListVisibleMenusByRole (both
+// 2026-08-10) — every role-scoped endpoint now lives under /role/*.
 type RoleServiceHttpServer interface {
+	// Returns a role's permission grants (Menu.Component values in menus,
+	// Permission.Data values in apis).  type UNSPECIFIED(0, default)
+	// returns the combined {menus, apis}; MENU(1) returns menus only;
+	// API(2) returns apis only.
 	// Wire format: GET /role/permissions?role={role}[&type={0|1|2}].
-	// type UNSPECIFIED(0, default) returns the combined {menus, apis};
-	// MENU(1) returns menus only; API(2) returns apis only.  Absorbed
-	// PermissionService.ListRolePermissions (2026-08-10).
+	// Absorbed PermissionService.ListRolePermissions (2026-08-10).
 	RolePermissions(ctx context.Context, req *RolePermissionsRequest) (res *RolePermissionsResponse, err error)
+	// Fully replaces a role's permission set (see ReplaceRolePermissionsRequest):
+	// existing rows for menus+apis are deleted and the new set is inserted
+	// in a single transaction.
+	// Wire format: PUT /role/permissions with JSON body.
 	// body: "*" — role travels in the JSON body; transport/http's
 	// non-GET bind is body-only (gin), a ?role= query would be ignored.
 	ReplaceRolePermissions(ctx context.Context, req *ReplaceRolePermissionsRequest) (res *ReplaceRolePermissionsResponse, err error)
-	// Role dropdown options.  Wire format: GET /role/options.
+	// Role dropdown options (key → name) for the role picker.
+	// Wire format: GET /role/options.
 	ListRoleOptions(ctx context.Context, req *Empty) (res *ListRoleOptionsResponse, err error)
-	// Visible menus for a specific role (admin preview).
+	// Visible menus for a specific role (admin preview — what the side
+	// bar would look like for any role, not just the caller's).
 	// Wire format: GET /role/menus?role={role}.
 	// Moved from MenuService.ListVisibleMenusByRole (2026-08-10) so every
 	// role-scoped endpoint lives under /role/*.
@@ -27,13 +43,13 @@ type RoleServiceHttpServer interface {
 }
 
 // RoleService server wrapper
-type roleServiceServerWrapper struct {
+type RoleServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server RoleServiceHttpServer
 }
 
-func (s *roleServiceServerWrapper) wrapHttpRoleServiceRolePermissions(ctx *http.Context) (err error) {
+func (s *RoleServiceServerWrapper) wrapHttpRoleServiceRolePermissions(ctx *http.Context) (err error) {
 	req := &RolePermissionsRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -49,7 +65,7 @@ func (s *roleServiceServerWrapper) wrapHttpRoleServiceRolePermissions(ctx *http.
 	}
 }
 
-func (s *roleServiceServerWrapper) wrapHttpRoleServiceReplaceRolePermissions(ctx *http.Context) (err error) {
+func (s *RoleServiceServerWrapper) wrapHttpRoleServiceReplaceRolePermissions(ctx *http.Context) (err error) {
 	req := &ReplaceRolePermissionsRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -65,7 +81,7 @@ func (s *roleServiceServerWrapper) wrapHttpRoleServiceReplaceRolePermissions(ctx
 	}
 }
 
-func (s *roleServiceServerWrapper) wrapHttpRoleServiceListRoleOptions(ctx *http.Context) (err error) {
+func (s *RoleServiceServerWrapper) wrapHttpRoleServiceListRoleOptions(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.ListRoleOptions(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -78,7 +94,7 @@ func (s *roleServiceServerWrapper) wrapHttpRoleServiceListRoleOptions(ctx *http.
 	}
 }
 
-func (s *roleServiceServerWrapper) wrapHttpRoleServiceRoleMenus(ctx *http.Context) (err error) {
+func (s *RoleServiceServerWrapper) wrapHttpRoleServiceRoleMenus(ctx *http.Context) (err error) {
 	req := &RoleMenusRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -94,7 +110,7 @@ func (s *roleServiceServerWrapper) wrapHttpRoleServiceRoleMenus(ctx *http.Contex
 	}
 }
 func RegisterRoleServiceRouter(hs *http.Server, s RoleServiceHttpServer, opts ...http.RouteOption) {
-	is := &roleServiceServerWrapper{http: hs, server: s}
+	is := &RoleServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register RoleService.RolePermissions http handler
 	hs.GET("/role/permissions", is.wrapHttpRoleServiceRolePermissions)

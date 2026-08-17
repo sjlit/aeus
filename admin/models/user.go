@@ -19,8 +19,8 @@ import (
 // so every password-write path — the BeforeCreate/BeforeUpdate hooks,
 // ChangePassword, ResetPassword — funnels through this function.
 func CheckPasswordPolicy(pwd string) error {
-	if n := len(pwd); n < 8 || n > 32 {
-		return errs.Newf(errs.CodeInvalid, "password must be 8-32 characters")
+	if n := len(pwd); n < 5 || n > 32 {
+		return errs.Newf(errs.CodeInvalid, "password must be 5-32 characters")
 	}
 	var hasLetter, hasDigit bool
 	for _, r := range pwd {

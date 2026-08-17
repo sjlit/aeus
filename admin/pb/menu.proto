@@ -50,14 +50,14 @@ message MenuTreeResponse {
 // models.Menu.Component (also what Menu.Parent references); hidden and
 // public mirror the row flags.
 message MenuNode {
-  string           name      = 1;
-  string           title     = 2;
-  string           component = 3;
-  string           uri       = 4;
-  string           icon      = 5;
-  bool             hidden    = 6;
-  bool             public    = 7;
-  repeated MenuNode children = 8;
+  string            name      = 1;
+  string            title     = 2;
+  string            component = 3;
+  string            uri       = 4;
+  string            icon      = 5;
+  bool              hidden    = 6;
+  bool              public    = 7;
+  repeated MenuNode children  = 8;
 }
 
 // MenuOptionsResponse carries cascader options; value is the
@@ -69,9 +69,9 @@ message MenuOptionsResponse {
 // OptionNode is one cascader tier: value = Menu.Component,
 // label = Menu.Name, parent = the parent's Component.
 message OptionNode {
-  string            value    = 1;
-  string            label    = 2;
-  string            parent   = 3;
+  string              value    = 1;
+  string              label    = 2;
+  string              parent   = 3;
   repeated OptionNode children = 4;
 }
 

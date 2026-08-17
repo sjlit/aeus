@@ -23,13 +23,13 @@ type TenantServiceHttpServer interface {
 }
 
 // TenantService server wrapper
-type tenantServiceServerWrapper struct {
+type TenantServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server TenantServiceHttpServer
 }
 
-func (s *tenantServiceServerWrapper) wrapHttpTenantServiceListTenantOptions(ctx *http.Context) (err error) {
+func (s *TenantServiceServerWrapper) wrapHttpTenantServiceListTenantOptions(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.ListTenantOptions(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -42,7 +42,7 @@ func (s *tenantServiceServerWrapper) wrapHttpTenantServiceListTenantOptions(ctx 
 	}
 }
 
-func (s *tenantServiceServerWrapper) wrapHttpTenantServiceTenant(ctx *http.Context) (err error) {
+func (s *TenantServiceServerWrapper) wrapHttpTenantServiceTenant(ctx *http.Context) (err error) {
 	req := &TenantRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -58,7 +58,7 @@ func (s *tenantServiceServerWrapper) wrapHttpTenantServiceTenant(ctx *http.Conte
 	}
 }
 func RegisterTenantServiceRouter(hs *http.Server, s TenantServiceHttpServer, opts ...http.RouteOption) {
-	is := &tenantServiceServerWrapper{http: hs, server: s}
+	is := &TenantServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register TenantService.ListTenantOptions http handler
 	hs.GET("/tenant/options", is.wrapHttpTenantServiceListTenantOptions)

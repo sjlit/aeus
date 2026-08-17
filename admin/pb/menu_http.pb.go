@@ -26,13 +26,13 @@ type MenuServiceHttpServer interface {
 }
 
 // MenuService server wrapper
-type menuServiceServerWrapper struct {
+type MenuServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server MenuServiceHttpServer
 }
 
-func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuTree(ctx *http.Context) (err error) {
+func (s *MenuServiceServerWrapper) wrapHttpMenuServiceMenuTree(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.MenuTree(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -45,7 +45,7 @@ func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuTree(ctx *http.Context
 	}
 }
 
-func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuOptions(ctx *http.Context) (err error) {
+func (s *MenuServiceServerWrapper) wrapHttpMenuServiceMenuOptions(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.MenuOptions(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -58,7 +58,7 @@ func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuOptions(ctx *http.Cont
 	}
 }
 
-func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuBreadcrumb(ctx *http.Context) (err error) {
+func (s *MenuServiceServerWrapper) wrapHttpMenuServiceMenuBreadcrumb(ctx *http.Context) (err error) {
 	req := &MenuBreadcrumbRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -74,7 +74,7 @@ func (s *menuServiceServerWrapper) wrapHttpMenuServiceMenuBreadcrumb(ctx *http.C
 	}
 }
 func RegisterMenuServiceRouter(hs *http.Server, s MenuServiceHttpServer, opts ...http.RouteOption) {
-	is := &menuServiceServerWrapper{http: hs, server: s}
+	is := &MenuServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register MenuService.MenuTree http handler
 	hs.GET("/menu/tree", is.wrapHttpMenuServiceMenuTree)

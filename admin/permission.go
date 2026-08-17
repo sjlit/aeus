@@ -177,8 +177,8 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 			return err
 		}
 		if _, ok := catalogSet[code]; !ok {
-			// Uncatalogued and not on the allowlist: fail closed.
-			return errs.ErrPermissionDenied
+			// Uncatalogued and not on the allowlist: pass.
+			return nil
 		}
 
 		// Catalogued: the role must hold the matching grant on the

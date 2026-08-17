@@ -26,15 +26,24 @@ const (
 // UserProfile is the flattened wire view of the caller's sys_users row.
 // role is the Role.Key, dept_id the owning department.
 type UserProfile struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
-	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	Gender        string                 `protobuf:"bytes,4,opt,name=gender,proto3" json:"gender,omitempty"`
-	Description   string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
-	Avatar        string                 `protobuf:"bytes,6,opt,name=avatar,proto3" json:"avatar,omitempty"`
-	Role          string                 `protobuf:"bytes,7,opt,name=role,proto3" json:"role,omitempty"`
-	DeptId        int64                  `protobuf:"varint,8,opt,name=dept_id,json=deptId,proto3" json:"dept_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Stable user identifier (mirrors models.User.UID).
+	Uid string `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	// Login name (mirrors models.User.Username).
+	Username string `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	// Email address (mirrors models.User.Email).
+	Email string `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	// Gender label as stored on the row (e.g. "M"/"F"/"U"); not enumerated.
+	Gender string `protobuf:"bytes,4,opt,name=gender,proto3" json:"gender,omitempty"`
+	// Free-form bio / description; empty string means "not set".
+	Description string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	// Avatar URL (see SetAvatarByURL); empty means no avatar.
+	Avatar string `protobuf:"bytes,6,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	// Role.Key of the caller's role (e.g. "super", "admin"); look it up
+	// in the role catalog to resolve a friendly label.
+	Role string `protobuf:"bytes,7,opt,name=role,proto3" json:"role,omitempty"`
+	// Owning department id (mirrors models.User.DeptID).
+	DeptId        int64 `protobuf:"varint,8,opt,name=dept_id,json=deptId,proto3" json:"dept_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -129,11 +138,15 @@ func (x *UserProfile) GetDeptId() int64 {
 // username/email/gender are applied only when non-empty; description is
 // always applied (send "" to clear it).
 type UpdateProfileRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
-	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	Gender        string                 `protobuf:"bytes,3,opt,name=gender,proto3" json:"gender,omitempty"`
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// New username; empty keeps the current value.
+	Username string `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	// New email; empty keeps the current value.
+	Email string `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	// New gender; empty keeps the current value.
+	Gender string `protobuf:"bytes,3,opt,name=gender,proto3" json:"gender,omitempty"`
+	// New description; always applied — send "" to clear it.
+	Description   string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -199,9 +212,11 @@ func (x *UpdateProfileRequest) GetDescription() string {
 // ChangePasswordRequest changes the caller's own password; old_password
 // must match the current one.
 type ChangePasswordRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OldPassword   string                 `protobuf:"bytes,1,opt,name=old_password,json=oldPassword,proto3" json:"old_password,omitempty"`
-	NewPassword   string                 `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Current password (must match the stored hash).
+	OldPassword string `protobuf:"bytes,1,opt,name=old_password,json=oldPassword,proto3" json:"old_password,omitempty"`
+	// New password (will be re-hashed on the server).
+	NewPassword   string `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -253,9 +268,11 @@ func (x *ChangePasswordRequest) GetNewPassword() string {
 // ResetPasswordRequest resets another user's password (admin-only:
 // the caller's role must be a super-admin role).
 type ResetPasswordRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TargetUid     string                 `protobuf:"bytes,1,opt,name=target_uid,json=targetUid,proto3" json:"target_uid,omitempty"`
-	NewPassword   string                 `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UID whose password is being reset (mirrors models.User.UID).
+	TargetUid string `protobuf:"bytes,1,opt,name=target_uid,json=targetUid,proto3" json:"target_uid,omitempty"`
+	// New password to apply (will be re-hashed on the server).
+	NewPassword   string `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -306,8 +323,9 @@ func (x *ResetPasswordRequest) GetNewPassword() string {
 
 // ResetPasswordResponse echoes the uid whose password was reset.
 type ResetPasswordResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TargetUid     string                 `protobuf:"bytes,1,opt,name=target_uid,json=targetUid,proto3" json:"target_uid,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// UID whose password was reset; mirrors the request's target_uid.
+	TargetUid     string `protobuf:"bytes,1,opt,name=target_uid,json=targetUid,proto3" json:"target_uid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -352,8 +370,10 @@ func (x *ResetPasswordResponse) GetTargetUid() string {
 // SetAvatarByURLRequest stores an avatar URL for the caller. The URL
 // must be non-empty and fit models.User.Avatar (size 1024).
 type SetAvatarByURLRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AvatarUrl     string                 `protobuf:"bytes,1,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Absolute URL of the avatar; server-side validated against
+	// models.User.Avatar (size 1024).
+	AvatarUrl     string `protobuf:"bytes,1,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -397,8 +417,9 @@ func (x *SetAvatarByURLRequest) GetAvatarUrl() string {
 
 // SetAvatarByURLResponse echoes the stored avatar URL.
 type SetAvatarByURLResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AvatarUrl     string                 `protobuf:"bytes,1,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The avatar URL that was stored; mirrors UserProfile.avatar.
+	AvatarUrl     string `protobuf:"bytes,1,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -451,15 +472,29 @@ func (x *SetAvatarByURLResponse) GetAvatarUrl() string {
 // operator has not provided one and the frontend should fall back to its
 // own static mapping table for legacy components.
 type MenuEntry struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Component     string                 `protobuf:"bytes,2,opt,name=component,proto3" json:"component,omitempty"`
-	Uri           string                 `protobuf:"bytes,3,opt,name=uri,proto3" json:"uri,omitempty"`
-	Parent        string                 `protobuf:"bytes,4,opt,name=parent,proto3" json:"parent,omitempty"`
-	Icon          string                 `protobuf:"bytes,5,opt,name=icon,proto3" json:"icon,omitempty"`
-	Public        bool                   `protobuf:"varint,6,opt,name=public,proto3" json:"public,omitempty"`
-	Hidden        bool                   `protobuf:"varint,7,opt,name=hidden,proto3" json:"hidden,omitempty"`
-	ViewPath      string                 `protobuf:"bytes,8,opt,name=view_path,json=viewPath,proto3" json:"view_path,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Menu.Name (mirrors models.Menu.Name); also the parent reference.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Menu.Component (mirrors models.Menu.Component); the unique slug
+	// used as Menu.Parent in the catalog.
+	Component string `protobuf:"bytes,2,opt,name=component,proto3" json:"component,omitempty"`
+	// Menu.URI (mirrors models.Menu.URI); the route/path the menu links to.
+	Uri string `protobuf:"bytes,3,opt,name=uri,proto3" json:"uri,omitempty"`
+	// Parent menu's Menu.Name (mirrors models.Menu.Parent); empty for
+	// root-level menus.
+	Parent string `protobuf:"bytes,4,opt,name=parent,proto3" json:"parent,omitempty"`
+	// Menu.Icon (mirrors models.Menu.Icon); frontend-specific icon hint.
+	Icon string `protobuf:"bytes,5,opt,name=icon,proto3" json:"icon,omitempty"`
+	// Menu.Public (mirrors models.Menu.Public); true when the menu is
+	// visible without authentication.
+	Public bool `protobuf:"varint,6,opt,name=public,proto3" json:"public,omitempty"`
+	// Menu.Hidden (mirrors models.Menu.Hidden); true when the menu exists
+	// in the tree but should be hidden in the side bar.
+	Hidden bool `protobuf:"varint,7,opt,name=hidden,proto3" json:"hidden,omitempty"`
+	// Auto-derived SPA view path (see message-level comment). Empty
+	// means the operator has not provided one — fall back to the
+	// frontend's static mapping table for legacy components.
+	ViewPath      string `protobuf:"bytes,8,opt,name=view_path,json=viewPath,proto3" json:"view_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -553,9 +588,12 @@ func (x *MenuEntry) GetViewPath() string {
 // ListVisibleMenusResponse is the flat list of menus visible to the
 // caller's role (see MenuEntry); the frontend rebuilds the tree.
 type ListVisibleMenusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TotalCount    int64                  `protobuf:"varint,1,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
-	Menus         []*MenuEntry           `protobuf:"bytes,2,rep,name=menus,proto3" json:"menus,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Number of menu entries returned (len(menus)); convenience for the
+	// SPA so it doesn't have to count the slice.
+	TotalCount int64 `protobuf:"varint,1,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	// Flat list of menus; the frontend rebuilds the tree from parent.
+	Menus         []*MenuEntry `protobuf:"bytes,2,rep,name=menus,proto3" json:"menus,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -607,9 +645,12 @@ func (x *ListVisibleMenusResponse) GetMenus() []*MenuEntry {
 // ListPermissionCodesResponse carries the API permission codes
 // (Permission.Data) granted to the caller's role.
 type ListPermissionCodesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TotalCount    int64                  `protobuf:"varint,1,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
-	Permissions   []string               `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Number of permission codes returned (len(permissions)).
+	TotalCount int64 `protobuf:"varint,1,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	// Permission.Data values (the string codes, not numeric ids) the
+	// SPA compares against per-button guards.
+	Permissions   []string `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

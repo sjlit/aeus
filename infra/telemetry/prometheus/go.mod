@@ -2,10 +2,7 @@ module github.com/sjlit/aeus/infra/telemetry/prometheus
 
 go 1.25.0
 
-require (
-	github.com/prometheus/client_golang v1.20.5
-	github.com/sjlit/aeus v1.0.0
-)
+require github.com/prometheus/client_golang v1.20.5
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

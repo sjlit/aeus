@@ -26,13 +26,13 @@ type AuthServiceHttpServer interface {
 }
 
 // AuthService server wrapper
-type authServiceServerWrapper struct {
+type AuthServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server AuthServiceHttpServer
 }
 
-func (s *authServiceServerWrapper) wrapHttpAuthServiceLogin(ctx *http.Context) (err error) {
+func (s *AuthServiceServerWrapper) wrapHttpAuthServiceLogin(ctx *http.Context) (err error) {
 	req := &LoginRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -48,7 +48,7 @@ func (s *authServiceServerWrapper) wrapHttpAuthServiceLogin(ctx *http.Context) (
 	}
 }
 
-func (s *authServiceServerWrapper) wrapHttpAuthServiceRefreshToken(ctx *http.Context) (err error) {
+func (s *AuthServiceServerWrapper) wrapHttpAuthServiceRefreshToken(ctx *http.Context) (err error) {
 	req := &RefreshTokenRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -64,7 +64,7 @@ func (s *authServiceServerWrapper) wrapHttpAuthServiceRefreshToken(ctx *http.Con
 	}
 }
 
-func (s *authServiceServerWrapper) wrapHttpAuthServiceLogout(ctx *http.Context) (err error) {
+func (s *AuthServiceServerWrapper) wrapHttpAuthServiceLogout(ctx *http.Context) (err error) {
 	req := &LogoutRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -80,7 +80,7 @@ func (s *authServiceServerWrapper) wrapHttpAuthServiceLogout(ctx *http.Context) 
 	}
 }
 func RegisterAuthServiceRouter(hs *http.Server, s AuthServiceHttpServer, opts ...http.RouteOption) {
-	is := &authServiceServerWrapper{http: hs, server: s}
+	is := &AuthServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register AuthService.Login http handler
 	hs.POST("/auth/login", is.wrapHttpAuthServiceLogin)

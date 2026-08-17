@@ -10,35 +10,51 @@ import "user.proto";
 
 option go_package = "github.com/sjlit/aeus/admin/pb;pb";
 
+// RoleService owns every role-scoped endpoint.  The generic rest/v3 CRUD
+// on sys_roles covers create/update/delete/list, so this service stays
+// narrow: read/replace a role's permission grants, dropdown options for
+// the role picker, and admin preview of a role's visible menu tree.
+//
+// History: RolePermissions absorbed PermissionService.ListRolePermissions
+// and RoleMenus absorbed MenuService.ListVisibleMenusByRole (both
+// 2026-08-10) — every role-scoped endpoint now lives under /role/*.
 service RoleService {
 
+  // Returns a role's permission grants (Menu.Component values in menus,
+  // Permission.Data values in apis).  type UNSPECIFIED(0, default)
+  // returns the combined {menus, apis}; MENU(1) returns menus only;
+  // API(2) returns apis only.
   // Wire format: GET /role/permissions?role={role}[&type={0|1|2}].
-  // type UNSPECIFIED(0, default) returns the combined {menus, apis};
-  // MENU(1) returns menus only; API(2) returns apis only.  Absorbed
-  // PermissionService.ListRolePermissions (2026-08-10).
+  // Absorbed PermissionService.ListRolePermissions (2026-08-10).
   rpc RolePermissions(RolePermissionsRequest) returns (RolePermissionsResponse) {
     option (google.api.http) = {
       get: "/role/permissions"
     };
   }
 
+  // Fully replaces a role's permission set (see ReplaceRolePermissionsRequest):
+  // existing rows for menus+apis are deleted and the new set is inserted
+  // in a single transaction.
+  // Wire format: PUT /role/permissions with JSON body.
   // body: "*" — role travels in the JSON body; transport/http's
   // non-GET bind is body-only (gin), a ?role= query would be ignored.
   rpc ReplaceRolePermissions(ReplaceRolePermissionsRequest) returns (ReplaceRolePermissionsResponse) {
     option (google.api.http) = {
-      put: "/role/permissions"
+      put : "/role/permissions"
       body: "*"
     };
   }
 
-  // Role dropdown options.  Wire format: GET /role/options.
+  // Role dropdown options (key → name) for the role picker.
+  // Wire format: GET /role/options.
   rpc ListRoleOptions(google.protobuf.Empty) returns (ListRoleOptionsResponse) {
     option (google.api.http) = {
       get: "/role/options"
     };
   }
 
-  // Visible menus for a specific role (admin preview).
+  // Visible menus for a specific role (admin preview — what the side
+  // bar would look like for any role, not just the caller's).
   // Wire format: GET /role/menus?role={role}.
   // Moved from MenuService.ListVisibleMenusByRole (2026-08-10) so every
   // role-scoped endpoint lives under /role/*.
@@ -52,7 +68,7 @@ service RoleService {
 // RolePermissionsRequest selects the role whose permissions are
 // read; type picks which side(s) to return (see RoleService).
 message RolePermissionsRequest {
-  string         role = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+  string role = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
   // UNSPECIFIED (default) = combined; MENU / API return only that side.
   PermissionType type = 2;
 }
@@ -69,7 +85,7 @@ message RolePermissionsResponse {
 // set. menus are Menu.Component values (sized 120), apis are catalog
 // Permission.Data values (sized 60) — see the field rules.
 message ReplaceRolePermissionsRequest {
-  string          role  = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
+  string role = 1 [(validate.rules).string = {min_len: 1, max_len: 60}];
   // menus are Menu.Component values, which are sized 120 in the model;
   // max_len must match (apis are catalog Permission.Data, sized 60).
   repeated string menus = 2 [(validate.rules).repeated = {max_items: 1024, items: {string: {min_len: 1, max_len: 120}}}];
@@ -79,7 +95,7 @@ message ReplaceRolePermissionsRequest {
 // ReplaceRolePermissionsResponse echoes the role and reports the
 // number of granted permissions (len(menus) + len(apis)).
 message ReplaceRolePermissionsResponse {
-  string role    = 1;
+  string role     = 1;
   int32  affected = 2;
 }
 

@@ -18,13 +18,13 @@ type PermissionServiceHttpServer interface {
 }
 
 // PermissionService server wrapper
-type permissionServiceServerWrapper struct {
+type PermissionServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server PermissionServiceHttpServer
 }
 
-func (s *permissionServiceServerWrapper) wrapHttpPermissionServiceListCatalog(ctx *http.Context) (err error) {
+func (s *PermissionServiceServerWrapper) wrapHttpPermissionServiceListCatalog(ctx *http.Context) (err error) {
 	req := &ListCatalogRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -40,7 +40,7 @@ func (s *permissionServiceServerWrapper) wrapHttpPermissionServiceListCatalog(ct
 	}
 }
 func RegisterPermissionServiceRouter(hs *http.Server, s PermissionServiceHttpServer, opts ...http.RouteOption) {
-	is := &permissionServiceServerWrapper{http: hs, server: s}
+	is := &PermissionServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register PermissionService.ListCatalog http handler
 	hs.GET("/permission/catalog", is.wrapHttpPermissionServiceListCatalog)

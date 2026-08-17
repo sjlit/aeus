@@ -17,29 +17,42 @@ import (
 // middleware/auth); requests intentionally do NOT carry target_uid for
 // self-targeted RPCs.
 type UserServiceHttpServer interface {
+	// Returns the caller's profile (see UserProfile). Caller uid is
+	// taken from ctx, never from a query/body parameter.
+	// Wire format: GET /user/profile.
 	Profile(ctx context.Context, req *Empty) (res *UserProfile, err error)
-
+	// Partial update of the caller's profile (see UpdateProfileRequest).
+	// Wire format: PATCH /user/profile with JSON body.
 	UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (res *UserProfile, err error)
-
+	// Changes the caller's own password; old_password must match the
+	// currently stored one.
+	// Wire format: POST /user/change-password with JSON body.
 	ChangePassword(ctx context.Context, req *ChangePasswordRequest) (res *Empty, err error)
-
+	// Resets another user's password (admin-only: the caller's role must
+	// be a super-admin role).
+	// Wire format: POST /user/reset-password with JSON body.
 	ResetPassword(ctx context.Context, req *ResetPasswordRequest) (res *ResetPasswordResponse, err error)
-
+	// Stores an avatar URL for the caller (see SetAvatarByURLRequest).
+	// Wire format: POST /user/set-avatar with JSON body.
 	SetAvatarByURL(ctx context.Context, req *SetAvatarByURLRequest) (res *SetAvatarByURLResponse, err error)
-
+	// Returns the flat list of menus visible to the caller's role; the
+	// frontend rebuilds the tree from MenuEntry.parent.
+	// Wire format: GET /user/menus.
 	ListVisibleMenus(ctx context.Context, req *Empty) (res *ListVisibleMenusResponse, err error)
-
+	// Returns the API permission codes (Permission.Data) granted to the
+	// caller's role; used by the SPA to gate per-button actions.
+	// Wire format: GET /user/permissions.
 	ListPermissionCodes(ctx context.Context, req *Empty) (res *ListPermissionCodesResponse, err error)
 }
 
 // UserService server wrapper
-type userServiceServerWrapper struct {
+type UserServiceServerWrapper struct {
 	http   *http.Server
 	opts   *http.RouteOptions
 	server UserServiceHttpServer
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceProfile(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceProfile(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.Profile(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -52,7 +65,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceProfile(ctx *http.Context)
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceUpdateProfile(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceUpdateProfile(ctx *http.Context) (err error) {
 	req := &UpdateProfileRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -68,7 +81,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceUpdateProfile(ctx *http.Co
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceChangePassword(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceChangePassword(ctx *http.Context) (err error) {
 	req := &ChangePasswordRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -84,7 +97,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceChangePassword(ctx *http.C
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceResetPassword(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceResetPassword(ctx *http.Context) (err error) {
 	req := &ResetPasswordRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -100,7 +113,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceResetPassword(ctx *http.Co
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceSetAvatarByURL(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceSetAvatarByURL(ctx *http.Context) (err error) {
 	req := &SetAvatarByURLRequest{}
 	if err := ctx.Bind(req); err != nil {
 		return ctx.Error(int(errs.CodeInvalid), err.Error())
@@ -116,7 +129,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceSetAvatarByURL(ctx *http.C
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceListVisibleMenus(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceListVisibleMenus(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.ListVisibleMenus(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -129,7 +142,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceListVisibleMenus(ctx *http
 	}
 }
 
-func (s *userServiceServerWrapper) wrapHttpUserServiceListPermissionCodes(ctx *http.Context) (err error) {
+func (s *UserServiceServerWrapper) wrapHttpUserServiceListPermissionCodes(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.ListPermissionCodes(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
@@ -142,7 +155,7 @@ func (s *userServiceServerWrapper) wrapHttpUserServiceListPermissionCodes(ctx *h
 	}
 }
 func RegisterUserServiceRouter(hs *http.Server, s UserServiceHttpServer, opts ...http.RouteOption) {
-	is := &userServiceServerWrapper{http: hs, server: s}
+	is := &UserServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register UserService.Profile http handler
 	hs.GET("/user/profile", is.wrapHttpUserServiceProfile)

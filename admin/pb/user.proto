@@ -17,12 +17,17 @@ option go_package = "github.com/sjlit/aeus/admin/pb;pb";
 // self-targeted RPCs.
 service UserService {
 
+  // Returns the caller's profile (see UserProfile). Caller uid is
+  // taken from ctx, never from a query/body parameter.
+  // Wire format: GET /user/profile.
   rpc Profile(google.protobuf.Empty) returns (UserProfile) {
     option (google.api.http) = {
       get: "/user/profile"
     };
   }
 
+  // Partial update of the caller's profile (see UpdateProfileRequest).
+  // Wire format: PATCH /user/profile with JSON body.
   rpc UpdateProfile(UpdateProfileRequest) returns (UserProfile) {
     option (google.api.http) = {
       patch: "/user/profile"
@@ -30,6 +35,9 @@ service UserService {
     };
   }
 
+  // Changes the caller's own password; old_password must match the
+  // currently stored one.
+  // Wire format: POST /user/change-password with JSON body.
   rpc ChangePassword(ChangePasswordRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       post: "/user/change-password"
@@ -37,6 +45,9 @@ service UserService {
     };
   }
 
+  // Resets another user's password (admin-only: the caller's role must
+  // be a super-admin role).
+  // Wire format: POST /user/reset-password with JSON body.
   rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse) {
     option (google.api.http) = {
       post: "/user/reset-password"
@@ -44,6 +55,8 @@ service UserService {
     };
   }
 
+  // Stores an avatar URL for the caller (see SetAvatarByURLRequest).
+  // Wire format: POST /user/set-avatar with JSON body.
   rpc SetAvatarByURL(SetAvatarByURLRequest) returns (SetAvatarByURLResponse) {
     option (google.api.http) = {
       post: "/user/set-avatar"
@@ -51,12 +64,18 @@ service UserService {
     };
   }
 
+  // Returns the flat list of menus visible to the caller's role; the
+  // frontend rebuilds the tree from MenuEntry.parent.
+  // Wire format: GET /user/menus.
   rpc ListVisibleMenus(google.protobuf.Empty) returns (ListVisibleMenusResponse) {
     option (google.api.http) = {
       get: "/user/menus"
     };
   }
 
+  // Returns the API permission codes (Permission.Data) granted to the
+  // caller's role; used by the SPA to gate per-button actions.
+  // Wire format: GET /user/permissions.
   rpc ListPermissionCodes(google.protobuf.Empty) returns (ListPermissionCodesResponse) {
     option (google.api.http) = {
       get: "/user/permissions"
@@ -69,13 +88,22 @@ service UserService {
 // UserProfile is the flattened wire view of the caller's sys_users row.
 // role is the Role.Key, dept_id the owning department.
 message UserProfile {
+  // Stable user identifier (mirrors models.User.UID).
   string uid         = 1;
+  // Login name (mirrors models.User.Username).
   string username    = 2;
+  // Email address (mirrors models.User.Email).
   string email       = 3;
+  // Gender label as stored on the row (e.g. "M"/"F"/"U"); not enumerated.
   string gender      = 4;
+  // Free-form bio / description; empty string means "not set".
   string description = 5;
+  // Avatar URL (see SetAvatarByURL); empty means no avatar.
   string avatar      = 6;
+  // Role.Key of the caller's role (e.g. "super", "admin"); look it up
+  // in the role catalog to resolve a friendly label.
   string role        = 7;
+  // Owning department id (mirrors models.User.DeptID).
   int64  dept_id     = 8;
 }
 
@@ -83,9 +111,13 @@ message UserProfile {
 // username/email/gender are applied only when non-empty; description is
 // always applied (send "" to clear it).
 message UpdateProfileRequest {
+  // New username; empty keeps the current value.
   string username    = 1;
+  // New email; empty keeps the current value.
   string email       = 2;
+  // New gender; empty keeps the current value.
   string gender      = 3;
+  // New description; always applied — send "" to clear it.
   string description = 4;
 }
 
@@ -94,30 +126,38 @@ message UpdateProfileRequest {
 // ChangePasswordRequest changes the caller's own password; old_password
 // must match the current one.
 message ChangePasswordRequest {
+  // Current password (must match the stored hash).
   string old_password = 1;
+  // New password (will be re-hashed on the server).
   string new_password = 2;
 }
 
 // ResetPasswordRequest resets another user's password (admin-only:
 // the caller's role must be a super-admin role).
 message ResetPasswordRequest {
+  // UID whose password is being reset (mirrors models.User.UID).
   string target_uid   = 1;
+  // New password to apply (will be re-hashed on the server).
   string new_password = 2;
 }
 
 // ResetPasswordResponse echoes the uid whose password was reset.
 message ResetPasswordResponse {
+  // UID whose password was reset; mirrors the request's target_uid.
   string target_uid = 1;
 }
 
 // SetAvatarByURLRequest stores an avatar URL for the caller. The URL
 // must be non-empty and fit models.User.Avatar (size 1024).
 message SetAvatarByURLRequest {
+  // Absolute URL of the avatar; server-side validated against
+  // models.User.Avatar (size 1024).
   string avatar_url = 1;
 }
 
 // SetAvatarByURLResponse echoes the stored avatar URL.
 message SetAvatarByURLResponse {
+  // The avatar URL that was stored; mirrors UserProfile.avatar.
   string avatar_url = 1;
 }
 
@@ -134,26 +174,46 @@ message SetAvatarByURLResponse {
 // operator has not provided one and the frontend should fall back to its
 // own static mapping table for legacy components.
 message MenuEntry {
+  // Menu.Name (mirrors models.Menu.Name); also the parent reference.
   string name      = 1;
+  // Menu.Component (mirrors models.Menu.Component); the unique slug
+  // used as Menu.Parent in the catalog.
   string component = 2;
+  // Menu.URI (mirrors models.Menu.URI); the route/path the menu links to.
   string uri       = 3;
+  // Parent menu's Menu.Name (mirrors models.Menu.Parent); empty for
+  // root-level menus.
   string parent    = 4;
+  // Menu.Icon (mirrors models.Menu.Icon); frontend-specific icon hint.
   string icon      = 5;
+  // Menu.Public (mirrors models.Menu.Public); true when the menu is
+  // visible without authentication.
   bool   public    = 6;
+  // Menu.Hidden (mirrors models.Menu.Hidden); true when the menu exists
+  // in the tree but should be hidden in the side bar.
   bool   hidden    = 7;
+  // Auto-derived SPA view path (see message-level comment). Empty
+  // means the operator has not provided one — fall back to the
+  // frontend's static mapping table for legacy components.
   string view_path = 8;
 }
 
 // ListVisibleMenusResponse is the flat list of menus visible to the
 // caller's role (see MenuEntry); the frontend rebuilds the tree.
 message ListVisibleMenusResponse {
+  // Number of menu entries returned (len(menus)); convenience for the
+  // SPA so it doesn't have to count the slice.
   int64              total_count = 1;
+  // Flat list of menus; the frontend rebuilds the tree from parent.
   repeated MenuEntry menus       = 2;
 }
 
 // ListPermissionCodesResponse carries the API permission codes
 // (Permission.Data) granted to the caller's role.
 message ListPermissionCodesResponse {
+  // Number of permission codes returned (len(permissions)).
   int64           total_count = 1;
+  // Permission.Data values (the string codes, not numeric ids) the
+  // SPA compares against per-button guards.
   repeated string permissions = 2;
 }
