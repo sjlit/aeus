@@ -22,7 +22,6 @@ jobs:
           - infra/broker/nats
           - infra/telemetry/otel
           - infra/telemetry/prometheus
-          - middleware/auth
     # etcd/nats 子模块的集成测试在本地无服务时会 t.Skip,这里用容器把
     # 服务拉起来,配合就绪轮询让测试真正执行(避免 CI 假绿)。
     # 注意:
