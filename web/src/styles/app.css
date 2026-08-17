@@ -70,7 +70,11 @@ body { padding: 0; }
   flex-shrink: 0;
   display: flex; align-items: center; gap: 10px; padding: 10px; background: white;
   border-radius: 14px; box-shadow: 0 4px 16px var(--shadow);
+  cursor: pointer; outline: none;
+  transition: box-shadow .15s ease, transform .15s ease;
 }
+.user-pill:hover { box-shadow: 0 6px 20px var(--shadow); transform: translateY(-1px); }
+.user-pill:focus-visible { box-shadow: 0 0 0 2px var(--acc-mint); }
 .user-pill .avatar {
   width: 32px; height: 32px; border-radius: 50%;
   background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));

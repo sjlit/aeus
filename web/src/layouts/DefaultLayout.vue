@@ -25,6 +25,16 @@ onMounted(async () => {
 function go(uri: string) {
   if (uri) router.push(uri)
 }
+
+async function onLogout() {
+  await auth.logout()
+  // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
+  await router.push({ path: '/login', query: { redirect: route.fullPath } })
+}
+
+function onCommand(cmd: string) {
+  if (cmd === 'logout') void onLogout()
+}
 </script>
 
 <template>
@@ -47,13 +57,20 @@ function go(uri: string) {
         </template>
       </div>
 
-      <div class="user-pill">
-        <div class="avatar">{{ avatar }}</div>
-        <div class="info">
-          <div class="name">{{ auth.userProfile?.username ?? auth.profile?.username ?? '—' }}</div>
-          <div class="role">{{ auth.profile?.tenant_name ?? auth.userProfile?.role ?? '—' }}</div>
+      <el-dropdown trigger="click" @command="onCommand">
+        <div class="user-pill" role="button" tabindex="0">
+          <div class="avatar">{{ avatar }}</div>
+          <div class="info">
+            <div class="name">{{ auth.userProfile?.username ?? auth.profile?.username ?? '—' }}</div>
+            <div class="role">{{ auth.profile?.tenant_name ?? auth.userProfile?.role ?? '—' }}</div>
+          </div>
         </div>
-      </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </aside>
 
     <main class="main">
