@@ -58,20 +58,29 @@ router.beforeEach(async (to) => {
   if (!auth.accessToken) {
     return { path: LOGIN_PATH, query: { redirect: to.fullPath }, replace: true }
   }
+
+  // 已登录:强制保证菜单已加载、路由已注册——bootstrap 是 first line,这里是兜底。
+  // 关键:不要在 addRoute 之后用 `return to` 重放当前导航(vue-router 4 不一定
+  // 重算 to.matched);用「未注册则重定向到 /」保证渲染的一定是已知路由。
   const menu = useMenuStore()
-  // '/' 与深链接:确保菜单已加载、路由已注册
-  if (to.path === '/' || !isRegistered(to.path)) {
-    await menu.load()
-    await registerMenuRoutes()
-    if (to.path === '/') {
-      const first = collectMenuUris(menu.tree)[0]
-      return first ? { path: first, replace: true } : true
+  if (menu.tree.length === 0) {
+    try {
+      await menu.load()
+    } catch {
+      // 网络/业务错误已 toast,这里不阻断 → 让用户至少能进入 layout 看到空菜单
     }
-    // 深链接:注册后重放一次导航;仍不匹配 → 回首页
-    if (!isRegistered(to.path)) return { path: '/', replace: true }
-    // 路由是本次导航才注册的,vue-router 不会重算当前匹配,
-    // 必须返回 to 重放,否则会落到 catch-all(404)。
-    return to
   }
+  await registerMenuRoutes()
+
+  if (to.path === '/') {
+    const first = collectMenuUris(menu.tree)[0]
+    return first ? { path: first, replace: true } : true
+  }
+
+  // 路径不在菜单里 → 重定向到 '/'('/' 分支会再次处理)
+  if (!isRegistered(to.path)) {
+    return { path: '/', replace: true }
+  }
+
   return true
 })
