@@ -14,11 +14,12 @@ app.use(pinia)
 app.use(router)
 app.use(ElementPlus)
 
+const auth = useAuthStore()
 bindHttpContext({
-  getToken: () => useAuthStore().accessToken,
-  getTenantId: () => useAuthStore().profile?.tenant_id ?? null,
-  refresh: () => useAuthStore().refresh(),
-  logout: () => void useAuthStore().logout(),
+  getToken: () => auth.accessToken,
+  getTenantId: () => auth.profile?.tenant_id ?? null,
+  refresh: () => auth.refresh(),
+  logout: () => void auth.logout(),
   pushLogin: (redirect) => {
     void router.push({ path: '/login', query: { redirect } })
   },

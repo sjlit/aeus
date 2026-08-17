@@ -28,6 +28,8 @@ http.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${ctx.getToken()}`
   }
   if (ctx?.getTenantId()) {
+    // NOTE: 后端当前从 JWT TenantID claim 派生租户(admin/middleware/auth/jwt.go),
+    // 此 header 被静默忽略;契约保留以便后续多租户接入时启用。
     config.headers['X-Tenant-Id'] = ctx.getTenantId()
   }
   return config
@@ -50,12 +52,18 @@ http.interceptors.response.use(
       refreshing ??= (ctx?.refresh() ?? Promise.resolve(false)).finally(() => {
         refreshing = null
       })
-      const ok = await refreshing
+      let ok = false
+      try {
+        ok = await refreshing
+      } catch {
+        // refresh() 自身抛错(网络抖动等):与 refresh 返回 false 同等待遇。
+        ctx?.logout()
+        ctx?.pushLogin(window.location.hash.replace(/^#/, '') || '/')
+        return Promise.reject(new Error('session expired'))
+      }
       if (ok) {
-        const retryConfig = {
-          ...response.config,
-          headers: { ...response.config.headers, Authorization: `Bearer ${ctx!.getToken()}` },
-        }
+        // 仅复用原请求配置;Authorization 由请求拦截器在重试时重新注入。
+        const retryConfig = { ...response.config }
         return http.request(retryConfig)
       }
       ctx?.logout()
