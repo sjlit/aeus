@@ -50,8 +50,8 @@ function go(uri: string) {
       <div class="user-pill">
         <div class="avatar">{{ avatar }}</div>
         <div class="info">
-          <div class="name">{{ auth.profile?.username ?? '—' }}</div>
-          <div class="role">{{ auth.profile?.tenant_name ?? '—' }}</div>
+          <div class="name">{{ auth.userProfile?.username ?? auth.profile?.username ?? '—' }}</div>
+          <div class="role">{{ auth.profile?.tenant_name ?? auth.userProfile?.role ?? '—' }}</div>
         </div>
       </div>
     </aside>

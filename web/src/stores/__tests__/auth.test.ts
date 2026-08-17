@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '../auth'
 import * as authApi from '../../api/auth'
+import * as userApi from '../../api/user'
 
 vi.mock('../../api/auth', () => ({
   login: vi.fn(),
   refresh: vi.fn(),
   logout: vi.fn(),
+}))
+
+vi.mock('../../api/user', () => ({
+  fetchProfile: vi.fn(),
 }))
 
 const loginResp = {
@@ -17,6 +22,17 @@ const loginResp = {
   refresh_token: 'rt-1',
   tenant_id: 't-1',
   tenant_name: '默认租户',
+}
+
+const profileResp = {
+  uid: 'admin',
+  username: 'admin',
+  email: 'admin@example.com',
+  gender: '',
+  description: '',
+  avatar: '',
+  role: 'admin',
+  dept_id: 1,
 }
 
 describe('auth store', () => {
@@ -61,12 +77,33 @@ describe('auth store', () => {
     vi.mocked(authApi.login).mockResolvedValue(loginResp)
     const s = useAuthStore()
     await s.login({ username: 'admin', password: 'Admin123' })
+    vi.mocked(userApi.fetchProfile).mockResolvedValue(profileResp)
+    await s.fetchProfile()
     vi.mocked(authApi.logout).mockResolvedValue(undefined)
     await s.logout()
     expect(authApi.logout).toHaveBeenCalledWith('at-1')
     expect(s.accessToken).toBeNull()
     expect(s.refreshToken).toBeNull()
     expect(s.profile).toBeNull()
+    expect(s.userProfile).toBeNull()
     expect(localStorage.getItem('aeus.access')).toBeNull()
+  })
+
+  it('fetchProfile 拉取并存入 userProfile', async () => {
+    vi.mocked(userApi.fetchProfile).mockResolvedValue(profileResp)
+    const s = useAuthStore()
+    expect(s.userProfile).toBeNull()
+    const resp = await s.fetchProfile()
+    expect(resp.username).toBe('admin')
+    expect(s.userProfile?.role).toBe('admin')
+    expect(s.userProfile?.email).toBe('admin@example.com')
+    expect(userApi.fetchProfile).toHaveBeenCalledWith()
+  })
+
+  it('fetchProfile 失败时抛错且 userProfile 保持原状', async () => {
+    vi.mocked(userApi.fetchProfile).mockRejectedValue(new Error('boom'))
+    const s = useAuthStore()
+    await expect(s.fetchProfile()).rejects.toThrow('boom')
+    expect(s.userProfile).toBeNull()
   })
 })

@@ -69,6 +69,9 @@ router.beforeEach(async (to) => {
     }
     // 深链接:注册后重放一次导航;仍不匹配 → 回首页
     if (!isRegistered(to.path)) return { path: '/', replace: true }
+    // 路由是本次导航才注册的,vue-router 不会重算当前匹配,
+    // 必须返回 to 重放,否则会落到 catch-all(404)。
+    return to
   }
   return true
 })

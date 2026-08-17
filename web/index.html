@@ -6,9 +6,34 @@
   <title>aeus</title>
   <link rel="stylesheet" href="/shared-b2.css" />
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* Vue 挂载前占位:bootstrap 期间的 loading。
+       #app 有内容后会被覆盖,这里无需清理。 */
+    html, body { margin: 0; }
+    .boot {
+      position: fixed; inset: 0;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, #f7f9f7 0%, #eef3ee 100%);
+      font-family: 'Inter Tight', system-ui, sans-serif;
+      color: #6c7a72;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .boot::before {
+      content: ''; width: 10px; height: 10px;
+      background: #6cc5a8; border-radius: 2px;
+      margin-right: 12px; box-shadow: 0 0 16px #6cc5a866;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; transform: scale(0.85); }
+      50%      { opacity: 1;   transform: scale(1.1); }
+    }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><div class="boot">aeus</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

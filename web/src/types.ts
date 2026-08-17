@@ -34,3 +34,17 @@ export interface RefreshTokenResponse {
   expires: number
   access_token: string
 }
+
+/** GET /user/profile 响应(user.proto UserProfile)。
+   后端不返回 tenant_* 字段;租户来自 LoginResponse,
+   所以这里只覆盖用户自身属性。 */
+export interface UserProfile {
+  uid: string
+  username: string
+  email: string
+  gender: string
+  description: string
+  avatar: string
+  role: string
+  dept_id: number
+}
