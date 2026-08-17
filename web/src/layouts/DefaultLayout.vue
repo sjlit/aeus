@@ -32,18 +32,20 @@ function go(uri: string) {
     <aside class="sidebar">
       <div class="brand">aeus</div>
 
-      <template v-for="sec in menu.sections" :key="sec.name">
-        <nav class="nav-section">
-          <div class="title">{{ sec.name }}</div>
-          <template v-for="node in sec.items" :key="node.component">
-            <a v-if="node.uri" :class="{ on: route.path === node.uri }" @click="go(node.uri)">
-              <span class="ic">{{ node.name.slice(0, 1).toUpperCase() }}</span>
-              <span>{{ node.title }}</span>
-            </a>
-            <div v-else class="group-label">{{ node.title }}</div>
-          </template>
-        </nav>
-      </template>
+      <div class="nav-scroll">
+        <template v-for="sec in menu.sections" :key="sec.name">
+          <nav class="nav-section">
+            <div class="title">{{ sec.name }}</div>
+            <template v-for="node in sec.items" :key="node.component">
+              <a v-if="node.uri" :class="{ on: route.path === node.uri }" @click="go(node.uri)">
+                <span class="ic">{{ node.name.slice(0, 1).toUpperCase() }}</span>
+                <span>{{ node.title }}</span>
+              </a>
+              <div v-else class="group-label">{{ node.title }}</div>
+            </template>
+          </nav>
+        </template>
+      </div>
 
       <div class="user-pill">
         <div class="avatar">{{ avatar }}</div>
