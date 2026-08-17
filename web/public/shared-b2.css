@@ -1,0 +1,93 @@
+/* =========================================================
+   B2 SHARED · 极光薄荷+丁香+蜜桃+深松绿
+   共用色系 · 4 个布局都引用此
+========================================================= */
+:root {
+  --bg-1: #c9e7d8;
+  --bg-2: #dccde8;
+  --bg-3: #ffd4c2;
+  --bg-base: #f3faf6;
+  --ink:  #1e3a3a;
+  --ink-2:#5b7a78;
+  --glass:        rgba(255,255,255,0.55);
+  --glass-strong: rgba(255,255,255,0.75);
+  --glass-border: rgba(255,255,255,0.7);
+  --shadow:       rgba(30,90,90,0.16);
+  --acc-mint:    #6cc5a8;
+  --acc-lilac:   #9b85c4;
+  --acc-peach:   #f4a484;
+  --acc-cobalt:  #4a7fcc;
+  --acc-honey:   #e8b960;
+  --acc-sage:    #7ea890;
+  --display: 'Bricolage Grotesque', 'Inter Tight', sans-serif;
+  --body:    'Inter Tight', -apple-system, sans-serif;
+  --mono:    'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(at 20% 10%, var(--bg-1) 0%, transparent 50%),
+    radial-gradient(at 80% 0%, var(--bg-3) 0%, transparent 55%),
+    radial-gradient(at 50% 100%, var(--bg-2) 0%, transparent 60%),
+    var(--bg-base);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14px;
+  padding: 28px;
+  position: relative;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.5) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+/* ---- glass utility ---- */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+/* ---- common text ---- */
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.kicker .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--acc-peach);
+  box-shadow: 0 0 12px var(--acc-peach);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.foot { text-align: center; margin-top: 22px; font-size: 11px; color: var(--ink-2); letter-spacing: 0.1em; }
