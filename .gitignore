@@ -14,8 +14,6 @@ vendor
 cmd/
 tools/
 third_party/
-go.work
-go.work.sum
 coverage.out
 .trae
 .version
