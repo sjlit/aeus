@@ -2,7 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -88,6 +88,7 @@ async function submit() {
   place-items: center;
   padding: 28px;
 }
+
 .login-card {
   width: 100%;
   max-width: 440px;
@@ -95,27 +96,34 @@ async function submit() {
   position: relative;
   overflow: hidden;
 }
+
 /* 角落两团装饰渐变:蜜桃右上 + 丁香左下,blur 后透出毛玻璃(参考项目同款) */
 .login-card::before {
   content: '';
   position: absolute;
-  top: -80px; right: -80px;
-  width: 240px; height: 240px;
+  top: -80px;
+  right: -80px;
+  width: 240px;
+  height: 240px;
   background: radial-gradient(circle, var(--acc-peach), transparent 70%);
   filter: blur(40px);
   opacity: 0.5;
   pointer-events: none;
 }
+
 .login-card::after {
   content: '';
   position: absolute;
-  bottom: -60px; left: -60px;
-  width: 200px; height: 200px;
+  bottom: -60px;
+  left: -60px;
+  width: 200px;
+  height: 200px;
   background: radial-gradient(circle, var(--acc-lilac), transparent 70%);
   filter: blur(40px);
   opacity: 0.4;
   pointer-events: none;
 }
+
 .brand-row {
   display: flex;
   align-items: center;
@@ -123,8 +131,10 @@ async function submit() {
   margin-bottom: 32px;
   position: relative;
 }
+
 .brand-mark {
-  width: 28px; height: 28px;
+  width: 28px;
+  height: 28px;
   background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
   border-radius: 8px;
   display: grid;
@@ -134,12 +144,14 @@ async function submit() {
   font-size: 14px;
   box-shadow: 0 4px 12px rgba(108, 197, 168, 0.4);
 }
+
 .brand-name {
   font-family: var(--display);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
+
 h1 {
   font-family: var(--display);
   font-size: 32px;
@@ -148,16 +160,19 @@ h1 {
   margin-bottom: 6px;
   position: relative;
 }
+
 .lead {
   font-size: 13px;
   color: var(--ink-2);
   margin-bottom: 28px;
   position: relative;
 }
+
 /* label-position="top" 的标签:对齐参考项目的 10px 大写小标签 */
 :deep(.el-form-item) {
   margin-bottom: 16px;
 }
+
 :deep(.el-form-item__label) {
   display: block;
   height: auto;
@@ -169,6 +184,7 @@ h1 {
   text-transform: uppercase;
   color: var(--ink-2);
 }
+
 .form-actions {
   display: flex;
   justify-content: space-between;
@@ -176,21 +192,25 @@ h1 {
   margin: 8px 0 24px;
   font-size: 12px;
 }
+
 /* 参考项目用 --acc-cobalt(已移除),换成主题主色 */
 .form-actions a {
   color: var(--acc-mint);
   font-weight: 500;
   text-decoration: none;
 }
+
 .form-actions a:hover {
   color: #2f7d63;
 }
+
 .el-button {
   width: 100%;
   height: 48px;
   font-size: 14px;
   letter-spacing: 0.05em;
 }
+
 .footer-row {
   display: flex;
   justify-content: space-between;
@@ -204,22 +224,35 @@ h1 {
   border-top: 1px dashed rgba(30, 90, 90, 0.15);
   position: relative;
 }
+
 .live {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--acc-mint);
 }
+
 .live::before {
   content: '';
-  width: 6px; height: 6px;
+  width: 6px;
+  height: 6px;
   background: var(--acc-mint);
   border-radius: 50%;
   box-shadow: 0 0 8px var(--acc-mint);
   animation: pulse 1.6s infinite;
 }
+
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(1.4); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(1.4);
+  }
 }
 </style>
