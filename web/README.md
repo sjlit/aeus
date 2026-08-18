@@ -31,4 +31,5 @@ npm run dev
 - 认证失败码 `4001/4002/4006` 触发静默刷新;`4003/4005` 只 toast。
 - `refresh()` 不覆盖 profile;refresh token 不轮换。
 - 路由:Hash 模式;业务路由从 MenuTree 动态注册,uri 即路径。
-- 视觉:public/shared-b2.css 提供 token,app.css 桥接 Element Plus 主题。
+- 视觉:`src/styles/style.scss` 提供共享 token + 玻璃拟态工具类;
+  `src/styles/app.scss` 桥接 Element Plus 主题并承载管理台布局。`app.scss` 顶部用 `@use './style'` 引入共享样式。

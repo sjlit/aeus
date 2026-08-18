@@ -1,0 +1,264 @@
+@use './style';
+
+// Element Plus 主题桥接:以 style.scss 的 acc-mint 为主色,
+// light-3..9 为手调的同色系白化阶
+:root {
+  --el-color-primary: #6cc5a8;
+  --el-color-primary-light-3: #93d3ba;
+  --el-color-primary-light-5: #b5e0cd;
+  --el-color-primary-light-7: #d8ede1;
+  --el-color-primary-light-8: #e6f3ec;
+  --el-color-primary-light-9: #f3faf6;
+  --el-color-primary-dark-2: #56a186;
+  --el-border-radius-base: 10px;
+  --el-font-family: var(--body);
+}
+
+// L3 模板的 body 有 padding:28px,管理台不需要
+body {
+  padding: 0;
+}
+
+// ---- L3 chrome 布局(移植自 L3-sidebar.html <style>) ----
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  gap: 0;
+}
+
+.sidebar {
+  background: var(--glass-strong);
+  backdrop-filter: blur(30px) saturate(150%);
+  border-right: 1px solid var(--glass-border);
+  padding: 28px 18px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar .brand {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding: 0 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: var(--acc-mint);
+    border-radius: 2px;
+  }
+}
+
+.sidebar .nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  // 滚动条留白:让最后一项的底部圆角不被裁掉
+  padding-right: 2px;
+}
+
+.nav-section {
+  margin-bottom: 22px;
+
+  .title {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    padding: 0 8px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--ink);
+    }
+
+    &.on {
+      background: white;
+      color: var(--ink);
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .ic {
+      width: 16px;
+      height: 16px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+  }
+
+  .group-label {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-2);
+    opacity: 0.6;
+  }
+}
+
+.user-pill {
+  margin-top: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px var(--shadow);
+  cursor: pointer;
+  outline: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 6px 20px var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--acc-mint);
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+    display: grid;
+    place-items: center;
+    color: white;
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  .info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .name {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .role {
+    font-size: 10px;
+    color: var(--ink-2);
+  }
+}
+
+.main {
+  padding: 28px 36px;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+
+  .search {
+    flex: 1;
+    max-width: 360px;
+    padding: 8px 16px;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--ink-2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    input {
+      background: none;
+      border: none;
+      outline: none;
+      font-size: 13px;
+      flex: 1;
+      font-family: inherit;
+      color: var(--ink);
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      background: white;
+    }
+  }
+}
+
+.hero {
+  h1 {
+    font-family: var(--display);
+    font-size: 36px;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin-bottom: 6px;
+
+    em {
+      font-style: italic;
+      background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+
+  .crumb {
+    font-size: 12px;
+    color: var(--ink-2);
+    margin-bottom: 12px;
+  }
+}

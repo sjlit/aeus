@@ -6,7 +6,7 @@ import App from './App.vue'
 import { router, ensureMenuRoutes } from './router'
 import { bindHttpContext } from './api/http'
 import { useAuthStore } from './stores/auth'
-import './styles/app.css'
+import './styles/app.scss'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -33,7 +33,9 @@ bindHttpContext({
 async function bootstrap(): Promise<void> {
   if (!auth.accessToken) return
   await Promise.all([
-    auth.fetchProfile().catch(() => {}),
+    auth.fetchProfile().catch(() => {
+      // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
+    }),
     ensureMenuRoutes(),
   ])
 }
