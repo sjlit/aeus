@@ -1,89 +1,51 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
 import { useTabsStore } from '@/stores/tabs'
-import type { MenuNode } from '@/types'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import HeaderBar from './HeaderBar.vue'
 import TabStrip from './TabStrip.vue'
-import { resolveIcon } from '@/utils/icons'
+import SidebarContent from './SidebarContent.vue'
 
 const menu = useMenuStore()
 const ui = useUiStore()
 const route = useRoute()
 const tabs = useTabsStore()
+const isMobile = useMediaQuery('(max-width: 768px)')
 
-function subIndex(node: Pick<MenuNode, 'uri' | 'view_path' | 'name'>): string {
-    return node.uri || node.view_path || node.name
-}
-
-const defaultOpeneds = computed<string[]>(() => {
-    const path = route.path
-    const out: string[] = []
-    for (const sec of menu.sections) {
-        for (const node of sec.items) {
-            if (!node.children?.length) continue
-            if (node.children.some((c) => c.uri === path)) out.push(subIndex(node))
-        }
-    }
-    return out
-})
-
-const labelOnly = computed(() =>
-    new Map(menu.sections.map((s) => [s.name, s.items.filter((n) => !n.uri && !n.children?.length)])),
+// 路由切换时关掉抽屉,避免"点了菜单但抽屉还盖在内容上"
+watch(
+    () => route.fullPath,
+    () => {
+        if (isMobile.value) ui.closeMobileSidebar()
+    },
 )
 
-const menuRef = ref<{ open?: (index: string) => void } | null>(null)
-
-watch(defaultOpeneds, async (openeds) => {
-    await nextTick()
-    for (const idx of openeds) menuRef.value?.open?.(idx)
+// 从桌面切到移动端,关掉抽屉(避免抽屉开着然后切换布局)
+watch(isMobile, (now) => {
+    if (!now) ui.closeMobileSidebar()
 })
 </script>
 
 <template>
     <el-container class="app-main" direction="horizontal">
-        <el-aside class="sidebar" :class="{ 'is-collapsed': ui.sidebarCollapsed }"
+        <!-- 桌面:内嵌侧栏。移动端整段不渲染(改为下方抽屉) -->
+        <el-aside v-if="!isMobile" class="sidebar menu-chrome"
+            :class="{ 'is-collapsed': ui.sidebarCollapsed }"
             :width="ui.sidebarCollapsed ? '64px' : '240px'">
-            <div class="brand text-gradient"><span class="brand-name">aeus</span></div>
-            <div class="nav-scroll">
-                <div v-for="section in menu.sections" :key="section.name" class="nav-section">
-                    <div class="nav-section-title">{{ section.name }}</div>
-                    <div v-for="node in labelOnly.get(section.name) ?? []" :key="`label-${node.view_path ?? node.name}`"
-                        class="nav-group-label">
-                        {{ node.name }}
-                    </div>
-                    <el-menu ref="menuRef" class="nav-menu" :default-active="route.path"
-                        :default-openeds="defaultOpeneds" :router="true" :collapse="ui.sidebarCollapsed"
-                        background-color="transparent" text-color="var(--sidebar-ink)" active-text-color="var(--ink)">
-                        <template v-for="node in section.items" :key="node.uri || node.view_path || node.name">
-                            <el-sub-menu v-if="node.children && node.children.length" :index="subIndex(node)"
-                                popper-class="sidebar-pop">
-                                <template #title>
-                                    <el-icon v-if="resolveIcon(node.icon)">
-                                        <component :is="resolveIcon(node.icon)" />
-                                    </el-icon>
-                                    <span>{{ node.name }}</span>
-                                </template>
-                                <el-menu-item v-for="child in node.children" :key="child.uri" :index="child.uri">
-                                    <el-icon v-if="resolveIcon(child.icon)">
-                                        <component :is="resolveIcon(child.icon)" />
-                                    </el-icon>
-                                    <span>{{ child.name }}</span>
-                                </el-menu-item>
-                            </el-sub-menu>
-                            <el-menu-item v-else-if="node.uri" :index="node.uri">
-                                <el-icon v-if="resolveIcon(node.icon)">
-                                    <component :is="resolveIcon(node.icon)" />
-                                </el-icon>
-                                <span>{{ node.name }}</span>
-                            </el-menu-item>
-                        </template>
-                    </el-menu>
-                </div>
-            </div>
+            <SidebarContent />
         </el-aside>
+
+        <!-- 移动端:抽屉式菜单。从左侧滑出,宽度封顶 300px,
+             小屏(<=375px)再按 80vw 缩,避免在窄手机上完全盖住内容 -->
+        <el-drawer v-if="isMobile" v-model="ui.mobileSidebarOpen" direction="ltr" size="min(300px, 80vw)"
+            :with-header="false" :modal="true" :append-to-body="true" class="sidebar-drawer">
+            <div class="menu-chrome mobile-menu">
+                <SidebarContent />
+            </div>
+        </el-drawer>
 
         <el-container class="content" direction="vertical">
             <el-header class="topbar" height="auto">

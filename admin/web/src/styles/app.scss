@@ -13,7 +13,9 @@ body {
   height: 100vh;
 }
 
-// 左侧栏(el-aside)
+// 左侧栏(el-aside):只在桌面下挂载(移动端切到 .mobile-menu 抽屉)
+// 外层 chrome = 玻璃背景 / 右边框 / 内边距 / 折叠过渡;
+// 内层 chrome(品牌+导航)在 .menu-chrome 块,桌面抽屉共用。
 .sidebar {
   background: var(--glass-strong);
   backdrop-filter: blur(30px) saturate(150%);
@@ -25,6 +27,36 @@ body {
   flex-shrink: 0;
   // 折叠切换时宽度/内边距平滑过渡
   transition: width 0.25s ease, padding 0.25s ease;
+
+  // 折叠态:收窄内边距,文字(品牌名/分组标题)隐藏,只剩图标
+  &.is-collapsed {
+    padding: 28px 8px;
+  }
+}
+
+// ---- 抽屉内的菜单 chrome ----
+// el-drawer 自带 panel 背景,这里只补内层导航所需的布局;
+// 背景/边框/外边距由抽屉本身提供,避免双重玻璃叠加。
+.mobile-menu {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 18px 14px 18px 18px;
+  overflow: hidden;
+}
+
+// ---- 通用菜单 chrome(品牌 + 导航树)----
+// 桌面侧栏、移动端抽屉共用同一套内部样式。
+// 注意:app.scss 是全局 CSS,直接用后代选择器即可(不要写 :deep()—
+// Vue SFC 的 <style scoped> 才会处理 :deep(),全局 CSS 写了反而让浏览器
+// 把整条规则当成无效伪类丢掉)
+// ⚠️ 不要在这里加 `flex: 1 1 auto`:桌面下这条会挂到 <el-aside> 上,
+//   而 el-aside 是 el-container 的 flex 子项,grow:1 会把它撑得比
+//   :width="240px" 还宽很多。抽屉里 .mobile-menu 自己负责高度。
+.menu-chrome {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 
   .brand {
     font-family: var(--display);
@@ -44,25 +76,6 @@ body {
       background: var(--acc-mint);
       border-radius: 2px;
       flex-shrink: 0;
-    }
-  }
-
-  // 折叠态:收窄内边距,文字(品牌名/分组标题)隐藏,只剩图标
-  &.is-collapsed {
-    padding: 28px 8px;
-
-    .brand {
-      justify-content: center;
-      padding: 0 0 18px;
-
-      .brand-name {
-        display: none;
-      }
-    }
-
-    .nav-section-title,
-    .nav-group-label {
-      display: none;
     }
   }
 
@@ -99,9 +112,6 @@ body {
   }
 
   // el-menu 接管菜单项的渲染;只调样式,不接管结构
-  // 注意:app.scss 是全局 CSS,直接用后代选择器即可(不要写 :deep()—
-  // Vue SFC 的 <style scoped> 才会处理 :deep(),全局 CSS 写了反而让浏览器
-  // 把整条规则当成无效伪类丢掉)
   .nav-menu {
     --el-menu-bg-color: transparent;
     --el-menu-hover-bg-color: var(--glass-soft);
@@ -225,6 +235,24 @@ body {
   }
 }
 
+// ---- 桌面折叠态下隐藏文字 ----
+// 挂到 .sidebar 上而非 .menu-chrome,保证抽屉不受影响。
+.sidebar.is-collapsed {
+  .brand {
+    justify-content: center;
+    padding: 0 0 18px;
+
+    .brand-name {
+      display: none;
+    }
+  }
+
+  .nav-section-title,
+  .nav-group-label {
+    display: none;
+  }
+}
+
 // 右侧内容区(外层 el-container,内部垂直堆叠 header + main)
 .content {
   flex: 1 1 auto;
@@ -343,4 +371,37 @@ body {
 
 .sidebar-pop .el-menu .el-menu-item.is-active .el-icon {
   opacity: 0.8;
+}
+
+// ---- 移动端(<=768px)整体收口 ----
+// 桌面端在 980/720 还有自己的一套折叠,但 .sidebar 在这里已被 v-if 干掉,
+// 只剩内容区需要重排 padding/margin 与 topbar 留白。
+@media (max-width: 768px) {
+  // 内容区让出顶部 topbar 高度的 12px,左右贴边各 12px
+  .content > .el-main {
+    padding: 16px 14px;
+  }
+
+  .topbar {
+    // 抽屉打开时贴边,玻璃卡变窄一点
+    margin: 0 12px 12px;
+    top: 8px;
+    border-radius: 10px;
+  }
+}
+
+// ---- 移动端抽屉外观 ----
+// el-drawer 默认 panel 是白底,这里套上主题玻璃风,跟侧栏一致。
+.sidebar-drawer {
+  // el-drawer 根容器(append-to-body),只调整外层
+  .el-drawer__header {
+    display: none;
+  }
+}
+
+.sidebar-drawer .el-drawer__body {
+  padding: 0;
+  background: var(--glass-strong);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
 }

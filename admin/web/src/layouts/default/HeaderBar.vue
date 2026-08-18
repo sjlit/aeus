@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Expand, Fold, Search } from '@element-plus/icons-vue'
+import { Expand, Fold, Menu, Search } from '@element-plus/icons-vue'
 import { useUiStore } from '../../stores/ui'
+import { useMediaQuery } from '../../composables/useMediaQuery'
 import UserMenu from './UserMenu.vue'
 
 const ui = useUiStore()
 const route = useRoute()
+const isMobile = useMediaQuery('(max-width: 768px)')
 
 interface Crumb {
     label: string
@@ -18,18 +20,37 @@ const crumbs = computed<Crumb[]>(() =>
         .filter((r) => r.meta?.title)
         .map((r) => ({ label: r.meta.title as string, path: r.path })),
 )
+
+// 桌面:切换 aside 折叠态;移动端:打开抽屉
+function onSidebarToggle() {
+    if (isMobile.value) {
+        ui.toggleMobileSidebar()
+    } else {
+        ui.toggleSidebar()
+    }
+}
+
+const toggleIcon = computed(() => {
+    if (isMobile.value) return Menu
+    return ui.sidebarCollapsed ? Expand : Fold
+})
+
+const toggleLabel = computed(() => {
+    if (isMobile.value) return '打开菜单'
+    return ui.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'
+})
 </script>
 
 <template>
     <div class="toolbar">
         <div class="cluster left">
-            <button class="icon-btn" type="button" :aria-label="ui.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
-                :title="ui.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" @click="ui.toggleSidebar()">
+            <button class="icon-btn" type="button" :aria-label="toggleLabel" :title="toggleLabel"
+                @click="onSidebarToggle">
                 <el-icon>
-                    <component :is="ui.sidebarCollapsed ? Expand : Fold" />
+                    <component :is="toggleIcon" />
                 </el-icon>
             </button>
-            <nav v-if="crumbs.length" class="crumbs" aria-label="Breadcrumb">
+            <nav v-if="!isMobile && crumbs.length" class="crumbs" aria-label="Breadcrumb">
                 <template v-for="(c, i) in crumbs" :key="c.path">
                     <router-link v-if="i < crumbs.length - 1" :to="c.path" class="crumb crumb-link">
                         {{ c.label }}
@@ -42,7 +63,7 @@ const crumbs = computed<Crumb[]>(() =>
             </nav>
         </div>
 
-        <div class="searchbox">
+        <div v-if="!isMobile" class="searchbox">
             <el-icon class="s-icon">
                 <Search />
             </el-icon>
@@ -77,6 +98,7 @@ const crumbs = computed<Crumb[]>(() =>
 
 .right {
     gap: 8px;
+    grid-column: 3;
 }
 
 /* ── icon-btn(折叠) ── */
@@ -211,18 +233,6 @@ const crumbs = computed<Crumb[]>(() =>
     /* 窄屏只留当前页,链路/分隔符藏掉(见模板注释) */
     .crumbs .crumb-link,
     .crumbs .crumb-sep {
-        display: none;
-    }
-}
-
-@media (max-width: 720px) {
-    .searchbox {
-        padding: 8px;
-        min-width: 38px;
-        justify-content: center;
-    }
-
-    .s-input {
         display: none;
     }
 }
