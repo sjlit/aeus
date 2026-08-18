@@ -1,4 +1,9 @@
 import type { MenuNode } from '../types'
+import {
+  DEFAULT_SECTION_NAME,
+  SECTION_DEFINITIONS,
+  type SectionDefinition,
+} from './menuSections'
 
 export interface Section {
   name: string
@@ -12,10 +17,26 @@ export function uriSegment(uri: string): string {
 }
 
 /** 一级菜单容器:无 uri 且有 children,后端把它插在 sys_menus 里用作
- *  分组标题。store.load 拿到平铺数据 buildTree 后,容器成为根节点,
- *  它的 name 直接作为侧栏节标题。 */
+ *  逻辑父节点(parent="SystemXxx")。store.load 拿到平铺数据 buildTree
+ *  后,容器成为根节点,它的 name 在侧栏里作为一级菜单标题出现。 */
 export function isSectionContainer(node: MenuNode): boolean {
   return !node.uri && (node.children?.length ?? 0) > 0
+}
+
+/** 容器在所属节里的渲染策略。SidebarContent 用它决定是把容器渲染成
+ *  el-sub-menu(显示容器自身标题 + 子项),还是把 children 平铺成 el-menu-item。
+ *
+ *  规则:容器名 ≠ 节名 → sub-menu(呈现一级标题;多容器归到一节时尤其需要);
+ *       容器名 = 节名 → 平铺(legacy "1 节 = 1 容器" 布局,避免节标题与
+ *       容器标题重复)。
+ *
+ *  该函数只判断"要不要把容器当成 sub-menu";是否真的渲染为 sub-menu
+ *  还要看 isSectionContainer(node) 为真(否则走普通 sub-menu / leaf 分支)。 */
+export function shouldRenderAsSubMenu(
+  container: MenuNode,
+  sectionName: string,
+): boolean {
+  return container.name !== sectionName
 }
 
 /** 把 /user/menus 的平铺结果(每行带 parent 字段)构造成嵌套树:
@@ -46,18 +67,54 @@ export function buildTree(flat: MenuNode[]): MenuNode[] {
   return roots
 }
 
-/** 根节点按节分组:
- *  - section container(uri 空 + 有 children)用自身 name 作节标题;
- *  - 其他根节点继续按 uri 首段分组('system' / 'general')。
- *  首次出现顺序保留。 */
-export function groupBySection(tree: MenuNode[]): Section[] {
-  const map = new Map<string, MenuNode[]>()
-  for (const root of tree) {
-    const key = isSectionContainer(root) ? root.name : uriSegment(root.uri)
-    if (!map.has(key)) map.set(key, [])
-    map.get(key)!.push(root)
+/** 根节点按节分组(配置驱动):
+ *  - `definitions` 里列出 component 的 def → 进对应分组的 `items`(节名取 `def.name`);
+ *  - `definitions` 里 `components: []` 的 def 是 "catcher" 节,吸纳所有未被
+ *    显式列出的顶级节点,渲染位置由它在数组里的声明位置决定(用户完全
+ *    控制顺序);
+ *  - 未声明 catcher 时,未列入的顶级节点被静默丢弃——分组策略完全交给
+ *    配置,不再有隐式默认节。
+ *  - 输出过滤掉空节(包括没有未列入节点的 catcher、引用了不存在的
+ *    component 的 def),保证侧栏不会出现空标题。
+ *
+ *  多个 catcher 出现时,只有第一个声明位置的最先那个真正吸纳;后续空
+ *  catcher 一并被过滤掉(避免重复标题)。
+ *
+ *  组内顺序保留 buildTree 的顺序,即后端 `MenuEntry.Sort`。 */
+export function groupBySection(
+  tree: MenuNode[],
+  definitions: SectionDefinition[] = SECTION_DEFINITIONS,
+): Section[] {
+  const byComponent = new Map<string, MenuNode>()
+  for (const root of tree) byComponent.set(root.component, root)
+
+  const assigned = new Set<string>()
+  const sections: Section[] = []
+  let catcherIdx = -1
+
+  for (let i = 0; i < definitions.length; i++) {
+    const def = definitions[i]
+    const items: MenuNode[] = []
+    for (const comp of def.components) {
+      const node = byComponent.get(comp)
+      if (node) {
+        items.push(node)
+        assigned.add(comp)
+      }
+    }
+    if (def.components.length === 0 && catcherIdx < 0) catcherIdx = i
+    sections.push({ name: def.name, items })
   }
-  return [...map.entries()].map(([name, items]) => ({ name, items }))
+
+  if (catcherIdx >= 0) {
+    const catcher = sections[catcherIdx]
+    for (const root of tree) {
+      if (!assigned.has(root.component)) catcher.items.push(root)
+    }
+  }
+
+  // 过滤空节:无未列入节点的 catcher + 引用不存在 component 的 def,都不渲染。
+  return sections.filter((s) => s.items.length > 0)
 }
 
 export interface MenuFlat {

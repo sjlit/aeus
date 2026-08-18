@@ -6,18 +6,21 @@
  * 外层样式 .menu-chrome 写在全局 app.scss,内层 .brand/.nav-scroll/.nav-menu
  * 通过该类选择器自动在两种容器里生效。
  *
- * 节点渲染分三类(互斥):
- *   - section container(uri="" + 有 children):不渲染外层 sub-menu,
- *     直接把 children 摊成 el-menu-item,section 标题由上层
- *     .nav-section-title 给出,避免重复的折叠头。
- *   - 普通 sub-menu(有 uri + 有 children):渲染为 el-sub-menu。
+ * 节点渲染分支(互斥):
+ *   - section container(uri="" + 有 children)且容器名 ≠ 节名:
+ *     渲染为 el-sub-menu(显示容器自身标题 + 子项),呈现多容器归到
+ *     一节时的层级;
+ *   - section container 且容器名 = 节名(legacy "1 节 = 1 容器"):
+ *     跳过外层 sub-menu,把 children 平铺为 el-menu-item,避免
+ *     节标题与容器标题重复;
+ *   - 普通 sub-menu(有 uri + 有 children):渲染为 el-sub-menu;
  *   - 普通 leaf(只有 uri):渲染为 el-menu-item。
  */
 import { computed, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
-import { isSectionContainer } from '@/stores/menuGroups'
+import { isSectionContainer, shouldRenderAsSubMenu } from '@/stores/menuGroups'
 import type { MenuNode } from '@/types'
 import { resolveIcon } from '@/utils/icons'
 
@@ -66,8 +69,27 @@ watch(defaultOpeneds, async (openeds) => {
                 :default-openeds="defaultOpeneds" :router="true" :collapse="ui.sidebarCollapsed"
                 background-color="transparent" text-color="var(--sidebar-ink)" active-text-color="var(--ink)">
                 <template v-for="node in section.items" :key="node.uri || node.view_path || node.name">
-                    <!-- Section container: 跳过外层 sub-menu,把 children 平铺为叶子。 -->
-                    <template v-if="isSectionContainer(node)">
+                    <!-- Section container:
+                         - 容器名 ≠ 节名 → 渲染为 el-sub-menu(显示容器自身标题,呈现层级);
+                         - 容器名 = 节名(legacy "1 节 = 1 容器") → 平铺 children 为叶子,
+                           避免节标题与容器标题重复。 -->
+                    <el-sub-menu v-if="isSectionContainer(node) && shouldRenderAsSubMenu(node, section.name)"
+                        :index="subIndex(node)" popper-class="sidebar-pop">
+                        <template #title>
+                            <el-icon v-if="resolveIcon(node.icon)">
+                                <component :is="resolveIcon(node.icon)" />
+                            </el-icon>
+                            <span>{{ node.name }}</span>
+                        </template>
+                        <el-menu-item v-for="child in node.children!" :key="child.uri || child.view_path || child.name"
+                            :index="child.uri">
+                            <el-icon v-if="resolveIcon(child.icon)">
+                                <component :is="resolveIcon(child.icon)" />
+                            </el-icon>
+                            <span>{{ child.name }}</span>
+                        </el-menu-item>
+                    </el-sub-menu>
+                    <template v-else-if="isSectionContainer(node)">
                         <el-menu-item v-for="child in node.children!" :key="child.uri || child.view_path || child.name"
                             :index="child.uri">
                             <el-icon v-if="resolveIcon(child.icon)">
