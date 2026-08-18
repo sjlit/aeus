@@ -29,25 +29,31 @@ export interface MenuFlat {
   titlesByUri: Map<string, string>
   /** uri → 图标短串;多标签页的标签图标用,与 uris 同一次遍历得到。 */
   iconsByUri: Map<string, string>
+  /** uri → 服务端下发的视图路径(view_path);路由注册时按此查表。 */
+  viewsByUri: Map<string, string>
 }
 
-/** 单次深度优先遍历,同时产出 uri 列表、uri → 标题与 uri → 图标映射(替代原先两个独立 DFS)。 */
+/** 单次深度优先遍历,同时产出 uri 列表、uri → 标题/图标/view_path 映射。
+ *  标题来自 n.name(后端 MenuNode 用 name 作显示名);view_path 由服务端下发,
+ *  客户端不做推导。 */
 export function flattenMenu(nodes: MenuNode[]): MenuFlat {
   const uris: string[] = []
   const titlesByUri = new Map<string, string>()
   const iconsByUri = new Map<string, string>()
+  const viewsByUri = new Map<string, string>()
   const seen = new Set<string>()
   const walk = (ns: MenuNode[]) => {
     for (const n of ns) {
       if (n.uri && !seen.has(n.uri)) {
         seen.add(n.uri)
         uris.push(n.uri)
-        titlesByUri.set(n.uri, n.title)
+        titlesByUri.set(n.uri, n.name)
         iconsByUri.set(n.uri, n.icon)
+        if (n.view_path) viewsByUri.set(n.uri, n.view_path)
       }
       if (n.children?.length) walk(n.children)
     }
   }
   walk(nodes)
-  return { uris, titlesByUri, iconsByUri }
+  return { uris, titlesByUri, iconsByUri, viewsByUri }
 }

@@ -8,8 +8,12 @@ export interface Envelope<T = unknown> {
 /** MenuTree 返回的节点(menu.proto MenuNode)。 */
 export interface MenuNode {
   name: string
-  title: string
-  component: string
+  /**
+   * 服务端下发的视图路径,相对 src/views,不含扩展名。
+   * 例 "system/sys-users" → src/views/system/sys-users.vue。
+   * 客户端不做推导,直接用此字段查表;空串表示该节点不路由(纯分组)。
+   */
+  view_path: string
   uri: string
   icon: string
   hidden: boolean

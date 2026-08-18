@@ -4,30 +4,50 @@ import type { MenuNode } from '../../types'
 
 const tree: MenuNode[] = [
   {
-    name: 'SystemSysUsers', title: '用户管理', component: 'SystemSysUsers',
-    uri: '/system/sys-users', icon: '', hidden: false, public: false,
+    name: '用户管理',
+    view_path: '@/views/system/sys_user/Index.vue',
+    uri: '/system/sys-users',
+    icon: '',
+    hidden: false,
+    public: false,
     children: [
       {
-        name: 'SystemSysUserDetail', title: '用户详情', component: 'SystemSysUserDetail',
+        name: '用户详情',
+        view_path: '@/views/system/sys_user/Detail.vue',
         uri: '/system/sys-users/detail', icon: '', hidden: true, public: false, children: [],
       },
     ],
   },
   {
-    name: 'SystemSysRoles', title: '角色管理', component: 'SystemSysRoles',
+    name: '角色管理',
+    view_path: '@/views/system/sys_role/Index.vue',
     uri: '/system/sys-roles', icon: '', hidden: false, public: false, children: [],
   },
   {
-    name: 'WorkspaceOverview', title: '概览', component: 'WorkspaceOverview',
-    uri: '/workspace/overview', icon: 'Monitor', hidden: false, public: false, children: [],
+    name: '概览',
+    view_path: '@/views/workspace/overview/Index.vue',
+    uri: '/workspace/overview',
+    icon: 'Monitor',
+    hidden: false,
+    public: false,
+    children: [],
   },
   {
-    name: 'GroupOnly', title: '纯分组', component: 'GroupOnly',
-    uri: '', icon: '', hidden: false, public: false,
+    name: '纯分组',
+    view_path: '',
+    uri: '',
+    icon: '',
+    hidden: false,
+    public: false,
     children: [
       {
-        name: 'Child', title: '子项', component: 'Child',
-        uri: '/system/child', icon: '', hidden: false, public: false, children: [],
+        name: '子项',
+        view_path: '@/views/system/child/Index.vue',
+        uri: '/system/child',
+        icon: '',
+        hidden: false,
+        public: false,
+        children: [],
       },
     ],
   },
@@ -48,8 +68,8 @@ describe('groupBySection', () => {
   it('按 uri 首段分组,保留出现顺序', () => {
     const secs = groupBySection(tree)
     expect(secs.map((s) => s.name)).toEqual(['system', 'workspace', 'general'])
-    expect(secs[0].items.map((n) => n.title)).toEqual(['用户管理', '角色管理'])
-    expect(secs[2].items.map((n) => n.title)).toEqual(['纯分组'])
+    expect(secs[0].items.map((n) => n.name)).toEqual(['用户管理', '角色管理'])
+    expect(secs[2].items.map((n) => n.name)).toEqual(['纯分组'])
   })
   it('空 uri 根节点归入 general', () => {
     const secs = groupBySection([tree[3]])
@@ -80,5 +100,20 @@ describe('flattenMenu', () => {
     expect(iconsByUri.get('/workspace/overview')).toBe('Monitor')
     expect(iconsByUri.get('/system/sys-users')).toBe('')
     expect(iconsByUri.has('/system/nope')).toBe(false)
+  })
+
+  it('同时产出 uri → 服务端 view_path 映射(保留 @/ 前缀原值)', () => {
+    const { viewsByUri } = flattenMenu(tree)
+    expect(viewsByUri.get('/system/sys-users')).toBe('@/views/system/sys_user/Index.vue')
+    expect(viewsByUri.get('/system/sys-roles')).toBe('@/views/system/sys_role/Index.vue')
+    expect(viewsByUri.get('/workspace/overview')).toBe('@/views/workspace/overview/Index.vue')
+    expect(viewsByUri.has('/system/nope')).toBe(false)
+  })
+
+  it('空 view_path 不会进入映射(留给路由回落占位)', () => {
+    const { viewsByUri } = flattenMenu([
+      { name: 'g', view_path: '', uri: '/g', icon: '', hidden: false, public: false, children: [] },
+    ])
+    expect(viewsByUri.size).toBe(0)
   })
 })
