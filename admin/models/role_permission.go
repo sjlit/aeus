@@ -37,12 +37,14 @@ func (m *RolePermission) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes role-permission grants as a top-level navigable
-// item.  This is the canonical surface for editing per-role menu and
-// permission bindings — separate from Role, which only manages the
-// role list itself.
+// MenuEntry exposes role-permission grants as a navigable item under
+// the 用户中心 section.  This is the canonical surface for editing
+// per-role menu and permission bindings — separate from Role, which
+// only manages the role list itself.  Parent references
+// SystemUserCenter; Sort places RolePermission below Role inside the
+// section.
 func (m *RolePermission) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "角色授权"}
+	return MenuSpec{Name: "角色授权", Parent: "SystemUserCenter", Sort: 30}
 }
 
 // MenuPermissionDatas returns the distinct Menu.Component values a role

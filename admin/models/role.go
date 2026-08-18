@@ -127,9 +127,11 @@ func (m *Role) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes roles as a top-level navigable item.
+// MenuEntry exposes roles as a navigable item under the 用户中心
+// section.  Parent references SystemUserCenter; Sort places Role below
+// User and above RolePermission inside the section.
 func (m *Role) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "角色管理"}
+	return MenuSpec{Name: "角色管理", Parent: "SystemUserCenter", Sort: 20}
 }
 
 // ReplacePermissions atomically deletes every existing sys_role_permissions

@@ -58,12 +58,14 @@ func (m *Menu) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry auto-registers this Menu model as a navigable menu item so
-// admins can reach /system/sys-menus to manage menus themselves.
+// MenuEntry auto-registers this Menu model as a navigable menu item
+// under the 系统设置 section so admins can reach /system/sys-menus to
+// manage menus themselves.  Parent references SystemSettings; Sort
+// places Menu between Tenant and Permission inside the section.
 // Component/Uri are left empty so the framework derives them from
 // ModuleName + TableName (see MenuProvider doc).
 func (m *Menu) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "菜单管理"}
+	return MenuSpec{Name: "菜单管理", Parent: "SystemSettings", Sort: 20}
 }
 
 // MenuSpec describes one auto-generated sys_menus row.  Fields left zero

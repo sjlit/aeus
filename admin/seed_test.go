@@ -157,8 +157,9 @@ func TestSeed_GrantsFullCatalogToAdminRole(t *testing.T) {
 		t.Error("seeded role.IsSuper should be true")
 	}
 	menus, perms := seedGrantCount(t, db, "admin")
-	if menus != 2 || perms != 2 {
-		t.Fatalf("grants = %d menus / %d perms, want 2/2", menus, perms)
+	// 2 manually-inserted menus + 3 first-level section menus = 5 catalog rows.
+	if menus != 5 || perms != 2 {
+		t.Fatalf("grants = %d menus / %d perms, want 5/2", menus, perms)
 	}
 	// every junction row must carry the role's tenant and the catalog
 	// row's data, including the non-api catalog type.
@@ -183,8 +184,9 @@ func TestSeed_TopUp_GrantsNewCatalogRows(t *testing.T) {
 		t.Fatalf("first Seed: %v", err)
 	}
 	menus, perms := seedGrantCount(t, db, "admin")
-	if menus != 1 || perms != 0 {
-		t.Fatalf("after first Seed: %d menus / %d perms, want 1/0", menus, perms)
+	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
+	if menus != 4 || perms != 0 {
+		t.Fatalf("after first Seed: %d menus / %d perms, want 4/0", menus, perms)
 	}
 
 	// catalog grows: a new menu and a new permission appear (upgrade
@@ -200,8 +202,9 @@ func TestSeed_TopUp_GrantsNewCatalogRows(t *testing.T) {
 	}
 
 	menus, perms = seedGrantCount(t, db, "admin")
-	if menus != 2 || perms != 1 {
-		t.Fatalf("after second Seed: %d menus / %d perms, want 2/1", menus, perms)
+	// 2 manually-inserted menus + 3 first-level section menus = 5 catalog rows.
+	if menus != 5 || perms != 1 {
+		t.Fatalf("after second Seed: %d menus / %d perms, want 5/1", menus, perms)
 	}
 }
 
@@ -226,8 +229,9 @@ func TestSeed_TopUp_HealsRevokedGrants(t *testing.T) {
 		t.Fatalf("second Seed: %v", err)
 	}
 	menus, _ := seedGrantCount(t, db, "admin")
-	if menus != 1 {
-		t.Fatalf("after heal: %d menu grants, want 1", menus)
+	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
+	if menus != 4 {
+		t.Fatalf("after heal: %d menu grants, want 4", menus)
 	}
 }
 
@@ -256,8 +260,9 @@ func TestSeed_UpgradesExistingBuiltinRoleToSuper(t *testing.T) {
 		t.Error("existing builtin admin role should be upgraded to IsSuper")
 	}
 	menus, _ := seedGrantCount(t, db, "admin")
-	if menus != 1 {
-		t.Fatalf("menu grants = %d, want 1 after upgrade", menus)
+	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
+	if menus != 4 {
+		t.Fatalf("menu grants = %d, want 4 after upgrade", menus)
 	}
 }
 
@@ -348,5 +353,118 @@ func TestSeed_ThenLoginFlow(t *testing.T) {
 	}
 	if res.TenantName != "默认租户" {
 		t.Errorf("TenantName = %q, want 默认租户 (Seed converges the sys_tenants row)", res.TenantName)
+	}
+}
+
+// TestSeed_InsertsSectionMenus pins the structural menu contract: a
+// fresh Seed creates exactly 3 first-level section rows in sys_menus
+// — 用户中心 / 日志记录 / 系统设置 — with stable Components, empty
+// Uri (non-navigable grouping containers), and the Element-Plus icon
+// names declared in seed.go's sectionMenuSpecs.  Parent stays empty
+// because Seed does NOT re-point child menus at these containers
+// (that is a separate task that needs Setup modification).
+func TestSeed_InsertsSectionMenus(t *testing.T) {
+	db := newTestDB(t)
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	expected := []struct {
+		component, name, icon string
+		sort                  int64
+	}{
+		{"SystemUserCenter", "用户中心", "UserFilled", 10},
+		{"SystemLogs", "日志记录", "Tickets", 20},
+		{"SystemSettings", "系统设置", "Tools", 30},
+	}
+	for _, e := range expected {
+		var row models.Menu
+		err := db.Unscoped().Where("component = ?", e.component).First(&row).Error
+		if err != nil {
+			t.Errorf("section menu %q missing: %v", e.component, err)
+			continue
+		}
+		if row.Name != e.name {
+			t.Errorf("section menu %q Name = %q, want %q", e.component, row.Name, e.name)
+		}
+		if row.Icon != e.icon {
+			t.Errorf("section menu %q Icon = %q, want %q", e.component, row.Icon, e.icon)
+		}
+		if row.Sort != e.sort {
+			t.Errorf("section menu %q Sort = %d, want %d", e.component, row.Sort, e.sort)
+		}
+		if row.Uri != "" {
+			t.Errorf("section menu %q should have empty Uri, got %q", e.component, row.Uri)
+		}
+		if row.ViewPath != "" {
+			t.Errorf("section menu %q should have empty ViewPath, got %q", e.component, row.ViewPath)
+		}
+		if row.Parent != "" {
+			t.Errorf("section menu %q should have empty Parent, got %q", e.component, row.Parent)
+		}
+		if row.Hidden {
+			t.Errorf("section menu %q should not be Hidden", e.component)
+		}
+	}
+}
+
+// TestSeed_SectionMenusIdempotent covers the re-run contract: a
+// second Seed must NOT duplicate section rows (FirstOrCreate on
+// Component) and must NOT touch their existing Name / Icon / Sort
+// (operator edits preserved).
+func TestSeed_SectionMenusIdempotent(t *testing.T) {
+	db := newTestDB(t)
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("first Seed: %v", err)
+	}
+	// operator rename + re-icon + re-sort, must survive second Seed.
+	if err := db.Model(&models.Menu{}).
+		Where("component = ?", "SystemUserCenter").
+		Updates(map[string]any{"name": "成员管理", "icon": "Avatar", "sort": 99}).Error; err != nil {
+		t.Fatalf("operator edit: %v", err)
+	}
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("second Seed: %v", err)
+	}
+
+	// still exactly 3 section rows, no duplicates.
+	var n int64
+	if err := db.Model(&models.Menu{}).
+		Where("component IN ?", []string{"SystemUserCenter", "SystemLogs", "SystemSettings"}).
+		Count(&n).Error; err != nil {
+		t.Fatalf("count section menus: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("section menu count = %d, want 3 (no duplicates)", n)
+	}
+
+	// operator edits survived.
+	var renamed models.Menu
+	if err := db.Where("component = ?", "SystemUserCenter").First(&renamed).Error; err != nil {
+		t.Fatalf("lookup renamed: %v", err)
+	}
+	if renamed.Name != "成员管理" || renamed.Icon != "Avatar" || renamed.Sort != 99 {
+		t.Errorf("operator edits lost: Name=%q Icon=%q Sort=%d",
+			renamed.Name, renamed.Icon, renamed.Sort)
+	}
+}
+
+// TestSeed_SectionMenusSkipBlankSpecs mirrors ensureMenuRow's
+// defensive guard: a spec with empty Component or Name is silently
+// skipped (matching the framework's "skip menu creation" contract for
+// such entries).  An empty-Comper entry must never produce a row,
+// regardless of Name being set.
+func TestSeed_SectionMenusSkipBlankSpecs(t *testing.T) {
+	db := newTestDB(t)
+	if err := EnsureSectionMenus(db); err != nil {
+		t.Fatalf("EnsureSectionMenus: %v", err)
+	}
+
+	var n int64
+	if err := db.Model(&models.Menu{}).Count(&n).Error; err != nil {
+		t.Fatalf("count sys_menus: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("sys_menus count = %d, want 3 (only the well-formed specs)", n)
 	}
 }

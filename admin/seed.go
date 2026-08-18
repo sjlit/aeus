@@ -2,12 +2,81 @@ package admin
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/pkg/errs"
 	"gorm.io/gorm"
 )
+
+// sectionMenuSpecs lists the first-level navigation containers created
+// by EnsureSectionMenus.  Each entry has a stable Component (used by
+// future MenuEntry().Parent references once Setup gains a pre-loop
+// insertion step) and a Chinese Name shown in the sidebar.  Uri and
+// ViewPath are intentionally empty — section containers are not
+// navigable; the sidebar's resolveIcon treats them as plain-text
+// grouping headers today (uri="" + no children → nav-group-label), and
+// a future frontend pass will render them as proper section dividers.
+//
+// Icons follow Element Plus naming (@element-plus/icons-vue) so the
+// sidebar's resolveIcon lookup hits the export directly.  Operators
+// can rename / re-icon via /system/sys-menus; EnsureSectionMenus is
+// FirstOrCreate and never overwrites an existing row.
+//
+// Adding / reordering rows here is safe; changing an existing
+// Component is not — Setup's auto-registration keys on the model's
+// derived Component and Parent references would silently break.
+var sectionMenuSpecs = []models.MenuSpec{
+	{Component: "SystemUserCenter", Name: "用户中心", Icon: "UserFilled", Sort: 10},
+	{Component: "SystemLogs", Name: "日志记录", Icon: "Tickets", Sort: 20},
+	{Component: "SystemSettings", Name: "系统设置", Icon: "Tools", Sort: 30},
+}
+
+// EnsureSectionMenus FirstOrCreates each sectionMenuSpecs entry into
+// sys_menus.  Idempotent — runs on every Seed call without duplicating
+// rows.  Existing rows are NEVER overwritten, so operator renames and
+// icon changes survive subsequent server starts.
+//
+// Scope: this function only creates the section containers.  It does
+// NOT re-point child menus' Parent at these containers — that would
+// require Setup to insert section menus BEFORE validateMenuParentsRef
+// runs (currently impossible without modifying Setup), and changing
+// MenuEntry().Parent to reference these Components on every child
+// model.  After this Seed-only step, sys_menus carries 3 standalone
+// section rows (Parent="") in addition to the 9 child rows that
+// MenuEntry() registers; the actual nesting / sidebar grouping is a
+// separate task.
+//
+// Unscoped() mirrors ensureMenuRow's contract: a previously
+// soft-deleted row counts as "exists, do nothing" so an operator who
+// removed a section via /system/sys-menus is not silently resurrected.
+func EnsureSectionMenus(db *gorm.DB) error {
+	for _, spec := range sectionMenuSpecs {
+		if spec.Component == "" || spec.Name == "" {
+			continue
+		}
+		var existing models.Menu
+		err := db.Unscoped().Where("component = ?", spec.Component).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("lookup section menu %q: %w", spec.Component, err)
+		}
+		row := models.Menu{
+			Component: spec.Component,
+			Name:      spec.Name,
+			Icon:      spec.Icon,
+			Sort:      spec.Sort,
+		}
+		if err := db.Create(&row).Error; err != nil {
+			return fmt.Errorf("insert section menu %q: %w", spec.Component, err)
+		}
+	}
+	return nil
+}
 
 // Seed converges a database to the bootstrap state the admin module
 // expects, and is safe to run on every startup:
@@ -65,6 +134,7 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		IsSuper:     true,
 		DataScope:   "all",
 	}
+
 	user := &models.User{
 		TenantModel: models.TenantModel{TenantID: role.TenantID},
 		UID:         "admin",
@@ -76,6 +146,14 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 	}
 
 	return db.Transaction(func(tx *gorm.DB) error {
+		// Section containers are inserted FIRST so the structural menu
+		// catalog is in place before role / user / grants; this is also
+		// the only place Seed touches the menu catalog — Setup owns the
+		// model-derived menus, Seed owns the section scaffolding.
+		if err := EnsureSectionMenus(tx); err != nil {
+			return err
+		}
+
 		// FirstOrCreate with a key-clause is the canonical "ensure exists"
 		// idiom.  RowsAffected==0 means the row was already there (any
 		// tenant_id) and has been loaded into role — including its

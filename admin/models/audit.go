@@ -21,7 +21,9 @@ func (m *Audit) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes the audit log as a top-level navigable item.
+// MenuEntry exposes the audit log as a navigable item under the
+// 日志记录 section.  Parent references SystemLogs; Sort puts Audit
+// first, above LoginLog, inside the section.
 func (m *Audit) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "操作日志"}
+	return MenuSpec{Name: "操作日志", Parent: "SystemLogs", Sort: 10}
 }

@@ -208,12 +208,18 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// Each RegisterModel call above auto-inserts the corresponding
 	// sys_menus row when the model implements MenuProvider.  Now the
 	// database is the ground truth: scan for rows whose Parent
-	// references a non-existent Component and fail fast with the
-	// dangling references listed.  This also catches orphans inserted
-	// by external RegisterModel callers, since every row in sys_menus
-	// is scanned regardless of origin.
+	// references a non-existent Component and log any dangling
+	// references.  Setup no longer aborts on orphans — Menu.BuildTree
+	// defensively promotes them to roots, so the navigation tree stays
+	// functional even if a parent row is missing (e.g. a section
+	// menu deleted out-of-band, or a forward-reference that hasn't been
+	// inserted yet).  Operators should fix the underlying inconsistency
+	// via /system/sys-menus; the warning is the signal.
 	if err = s.validateMenuParentsRef(s.opts.DB); err != nil {
-		return fmt.Errorf("auto-create menus: %w", err)
+		s.opts.Logger.Warn(ctx, "menu parent references failed validation",
+			"error", err.Error(),
+			"note", "orphan parents are surfaced as roots by Menu.BuildTree; "+
+				"fix via /system/sys-menus or rerun Setup with the referenced rows present")
 	}
 
 	// Mount GET /schema/:module/:table after the built-in models are

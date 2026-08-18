@@ -32,10 +32,11 @@ func (m *Permission) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes the permission catalog as a top-level navigable
-// item.
+// MenuEntry exposes the permission catalog as a navigable item under
+// the 系统设置 section.  Parent references SystemSettings; Sort places
+// Permission last inside the section (below Tenant and Menu).
 func (m *Permission) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "权限管理"}
+	return MenuSpec{Name: "权限管理", Parent: "SystemSettings", Sort: 30}
 }
 
 // PermissionType mirrors the proto enum, but as a string so models stay

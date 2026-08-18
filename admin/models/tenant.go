@@ -41,7 +41,9 @@ func (m *Tenant) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes tenants as a top-level navigable item.
+// MenuEntry exposes tenants as a navigable item under the 系统设置
+// section.  Parent references SystemSettings; Sort places Tenant
+// first inside the section.
 func (m *Tenant) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "租户管理"}
+	return MenuSpec{Name: "租户管理", Parent: "SystemSettings", Sort: 10}
 }

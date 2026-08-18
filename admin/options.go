@@ -2,6 +2,7 @@ package admin
 
 import (
 	"github.com/sjlit/aeus/admin/middleware"
+	"github.com/sjlit/aeus/infra/logger"
 	"github.com/sjlit/rest/v3"
 	"gorm.io/gorm"
 )
@@ -23,6 +24,8 @@ type (
 
 		//
 		Router rest.Router
+
+		Logger logger.Logger
 	}
 
 	// Option mutates Options.
@@ -32,6 +35,7 @@ type (
 func newOptions(opts ...Option) *Options {
 	options := &Options{
 		Responder: newResponder(),
+		Logger:    logger.Default(),
 	}
 	for _, o := range opts {
 		o(options)
@@ -55,6 +59,12 @@ func WithResponder(responder rest.Responder) Option {
 func WithOpenAPI(enabled bool) Option {
 	return func(o *Options) {
 		o.EnabledOpenAPI = enabled
+	}
+}
+
+func WithLogger(logger logger.Logger) Option {
+	return func(o *Options) {
+		o.Logger = logger
 	}
 }
 

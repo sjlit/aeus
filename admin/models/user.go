@@ -168,11 +168,14 @@ func (m *User) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes this model as a top-level navigable item so admins
-// can reach /system/sys-users.  Component/Uri are left empty for the
-// framework to derive from ModuleName + TableName.
+// MenuEntry exposes this model as a navigable item under the
+// 用户中心 section.  Parent references SystemUserCenter (inserted by
+// admin.seed.go's EnsureSectionMenus); the framework's BuildTree nests
+// the row under that container.  Sort orders User first inside the
+// section.  Component/Uri are left empty for the framework to derive
+// from ModuleName + TableName.
 func (m *User) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "用户管理"}
+	return MenuSpec{Name: "用户管理", Parent: "SystemUserCenter", Sort: 10}
 }
 
 // TableName returns the physical table name (gorm.Tabler).
@@ -185,7 +188,10 @@ func (m *LoginLog) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes login logs as a top-level navigable item.
+// MenuEntry exposes login logs as a navigable item under the
+// 日志记录 section.  Parent references SystemLogs (inserted by
+// admin.seed.go's EnsureSectionMenus); Sort puts LoginLog below Audit
+// inside the section.
 func (m *LoginLog) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "登录日志"}
+	return MenuSpec{Name: "登录日志", Parent: "SystemLogs", Sort: 20}
 }

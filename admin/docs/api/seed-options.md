@@ -153,7 +153,7 @@ if err := s.RegisterModel(&MyAppModel{}); err != nil { /* ... */ }
 
 **批量注册 + 孤儿校验**:
 
-应用批量调用 `RegisterModel` 之后,可以手动调一次 `validateMenuParentsRef`(`internal`)确保所有 `Parent` 引用闭合;Setup 末尾会自动做这一步。
+应用批量调用 `RegisterModel` 之后,可以手动调一次 `validateMenuParentsRef`(`internal`)确保所有 `Parent` 引用闭合;Setup 末尾会自动做这一步。**注意:Setup 末尾这一步采用 `warn-and-continue` 策略** —— 校验失败时记录 `Warn` 级别日志,不阻塞启动;孤儿 `Parent` 由 `Menu.BuildTree` 在前端兜底提升为根节点(失去所属分组,但不影响功能)。需要严格 fail-fast 的批量注册流程请自行手动调用并检查错误。
 
 ## 11.7 错误类型
 

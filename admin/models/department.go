@@ -21,7 +21,9 @@ func (m *Department) ModuleName() string {
 	return "system"
 }
 
-// MenuEntry exposes departments as a top-level navigable item.
+// MenuEntry exposes departments as a navigable item under the
+// 用户中心 section.  Parent references SystemUserCenter; Sort places
+// Department last inside the section (below RolePermission).
 func (m *Department) MenuEntry() MenuSpec {
-	return MenuSpec{Name: "部门管理"}
+	return MenuSpec{Name: "部门管理", Parent: "SystemUserCenter", Sort: 40}
 }
