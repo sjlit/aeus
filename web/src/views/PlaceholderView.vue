@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
-const path = computed(() => route.path)
 const title = computed(() => (route.meta.title as string) ?? route.path)
 </script>
 
@@ -12,10 +11,10 @@ const title = computed(() => (route.meta.title as string) ?? route.path)
   <section class="glass panel">
     <h3>{{ title }} <span class="tag">PLACEHOLDER</span></h3>
     <p class="desc">
-      此页面由 MenuTree 驱动：菜单 uri <code>{{ path }}</code> 即客户端路由。
+      此页面由 MenuTree 驱动：菜单 uri <code>{{ route.path }}</code> 即客户端路由。
       后续在此挂载对应 REST 资源页面（用户 / 角色 / 权限 / 租户等）。
     </p>
-    <el-button type="primary" @click="ElMessage.info(`即将接入 ${path} 的资源页面`)">
+    <el-button type="primary" @click="ElMessage.info(`即将接入 ${route.path} 的资源页面`)">
       查看接口文档
     </el-button>
   </section>

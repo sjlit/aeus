@@ -1,11 +1,13 @@
 import axios from 'axios'
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import { envelopeCode, envelopeMessage, isAuthFailureCode } from './envelope'
 
 /** 拦截器需要的运行时依赖,由 main.ts 注入,避免与 stores/router 循环引用。 */
 export interface HttpContext {
   getToken(): string | null
-  getTenantId(): string | null
+  /** 当前路由路径,登出后作为 redirect 回跳目标(由 router 提供,不自行解析 URL)。 */
+  getCurrentPath(): string
   refresh(): Promise<boolean>
   logout(): void
   pushLogin(redirect: string): void
@@ -24,19 +26,54 @@ export const http = axios.create({
 })
 
 http.interceptors.request.use((config) => {
-  if (ctx?.getToken()) {
-    config.headers.Authorization = `Bearer ${ctx.getToken()}`
-  }
-  if (ctx?.getTenantId()) {
-    // NOTE: 后端当前从 JWT TenantID claim 派生租户(admin/middleware/auth/jwt.go),
-    // 此 header 被静默忽略;契约保留以便后续多租户接入时启用。
-    config.headers['X-Tenant-Id'] = ctx.getTenantId()
+  const token = ctx?.getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
 
+/** 会话彻底失效:清本地状态并跳登录页,带上当前路径以便登录后回跳。 */
+function handleSessionExpired(): Promise<never> {
+  if (ctx) {
+    ctx.logout()
+    ctx.pushLogin(ctx.getCurrentPath())
+  }
+  return Promise.reject(new Error('session expired'))
+}
+
+/** refresh 请求自身:再失败也不能再去 refresh,否则会无限循环。 */
+function isRefreshRequest(config: InternalAxiosRequestConfig | undefined): boolean {
+  const url = config?.url ?? ''
+  // baseURL 已通过 http.defaults.baseURL 拼装,这里只看相对路径段。
+  return url.includes('/auth/refresh-token')
+}
+
 // 并发 401 共享同一次刷新(single-flight)
 let refreshing: Promise<boolean> | null = null
+
+/**
+ * 收到鉴权失败(信封 4001/4002/4006 或 HTTP 401)时,先静默 refresh 一次,
+ * 成功则用新 token 重试原请求;失败/refresh 抛错/refresh 请求自身失败 → 会话失效。
+ */
+async function refreshAndRetry(
+  config: InternalAxiosRequestConfig | undefined,
+): Promise<AxiosResponse> {
+  if (!config || isRefreshRequest(config)) return handleSessionExpired()
+  refreshing ??= (ctx?.refresh() ?? Promise.resolve(false)).finally(() => {
+    refreshing = null
+  })
+  let ok = false
+  try {
+    ok = await refreshing
+  } catch {
+    // refresh() 自身抛错(网络抖动等):与 refresh 返回 false 同等待遇。
+    return handleSessionExpired()
+  }
+  if (!ok) return handleSessionExpired()
+  // 仅复用原请求配置;Authorization 由请求拦截器在重试时重新注入。
+  return http.request(config)
+}
 
 http.interceptors.response.use(
   async (response) => {
@@ -48,27 +85,7 @@ http.interceptors.response.use(
       return response
     }
     if (isAuthFailureCode(code)) {
-      // 认证失败:静默刷新一次后重试原请求
-      refreshing ??= (ctx?.refresh() ?? Promise.resolve(false)).finally(() => {
-        refreshing = null
-      })
-      let ok = false
-      try {
-        ok = await refreshing
-      } catch {
-        // refresh() 自身抛错(网络抖动等):与 refresh 返回 false 同等待遇。
-        ctx?.logout()
-        ctx?.pushLogin(window.location.hash.replace(/^#/, '') || '/')
-        return Promise.reject(new Error('session expired'))
-      }
-      if (ok) {
-        // 仅复用原请求配置;Authorization 由请求拦截器在重试时重新注入。
-        const retryConfig = { ...response.config }
-        return http.request(retryConfig)
-      }
-      ctx?.logout()
-      ctx?.pushLogin(window.location.hash.replace(/^#/, '') || '/')
-      return Promise.reject(new Error('session expired'))
+      return refreshAndRetry(response.config)
     }
     const msg = envelopeMessage(body) || `业务错误 code=${code}`
     ElMessage.error(msg)
@@ -78,6 +95,13 @@ http.interceptors.response.use(
     // 网络层失败(后端未启动等)
     if (!error.response) {
       ElMessage.error('Network unreachable')
+      return Promise.reject(error)
+    }
+    // 后端对 CodeTokenExpired/CodeUnauthorized/CodeTokenInvalid 映射 HTTP 401
+    // (pkg/errs/error.go HTTPStatus):同样走静默刷新 → 重试路径,
+    // 否则 token 过期时不会自动跳登录页。
+    if (error.response.status === 401) {
+      return refreshAndRetry(error.config)
     }
     return Promise.reject(error)
   },

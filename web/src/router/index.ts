@@ -6,7 +6,8 @@ import PlaceholderView from '../views/PlaceholderView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
-import { collectMenuUris, titleForUri } from '../stores/menuGroups'
+import { titleForUri } from '../stores/menuGroups'
+import type { MenuNode } from '../types'
 
 export const LOGIN_PATH = '/login'
 
@@ -27,14 +28,16 @@ export const router = createRouter({
   ],
 })
 
-/** 把菜单树里所有非空 uri 注册为业务路由(幂等,去重)。 */
-export async function registerMenuRoutes(): Promise<void> {
-  const menu = useMenuStore()
-  const existing = new Set(
-    router.getRoutes().filter((r) => r.name?.toString().startsWith('menu:')).map((r) => r.path),
-  )
-  for (const uri of collectMenuUris(menu.tree)) {
-    if (existing.has(uri)) continue
+// 已注册过的菜单树引用;树未变时 registerMenuRoutes 直接返回,避免每次导航重走 DFS。
+let registeredFor: MenuNode[] | null = null
+// 并发导航共享同一次加载(single-flight),避免同时打开多个 tab/深链时重复请求菜单。
+let readiness: Promise<void> | null = null
+
+function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
+  if (menu.tree === registeredFor) return
+  registeredFor = menu.tree
+  for (const uri of menu.uris) {
+    if (router.hasRoute(`menu:${uri}`)) continue
     router.addRoute('default', {
       path: uri,
       name: `menu:${uri}`,
@@ -44,8 +47,23 @@ export async function registerMenuRoutes(): Promise<void> {
   }
 }
 
-function isRegistered(path: string): boolean {
-  return router.getRoutes().some((r) => r.path === path)
+/**
+ * 保证菜单已加载且对应路由已注册——菜单就绪的唯一入口(幂等、单飞)。
+ * main.ts 启动时与路由守卫都调用它,组件无需再自行 load/register。
+ */
+export function ensureMenuRoutes(): Promise<void> {
+  readiness ??= (async () => {
+    const menu = useMenuStore()
+    try {
+      await menu.load()
+    } catch {
+      // 网络/业务错误已由 http 拦截器 toast;不阻断导航 → 用户至少能进 layout 看到空菜单
+    }
+    registerMenuRoutes(menu)
+  })().finally(() => {
+    readiness = null
+  })
+  return readiness
 }
 
 router.beforeEach(async (to) => {
@@ -59,26 +77,19 @@ router.beforeEach(async (to) => {
     return { path: LOGIN_PATH, query: { redirect: to.fullPath }, replace: true }
   }
 
-  // 已登录:强制保证菜单已加载、路由已注册——bootstrap 是 first line,这里是兜底。
+  // 已登录:保证菜单已加载、路由已注册(ensureMenuRoutes 幂等,树未变时几乎零成本)。
   // 关键:不要在 addRoute 之后用 `return to` 重放当前导航(vue-router 4 不一定
   // 重算 to.matched);用「未注册则重定向到 /」保证渲染的一定是已知路由。
+  await ensureMenuRoutes()
   const menu = useMenuStore()
-  if (menu.tree.length === 0) {
-    try {
-      await menu.load()
-    } catch {
-      // 网络/业务错误已 toast,这里不阻断 → 让用户至少能进入 layout 看到空菜单
-    }
-  }
-  await registerMenuRoutes()
 
   if (to.path === '/') {
-    const first = collectMenuUris(menu.tree)[0]
+    const first = menu.uris[0]
     return first ? { path: first, replace: true } : true
   }
 
   // 路径不在菜单里 → 重定向到 '/'('/' 分支会再次处理)
-  if (!isRegistered(to.path)) {
+  if (!router.hasRoute(`menu:${to.path}`)) {
     return { path: '/', replace: true }
   }
 

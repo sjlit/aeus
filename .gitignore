@@ -52,5 +52,6 @@ profile
 
 # worktrees
 .worktrees/
+.superpowers
 docs/.devflow/
 docs/superpowers

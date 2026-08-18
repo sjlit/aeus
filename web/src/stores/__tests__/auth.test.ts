@@ -54,7 +54,7 @@ describe('auth store', () => {
     expect(authApi.login).toHaveBeenCalledWith({ username: 'admin', password: 'Admin123' })
   })
 
-  it('refresh 只更新 token/expiresAt,不覆盖 profile', async () => {
+  it('refresh 只更新 token,不覆盖 profile', async () => {
     vi.mocked(authApi.login).mockResolvedValue(loginResp)
     const s = useAuthStore()
     await s.login({ username: 'admin', password: 'Admin123' })
@@ -64,7 +64,6 @@ describe('auth store', () => {
     expect(s.accessToken).toBe('at-2')
     expect(s.refreshToken).toBe('rt-1') // refresh token 不轮换
     expect(s.profile?.username).toBe('admin') // profile 未被覆盖
-    expect(s.expiresAt).toBeGreaterThan(Date.now() + 3500 * 1000)
     expect(localStorage.getItem('aeus.access')).toBe('at-2')
   })
 

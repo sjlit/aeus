@@ -1,7 +1,5 @@
-import type { Envelope } from '../types'
-
 /** 触发静默刷新的业务码(pkg/errs/const.go)。 */
-export const AUTH_FAILURE_CODES = [4001, 4002, 4006] as const
+export const AUTH_FAILURE_CODES: readonly number[] = [4001, 4002, 4006]
 
 /** 取信封 code;非信封(网络层错误等)返回 -1。 */
 export function envelopeCode(body: unknown): number {
@@ -23,10 +21,5 @@ export function envelopeMessage(body: unknown): string {
 
 /** code ∈ {4001 Unauthorized, 4002 TokenExpired, 4006 TokenInvalid}。 */
 export function isAuthFailureCode(code: number): boolean {
-  return (AUTH_FAILURE_CODES as readonly number[]).includes(code)
-}
-
-/** 类型守卫:code===0 时 data 可用。 */
-export function isOkEnvelope<T = unknown>(body: unknown): body is Envelope<T> {
-  return envelopeCode(body) === 0
+  return AUTH_FAILURE_CODES.includes(code)
 }

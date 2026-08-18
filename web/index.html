@@ -24,9 +24,10 @@
       content: ''; width: 10px; height: 10px;
       background: #6cc5a8; border-radius: 2px;
       margin-right: 12px; box-shadow: 0 0 16px #6cc5a866;
-      animation: pulse 1.2s ease-in-out infinite;
+      animation: boot-pulse 1.2s ease-in-out infinite;
     }
-    @keyframes pulse {
+    /* 名字不能叫 pulse:keyframes 是全局的,会覆盖 shared-b2.css 里 .kicker .dot 用的同名动画。 */
+    @keyframes boot-pulse {
       0%, 100% { opacity: 0.4; transform: scale(0.85); }
       50%      { opacity: 1;   transform: scale(1.1); }
     }

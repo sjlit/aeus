@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
-import { collectMenuUris } from '../stores/menuGroups'
 
 const auth = useAuthStore()
 const menu = useMenuStore()
@@ -30,15 +29,10 @@ async function submit() {
   loading.value = true
   try {
     await auth.login(form)
-    // 登录后立刻拉菜单,用于确定落地页
+    // 换用户后菜单可能不同,强制刷新;落地页由路由守卫的 '/' 分支统一决定。
     await menu.load(true)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    if (redirect) {
-      await router.replace(redirect)
-    } else {
-      const first = collectMenuUris(menu.tree)[0]
-      await router.replace(first ?? '/')
-    }
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    await router.replace(redirect)
   } catch {
     // 业务错误已由 http 拦截器 toast
   } finally {

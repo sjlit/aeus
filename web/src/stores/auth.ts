@@ -9,7 +9,6 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     accessToken: localStorage.getItem(LS_ACCESS),
     refreshToken: null as string | null,
-    expiresAt: 0,
     profile: null as LoginResponse | null,
     // 来自 GET /user/profile;刷新后用于恢复侧栏用户信息。
     // profile(LoginResponse)保留为登录瞬态数据,登录后会再次被覆盖。
@@ -20,16 +19,14 @@ export const useAuthStore = defineStore('auth', {
       const resp = await apiLogin(form)
       this.accessToken = resp.access_token
       this.refreshToken = resp.refresh_token
-      this.expiresAt = Date.now() + resp.expires * 1000
       this.profile = resp
       localStorage.setItem(LS_ACCESS, resp.access_token)
     },
-    // 只更新 token/expiresAt —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile
+    // 只更新 token —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile
     async refresh(): Promise<boolean> {
       if (!this.refreshToken) return false
       const resp = await apiRefresh(this.refreshToken)
       this.accessToken = resp.access_token
-      this.expiresAt = Date.now() + resp.expires * 1000
       localStorage.setItem(LS_ACCESS, resp.access_token)
       return true
     },
@@ -48,7 +45,6 @@ export const useAuthStore = defineStore('auth', {
       }
       this.accessToken = null
       this.refreshToken = null
-      this.expiresAt = 0
       this.profile = null
       this.userProfile = null
       localStorage.removeItem(LS_ACCESS)

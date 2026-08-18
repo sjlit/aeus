@@ -1,26 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
-import { titleForUri } from '../stores/menuGroups'
-import { registerMenuRoutes } from '../router'
 
 const auth = useAuthStore()
 const menu = useMenuStore()
 const route = useRoute()
 const router = useRouter()
 
-const query = ref('')
+// profile(LoginResponse)与 userProfile(GET /user/profile)都可能先到,
+// 统一在此处定优先级,模板里不再各写一遍 ?? 链。
+const username = computed(() => auth.userProfile?.username ?? auth.profile?.username ?? '')
+const displayName = computed(() => username.value || '—')
+const displayRole = computed(() => auth.profile?.tenant_name ?? auth.userProfile?.role ?? '—')
+const avatar = computed(() => username.value.slice(0, 2).toUpperCase() || '?')
 
-const avatar = computed(() => auth.profile?.username?.slice(0, 2).toUpperCase() ?? '?')
-const pageTitle = computed(() => titleForUri(route.path, menu.tree))
+// 标题由 registerMenuRoutes 写入 meta.title,与 PlaceholderView 取法保持一致。
+const pageTitle = computed(() => (route.meta.title as string) ?? route.path)
 const crumb = computed(() => (route.path === '/' ? 'Home' : route.path.slice(1)))
 
-onMounted(async () => {
-  await menu.load()
-  await registerMenuRoutes()
-})
+const actions = [
+  { tip: '新建(占位)', icon: '+' },
+  { tip: '收藏(占位)', icon: '*' },
+  { tip: '帮助(占位)', icon: '?' },
+]
 
 function go(uri: string) {
   if (uri) router.push(uri)
@@ -61,8 +65,8 @@ function onCommand(cmd: string) {
         <div class="user-pill" role="button" tabindex="0">
           <div class="avatar">{{ avatar }}</div>
           <div class="info">
-            <div class="name">{{ auth.userProfile?.username ?? auth.profile?.username ?? '—' }}</div>
-            <div class="role">{{ auth.profile?.tenant_name ?? auth.userProfile?.role ?? '—' }}</div>
+            <div class="name">{{ displayName }}</div>
+            <div class="role">{{ displayRole }}</div>
           </div>
         </div>
         <template #dropdown>
@@ -77,12 +81,12 @@ function onCommand(cmd: string) {
       <div class="topbar">
         <div class="search">
           <span style="color: var(--ink-2)">Q</span>
-          <input v-model="query" placeholder="Search nodes, users, logs..." />
+          <input placeholder="Search nodes, users, logs..." />
         </div>
         <div class="actions">
-          <el-tooltip content="新建(占位)" placement="bottom"><div class="icon-btn">+</div></el-tooltip>
-          <el-tooltip content="收藏(占位)" placement="bottom"><div class="icon-btn">*</div></el-tooltip>
-          <el-tooltip content="帮助(占位)" placement="bottom"><div class="icon-btn">?</div></el-tooltip>
+          <el-tooltip v-for="a in actions" :key="a.icon" :content="a.tip" placement="bottom">
+            <div class="icon-btn">{{ a.icon }}</div>
+          </el-tooltip>
         </div>
       </div>
 
