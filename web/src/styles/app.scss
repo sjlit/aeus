@@ -252,7 +252,35 @@ body {
   // 左右留 36px 与 el-main 的内容区(padding: 28px 36px)对齐,
   // 玻璃卡片不再横贯整个内容区
   margin: 0 36px 18px;
-  height: 52px;
+  // 高度由内容决定:工具栏 52px + 分隔线 + 多标签栏 42px
+  height: auto;
+}
+
+// 工具栏 / 多标签栏之间的细分隔线(两端渐隐,参考项目 UnifiedHeader 同款)
+.chrome-sep {
+  height: 1px;
+  background: var(--glass-border);
+  position: relative;
+}
+
+.chrome-sep::before,
+.chrome-sep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: linear-gradient(90deg, var(--glass-border), transparent);
+  pointer-events: none;
+}
+
+.chrome-sep::before {
+  left: 0;
+}
+
+.chrome-sep::after {
+  right: 0;
+  transform: scaleX(-1);
 }
 
 .hero {

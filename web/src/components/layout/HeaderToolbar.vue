@@ -1,9 +1,10 @@
 <!--
-  HeaderToolbar · 头部工具栏(迁移自旧项目,去掉多标签/⌘K 弹窗/语言/主题)
+  HeaderToolbar · 头部工具栏(迁移自旧项目,去掉 ⌘K 弹窗/语言/主题)
   - L: 折叠按钮 + 面包屑
   - C: 搜索输入框(纯 UI 占位,暂未接功能)
   - R: 用户菜单
-  由 DefaultLayout 的 el-header 包裹,玻璃卡片样式在 app.scss 的 .topbar
+  由 DefaultLayout 的 el-header 包裹,与 HeaderTabStrip(多标签)共享同一张
+  玻璃卡片(参考项目 UnifiedHeader 形态),卡片样式在 app.scss 的 .topbar
 -->
 <script setup lang="ts">
 import { computed } from 'vue'

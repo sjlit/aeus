@@ -6,6 +6,7 @@ import App from './App.vue'
 import { router, ensureMenuRoutes, goToLogin } from './router'
 import { bindHttpContext } from './api/http'
 import { useAuthStore } from './stores/auth'
+import { setTabsRouter } from './stores/tabs'
 import './styles/app.scss'
 
 const app = createApp(App)
@@ -17,6 +18,9 @@ app.use(ElementPlus)
 // 再 use(router),保证首次导航时路由表已经备好。
 
 const auth = useAuthStore()
+// 多标签的 cachedViews 依赖 router.getRoutes(),必须在首航前注入
+// (与 setNavRouter 同模式,避免 store → router 的循环依赖)
+setTabsRouter(router)
 bindHttpContext({
   getToken: () => auth.accessToken,
   getCurrentPath: () => router.currentRoute.value.fullPath,

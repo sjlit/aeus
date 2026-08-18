@@ -6,6 +6,7 @@ import PlaceholderView from '../views/PlaceholderView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
+import { useTabsStore } from '../stores/tabs'
 import type { MenuNode } from '../types'
 
 export const LOGIN_PATH = '/login'
@@ -46,7 +47,9 @@ function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
       path: uri,
       name: `menu:${uri}`,
       component: PlaceholderView,
-      meta: { title: menu.titlesByUri.get(uri) },
+      // componentName: keep-alive include 白名单(多标签缓存)按它匹配,
+      // 取组件文件名;真实页面落地后各自文件名即组件名,无需额外维护
+      meta: { title: menu.titlesByUri.get(uri), componentName: 'PlaceholderView' },
     })
   }
 }
@@ -98,4 +101,22 @@ router.beforeEach(async (to) => {
   }
 
   return true
+})
+
+// 多标签:菜单页(带 meta.title)自动开标签;首页(菜单第一项)不可关闭。
+// 此时菜单必已加载(beforeEach 保证),home 推导安全;closable 随每次导航
+// 刷新,落地页变更后旧会话持久化的标签也能自愈(见 tabs store addTab)。
+router.afterEach((to) => {
+  const title = to.meta?.title as string | undefined
+  if (!title) return
+  const menu = useMenuStore()
+  const tabs = useTabsStore()
+  tabs.addTab({
+    path: to.path,
+    name: to.name as string,
+    title,
+    icon: menu.iconsByUri.get(to.path),
+    closable: to.path !== menu.uris[0],
+    query: to.query as Record<string, string>,
+  })
 })

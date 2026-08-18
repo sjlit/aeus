@@ -24,6 +24,9 @@ export const useMenuStore = defineStore('menu', {
     titlesByUri(): Map<string, string> {
       return this.flat.titlesByUri
     },
+    iconsByUri(): Map<string, string> {
+      return this.flat.iconsByUri
+    },
   },
   actions: {
     async load(force = false) {

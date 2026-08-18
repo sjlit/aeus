@@ -19,7 +19,7 @@ const tree: MenuNode[] = [
   },
   {
     name: 'WorkspaceOverview', title: '概览', component: 'WorkspaceOverview',
-    uri: '/workspace/overview', icon: '', hidden: false, public: false, children: [],
+    uri: '/workspace/overview', icon: 'Monitor', hidden: false, public: false, children: [],
   },
   {
     name: 'GroupOnly', title: '纯分组', component: 'GroupOnly',
@@ -73,5 +73,12 @@ describe('flattenMenu', () => {
     expect(titlesByUri.get('/system/sys-roles')).toBe('角色管理')
     expect(titlesByUri.get('/system/sys-users/detail')).toBe('用户详情')
     expect(titlesByUri.has('/system/nope')).toBe(false)
+  })
+
+  it('同时产出 uri → 图标映射(多标签页标签图标用)', () => {
+    const { iconsByUri } = flattenMenu(tree)
+    expect(iconsByUri.get('/workspace/overview')).toBe('Monitor')
+    expect(iconsByUri.get('/system/sys-users')).toBe('')
+    expect(iconsByUri.has('/system/nope')).toBe(false)
   })
 })

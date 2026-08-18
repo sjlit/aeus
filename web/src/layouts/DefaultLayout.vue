@@ -1,40 +1,22 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, type Component } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '../stores/menu'
 import { useUiStore } from '../stores/ui'
-import * as ElIcons from '@element-plus/icons-vue'
+import { useTabsStore } from '../stores/tabs'
 import type { MenuNode } from '../types'
 import HeaderToolbar from '../components/layout/HeaderToolbar.vue'
+import HeaderTabStrip from '../components/layout/HeaderTabStrip.vue'
 import { usePageTitle } from '../composables/usePageTitle'
+// 菜单/多标签共用的图标解析(缓存 + kebab/snake 归一),见 utils/icons.ts
+import { resolveIcon } from '../utils/icons'
 
 const menu = useMenuStore()
 const ui = useUiStore()
 const route = useRoute()
+const tabs = useTabsStore()
 
 const pageTitle = usePageTitle()
-
-// 后端 menu.icon 是短串(user / sys-role / Monitor);Element Plus 图标组件名是
-// PascalCase。直接命中优先,再做 kebab/snake → PascalCase 的归一;都没有就 null,
-// 模板里再决定要不要画图标。Map 缓存避免每个节点每次渲染都重做字符串归一。
-const ICONS = ElIcons as Record<string, Component>
-function toPascal(name: string): string {
-  return name
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join('')
-}
-const iconCache = new Map<string, Component | null>()
-function resolveIcon(name: string | undefined): Component | null {
-  if (!name) return null
-  let icon = iconCache.get(name)
-  if (icon === undefined) {
-    icon = ICONS[name] ?? ICONS[toPascal(name)] ?? null
-    iconCache.set(name, icon)
-  }
-  return icon
-}
 
 // el-sub-menu 的 index 必须是稳定、唯一的(用于 defaultOpeneds);uri 优先,
 // 没有 uri 的文件夹节点就用 component 兜底。el-menu-item 用 uri 作为
@@ -120,15 +102,25 @@ watch(defaultOpeneds, async (openeds) => {
     </el-aside>
 
     <el-container class="content" direction="vertical">
+      <!-- 同一张玻璃卡片:工具栏 + 分隔线 + 多标签栏(参考项目 UnifiedHeader 形态) -->
       <el-header class="topbar" height="auto">
         <HeaderToolbar />
+        <div class="chrome-sep"></div>
+        <HeaderTabStrip />
       </el-header>
 
       <el-main>
         <div class="hero">
           <h1><em class="text-gradient--peach">{{ pageTitle }}</em></h1>
         </div>
-        <router-view />
+        <!-- keep-alive 按路由 meta 白名单缓存页面实例;:key 用 path::token,
+             多 route 共享同一 view 时缓存 slot 互不碰撞,refreshTab 靠 token 变化
+             强制重挂载。见 stores/tabs.ts 头部注释。 -->
+        <router-view v-slot="{ Component, route: r }">
+          <keep-alive :include="tabs.cachedViews">
+            <component :is="Component" :key="`${r.path}::${tabs.getRefreshToken(r.path)}`" />
+          </keep-alive>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
