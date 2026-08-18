@@ -9,10 +9,15 @@
   --bg-base: #f3faf6;
   --ink: #1e3a3a;
   --ink-2: #5b7a78;
+  --ink-3: #3a5a58;
+  /* 侧栏菜单文字:比 --ink-2 再实一档,浅玻璃底上不发灰 */
+  --sidebar-ink: #3f625f;
   --glass: rgba(255, 255, 255, 0.55);
   --glass-strong: rgba(255, 255, 255, 0.75);
+  --glass-soft: rgba(255, 255, 255, 0.5);
   --glass-border: rgba(255, 255, 255, 0.7);
   --shadow: rgba(30, 90, 90, 0.16);
+  --shadow-soft: rgba(30, 90, 90, 0.08);
   --acc-mint: #6cc5a8;
   --acc-lilac: #9b85c4;
   --acc-peach: #f4a484;
@@ -22,6 +27,13 @@
   --display: 'Bricolage Grotesque', 'Inter Tight', sans-serif;
   --body: 'Inter Tight', -apple-system, sans-serif;
   --mono: 'JetBrains Mono', monospace;
+
+  /* ---- 几何 ---- */
+  --r-lg: 24px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --r-xs: 6px;
+  --r-pill: 100px;
 }
 
 * {
