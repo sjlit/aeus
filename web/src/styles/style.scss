@@ -3,19 +3,21 @@
 // 共用色系 · 4 个布局都引用此
 // =========================================================
 :root {
-  --bg-1: #c9e7d8;
-  --bg-2: #dccde8;
-  --bg-3: #ffd4c2;
-  --bg-base: #f3faf6;
+  // 背景色系对齐参考项目(旧 dashboard 的 aurora 默认主题):
+  // 三层 radial 拼色取调淡版,底色提亮
+  --bg-1: #e3f3ea;
+  --bg-2: #ede6f3;
+  --bg-3: #fde9e0;
+  --bg-base: #f9fcfb;
   --ink: #1e3a3a;
   --ink-2: #5b7a78;
   --ink-3: #3a5a58;
   /* 侧栏菜单文字:比 --ink-2 再实一档,浅玻璃底上不发灰 */
   --sidebar-ink: #3f625f;
-  --glass: rgba(255, 255, 255, 0.55);
-  --glass-strong: rgba(255, 255, 255, 0.75);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.85);
   --glass-soft: rgba(255, 255, 255, 0.5);
-  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.75);
   --shadow: rgba(30, 90, 90, 0.16);
   --shadow-soft: rgba(30, 90, 90, 0.08);
   --acc-mint: #6cc5a8;
@@ -64,7 +66,7 @@ body::before {
   background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.18;
 }
 
 // ---- glass utility ----
