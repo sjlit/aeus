@@ -19,113 +19,182 @@ body {
   padding: 0;
 }
 
-// ---- L3 chrome 布局(移植自 L3-sidebar.html <style>) ----
+// ---- L3 chrome 布局(el-container 接管 flex,这里只填装饰) ----
 .app {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  min-height: 100vh;
-  gap: 0;
+  // 让外层容器占满视口;高度交给 el-container 自身 100% 推断
+  height: 100vh;
 }
 
+// 左侧栏(el-aside)
 .sidebar {
   background: var(--glass-strong);
   backdrop-filter: blur(30px) saturate(150%);
   border-right: 1px solid var(--glass-border);
   padding: 28px 18px;
-  position: sticky;
-  top: 0;
-  height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.sidebar .brand {
-  font-family: var(--display);
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  padding: 0 8px 18px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
   flex-shrink: 0;
 
-  &::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    background: var(--acc-mint);
-    border-radius: 2px;
-  }
-}
-
-.sidebar .nav-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  // 滚动条留白:让最后一项的底部圆角不被裁掉
-  padding-right: 2px;
-}
-
-.nav-section {
-  margin-bottom: 22px;
-
-  .title {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--ink-2);
-    padding: 0 8px;
-    margin-bottom: 6px;
+  .brand {
+    font-family: var(--display);
+    font-size: 20px;
     font-weight: 600;
-  }
-
-  a {
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    padding: 0 8px 18px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    text-decoration: none;
-    color: var(--ink-2);
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.15s;
-    cursor: pointer;
-    user-select: none;
+    gap: 8px;
+    flex-shrink: 0;
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.5);
-      color: var(--ink);
-    }
-
-    &.on {
-      background: white;
-      color: var(--ink);
-      box-shadow: 0 2px 8px var(--shadow);
-    }
-
-    .ic {
-      width: 16px;
-      height: 16px;
-      display: grid;
-      place-items: center;
-      font-size: 12px;
-      flex-shrink: 0;
+    &::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--acc-mint);
+      border-radius: 2px;
     }
   }
 
-  .group-label {
-    padding: 8px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink-2);
-    opacity: 0.6;
+  .nav-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    // 滚动条留白:让最后一项的底部圆角不被裁掉
+    padding-right: 2px;
+  }
+
+  .nav-section {
+    margin-bottom: 22px;
+
+    .nav-section-title {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--ink-2);
+      padding: 0 8px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .nav-group-label {
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-2);
+      opacity: 0.6;
+    }
+  }
+
+  // el-menu 接管菜单项的渲染;只调样式,不接管结构
+  // 注意:app.scss 是全局 CSS,直接用后代选择器即可(不要写 :deep()—
+  // Vue SFC 的 <style scoped> 才会处理 :deep(),全局 CSS 写了反而让浏览器
+  // 把整条规则当成无效伪类丢掉)
+  .nav-menu {
+    --el-menu-bg-color: transparent;
+    --el-menu-hover-bg-color: rgba(255, 255, 255, 0.85);
+    --el-menu-border-color: transparent;
+    border-right: none;
+
+    // 左侧 3px mint 竖条指示的占位,默认 0 宽,hover/active 时撑开
+    .el-menu-item,
+    .el-sub-menu__title {
+      position: relative;
+      border-radius: 8px;
+      margin: 2px 0;
+      height: 36px;
+      line-height: 36px;
+      font-size: 13px;
+      color: var(--sidebar-ink);
+      font-weight: 500;
+      transition: background-color 0.16s, color 0.16s, transform 0.16s, box-shadow 0.16s;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        transform: translateY(-50%) scaleY(0);
+        width: 3px;
+        height: 18px;
+        background: var(--acc-mint);
+        border-radius: 0 2px 2px 0;
+        transition: transform 0.16s;
+        transform-origin: center;
+      }
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.85) !important;
+        color: var(--ink) !important;
+        transform: translateX(2px);
+
+        &::before {
+          transform: translateY(-50%) scaleY(1);
+        }
+      }
+    }
+
+    // 叶子项 active:渐变色块 + 发光 + 左侧竖条
+    .el-menu-item.is-active {
+      background: linear-gradient(135deg, #3f9b7e, #6f4fa6) !important;
+      color: white !important;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(63, 155, 126, 0.4);
+
+      &::before {
+        transform: translateY(-50%) scaleY(1);
+        background: var(--acc-mint);
+      }
+
+      .el-icon {
+        opacity: 0.85;
+      }
+    }
+
+    // 文件夹右侧的小箭头:小一号 + 弱化
+    .el-sub-menu__icon-arrow {
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+
+    // 二级菜单的子项:缩进更深 + 字号更小,和顶层拉开层级
+    .el-sub-menu .el-menu {
+      background: transparent;
+      padding: 2px 0;
+
+      .el-menu-item {
+        font-size: 12.5px;
+        height: 34px;
+        line-height: 34px;
+        padding-left: 38px !important;
+        color: var(--sidebar-ink);
+
+        &::before {
+          left: 14px;
+        }
+      }
+
+      // 二级菜单 active:不再用渐变(避免和顶层打架),改用玻璃 + 左侧 mint 圆点
+      .el-menu-item.is-active {
+        background: var(--glass-soft) !important;
+        color: var(--ink) !important;
+        font-weight: 600;
+        box-shadow: none;
+
+        // 二级用圆点不用竖条,避免左边两条并行视觉混乱
+        &::before {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          left: 18px;
+          background: var(--acc-mint);
+        }
+      }
+    }
   }
 }
 
@@ -180,44 +249,100 @@ body {
   }
 }
 
-.main {
-  padding: 28px 36px;
+// 右侧内容区(外层 el-container,内部垂直堆叠 header + main)
+.content {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
+// el-main 默认有 padding:20px;复刻原 .main 的 28px 36px
+.main,
+.content > .el-main {
+  padding: 28px 36px;
+}
+
 .topbar {
+  // 整张玻璃卡片(方案 A):与 sidebar 视觉对称,sticky 留 12px 顶部边距
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  background: var(--glass-strong);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm, 12px);
+  box-shadow: 0 8px 28px var(--shadow-soft);
+  padding: 0 14px;
+  margin-bottom: 18px;
+  height: 52px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 28px;
 
   .search {
     flex: 1;
-    max-width: 360px;
-    padding: 8px 16px;
-    background: var(--glass);
+    max-width: 460px;
+    // button 化:无浏览器默认样式
     border: 1px solid var(--glass-border);
-    border-radius: 100px;
-    font-size: 13px;
-    color: var(--ink-2);
-    display: flex;
+    background: var(--glass-soft);
+    border-radius: var(--r-pill, 100px);
+    padding: 7px 10px 7px 14px;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    color: var(--ink-2);
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 
-    input {
-      background: none;
-      border: none;
-      outline: none;
-      font-size: 13px;
+    .search-icon {
+      color: var(--ink-3);
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .search-placeholder {
       flex: 1;
-      font-family: inherit;
-      color: var(--ink);
+      font-size: 12px;
+      text-align: left;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.02em;
+    }
+
+    .search-kbd {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 3px 7px;
+      background: white;
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      color: var(--ink-2);
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    &:hover {
+      background: white;
+      border-color: var(--acc-mint);
+      box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.15);
+      transform: translateY(-1px);
+    }
+
+    &:focus-visible {
+      outline: none;
+      background: white;
+      border-color: var(--acc-mint);
+      box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.2);
     }
   }
 
   .actions {
     display: flex;
     gap: 8px;
+    flex-shrink: 0;
   }
 
   .icon-btn {
@@ -231,14 +356,38 @@ body {
     font-size: 14px;
     cursor: pointer;
     user-select: none;
+    transition: background 0.18s ease, transform 0.18s ease;
 
     &:hover {
       background: white;
+      transform: scale(1.05);
     }
   }
 }
 
 .hero {
+  // 面包屑:从 route.matched 自动推导,中间段可点击回退
+  .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    margin-bottom: 12px;
+  }
+  // 紧凑版默认隐藏,窄屏切换
+  .crumbs-compact { display: none; }
+
+  .crumb { flex-shrink: 0; transition: color 0.14s; }
+  .crumb-link { color: var(--ink-2); text-decoration: none; }
+  .crumb-link:hover { color: var(--acc-mint); }
+  .crumb-current { color: var(--ink); font-weight: 600; }
+  .crumb-sep { color: var(--ink-3); user-select: none; }
+
   h1 {
     font-family: var(--display);
     font-size: 36px;
@@ -256,9 +405,57 @@ body {
     }
   }
 
-  .crumb {
-    font-size: 12px;
-    color: var(--ink-2);
-    margin-bottom: 12px;
+  // 窄屏:标准面包屑收起,只显示 … / 当前页(占位文本也隐藏,
+  // 搜索框留个图标位置)
+  @media (max-width: 980px) {
+    .crumbs { display: none; }
+    .crumbs-compact { display: flex; }
   }
+}
+
+// ---- el-sub-menu 浮层(teleport 到 body,scoped 够不着,放全局) ----
+.sidebar-pop {
+  padding: 4px !important;
+  background: var(--glass-strong) !important;
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--r-md, 16px) !important;
+  box-shadow:
+    0 12px 40px rgba(60, 40, 90, 0.18),
+    0 2px 8px rgba(60, 40, 90, 0.08) !important;
+}
+
+.sidebar-pop .el-menu {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sidebar-pop .el-menu .el-menu-item {
+  border-radius: 8px !important;
+  margin: 2px 0 !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 13px !important;
+  color: var(--sidebar-ink) !important;
+  transition: all 0.16s;
+}
+
+.sidebar-pop .el-menu .el-menu-item:hover {
+  background: var(--glass-soft) !important;
+  color: var(--ink) !important;
+}
+
+.sidebar-pop .el-menu .el-menu-item.is-active {
+  background: linear-gradient(135deg, #3f9b7e, #6f4fa6) !important;
+  color: white !important;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(63, 155, 126, 0.4) !important;
+}
+
+.sidebar-pop .el-menu .el-menu-item.is-active .el-icon {
+  opacity: 0.8;
 }
