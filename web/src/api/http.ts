@@ -6,7 +6,6 @@ import { envelopeCode, envelopeMessage, isAuthFailureCode } from './envelope'
 /** 拦截器需要的运行时依赖,由 main.ts 注入,避免与 stores/router 循环引用。 */
 export interface HttpContext {
   getToken(): string | null
-  /** 当前路由路径,登出后作为 redirect 回跳目标(由 router 提供,不自行解析 URL)。 */
   getCurrentPath(): string
   refresh(): Promise<boolean>
   logout(): void

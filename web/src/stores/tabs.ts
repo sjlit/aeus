@@ -1,31 +1,3 @@
-/**
- * tabs store · 多标签页状态管理(迁移自参考项目)
- *
- * 功能:
- * - 管理打开的标签列表(路由 afterEach 自动加标签)
- * - 自动持久化到 localStorage
- * - 支持右键菜单操作(关闭其他、关闭左侧、关闭右侧)
- * - 配合 KeepAlive 实现页面缓存与「刷新当前页」
- *
- * 缓存策略:
- * - cachedViews 从路由表静态推导(meta.keepAlive !== false 即缓存)
- *   与「打开的 tab 列表」解耦 → 首访即缓存,不依赖 addTab 时机
- * - cachedViews 给 <keep-alive :include> 提供 componentName 白名单
- *
- * 身份策略(沿用参考项目 2026-07-20 的修复):
- * - 用 route.path 作为 :key 身份(App 内 :key="${r.path}::${refreshToken}")
- * - 多 route 共享同一 view 时 KeepAlive 缓存 slot 不碰撞
- * - 同 route 改 query 不重新 mount(r.path 不含 query)
- *
- * 与参考项目的差异:
- * - home tab 不硬编码 /dashboard:落地页 = 菜单第一项(menu.uris[0]),
- *   由路由 afterEach 计算 closable,store 不感知首页概念;
- *   不做 DEFAULT_TAB / ensureHomeTab——首页标签在首次导航时自然产生
- * - localStorage key 用 aeus.* 前缀
- *
- * 注意:不在模块顶层 import router,避免 @/router → guards → tabs → router
- *       的循环;由 setTabsRouter() 在 main.ts 启动时同步注入。
- */
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { Router } from 'vue-router'
