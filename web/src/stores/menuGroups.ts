@@ -22,31 +22,28 @@ export function groupBySection(tree: MenuNode[]): Section[] {
   return [...map.entries()].map(([name, items]) => ({ name, items }))
 }
 
-/** 所有非空 uri,去重、保持出现顺序(深度优先)。 */
-export function collectMenuUris(nodes: MenuNode[]): string[] {
-  const out: string[] = []
+export interface MenuFlat {
+  /** 所有非空 uri,去重、保持出现顺序(深度优先)。 */
+  uris: string[]
+  /** uri → 标题;路由注册(meta.title)与面包屑共用,一次遍历得到。 */
+  titlesByUri: Map<string, string>
+}
+
+/** 单次深度优先遍历,同时产出 uri 列表与 uri → 标题映射(替代原先两个独立 DFS)。 */
+export function flattenMenu(nodes: MenuNode[]): MenuFlat {
+  const uris: string[] = []
+  const titlesByUri = new Map<string, string>()
   const seen = new Set<string>()
   const walk = (ns: MenuNode[]) => {
     for (const n of ns) {
       if (n.uri && !seen.has(n.uri)) {
         seen.add(n.uri)
-        out.push(n.uri)
+        uris.push(n.uri)
+        titlesByUri.set(n.uri, n.title)
       }
       if (n.children?.length) walk(n.children)
     }
   }
   walk(nodes)
-  return out
-}
-
-/** 按 uri 找节点标题(深度优先);找不到返回 uri 本身。 */
-export function titleForUri(uri: string, nodes: MenuNode[]): string {
-  for (const n of nodes) {
-    if (n.uri === uri) return n.title
-    if (n.children?.length) {
-      const t = titleForUri(uri, n.children)
-      if (t !== uri) return t
-    }
-  }
-  return uri
+  return { uris, titlesByUri }
 }

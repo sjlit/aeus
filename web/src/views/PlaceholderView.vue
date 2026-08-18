@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { usePageTitle } from '../composables/usePageTitle'
 
 const route = useRoute()
-const title = computed(() => (route.meta.title as string) ?? route.path)
+const title = usePageTitle()
 </script>
 
 <template>

@@ -3,10 +3,8 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
-import { useMenuStore } from '../stores/menu'
 
 const auth = useAuthStore()
-const menu = useMenuStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -28,9 +26,9 @@ async function submit() {
   if (!valid) return
   loading.value = true
   try {
+    // 换用户后菜单可能不同:auth.login 已清空菜单缓存,路由守卫会在
+    // 这次导航里重新拉取;落地页由守卫的 '/' 分支统一决定。
     await auth.login(form)
-    // 换用户后菜单可能不同,强制刷新;落地页由路由守卫的 '/' 分支统一决定。
-    await menu.load(true)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.replace(redirect)
   } catch {
@@ -44,16 +42,17 @@ async function submit() {
 <template>
   <div class="login-wrap">
     <div class="login-card">
-      <div class="login-brand">aeus</div>
+      <div class="login-brand text-gradient">aeus</div>
       <p class="login-sub">AEUS Admin</p>
+      <!-- 提交只走 form submit:输入框回车与按钮点击都由原生 submit 触发 -->
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent="submit">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="form.username" placeholder="uid 或用户名" autofocus size="large" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="至少 6 位" size="large" @keyup.enter="submit" />
+          <el-input v-model="form.password" type="password" show-password placeholder="至少 6 位" size="large" />
         </el-form-item>
-        <el-button type="primary" size="large" class="login-btn" :loading="loading" @click="submit">
+        <el-button type="primary" size="large" class="login-btn" native-type="submit" :loading="loading">
           登录
         </el-button>
       </el-form>
@@ -83,10 +82,6 @@ async function submit() {
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 .login-sub {
   font-size: 12px;

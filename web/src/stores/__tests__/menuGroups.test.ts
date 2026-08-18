@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { collectMenuUris, groupBySection, titleForUri, uriSegment } from '../menuGroups'
+import { flattenMenu, groupBySection, uriSegment } from '../menuGroups'
 import type { MenuNode } from '../../types'
 
 const tree: MenuNode[] = [
@@ -57,9 +57,9 @@ describe('groupBySection', () => {
   })
 })
 
-describe('collectMenuUris', () => {
-  it('收集全部非空 uri(含子节点),去重保序', () => {
-    expect(collectMenuUris(tree)).toEqual([
+describe('flattenMenu', () => {
+  it('单次遍历收集全部非空 uri(含子节点),去重保序', () => {
+    expect(flattenMenu(tree).uris).toEqual([
       '/system/sys-users',
       '/system/sys-users/detail',
       '/system/sys-roles',
@@ -67,11 +67,11 @@ describe('collectMenuUris', () => {
       '/system/child',
     ])
   })
-})
 
-describe('titleForUri', () => {
-  it('按 uri 找标题,找不到返回 uri', () => {
-    expect(titleForUri('/system/sys-roles', tree)).toBe('角色管理')
-    expect(titleForUri('/system/nope', tree)).toBe('/system/nope')
+  it('同时产出 uri → 标题映射', () => {
+    const { titlesByUri } = flattenMenu(tree)
+    expect(titlesByUri.get('/system/sys-roles')).toBe('角色管理')
+    expect(titlesByUri.get('/system/sys-users/detail')).toBe('用户详情')
+    expect(titlesByUri.has('/system/nope')).toBe(false)
   })
 })

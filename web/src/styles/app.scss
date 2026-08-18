@@ -31,10 +31,6 @@ body {
     font-size: 20px;
     font-weight: 600;
     letter-spacing: -0.02em;
-    background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
     padding: 0 8px 18px;
     display: flex;
     align-items: center;
@@ -150,12 +146,12 @@ body {
       }
     }
 
-    // 叶子项 active:渐变色块 + 发光 + 左侧竖条
+    // 叶子项 active:渐变色块 + 发光 + 左侧竖条(渐变/辉光来自 --menu-active-* token)
     .el-menu-item.is-active {
-      background: linear-gradient(135deg, #3f9b7e, #6f4fa6) !important;
+      background: linear-gradient(135deg, var(--menu-active-1), var(--menu-active-2)) !important;
       color: white !important;
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(63, 155, 126, 0.4);
+      box-shadow: 0 4px 12px var(--menu-active-glow);
 
       &::before {
         transform: translateY(-50%) scaleY(1);
@@ -198,13 +194,13 @@ body {
         box-shadow: none;
 
         // 二级用圆点不用竖条,避免左边两条并行视觉混乱
-        // 尺寸/颜色对齐参考项目(4px · #3f9b7e)
+        // 尺寸对齐参考项目(4px),颜色用 --menu-active-1
         &::before {
           width: 4px;
           height: 4px;
           border-radius: 50%;
           left: 18px;
-          background: #3f9b7e;
+          background: var(--menu-active-1);
         }
       }
     }
@@ -270,10 +266,6 @@ body {
 
     em {
       font-style: italic;
-      background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
     }
   }
 }
@@ -315,10 +307,10 @@ body {
 }
 
 .sidebar-pop .el-menu .el-menu-item.is-active {
-  background: linear-gradient(135deg, #3f9b7e, #6f4fa6) !important;
+  background: linear-gradient(135deg, var(--menu-active-1), var(--menu-active-2)) !important;
   color: white !important;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(63, 155, 126, 0.4) !important;
+  box-shadow: 0 4px 12px var(--menu-active-glow) !important;
 }
 
 .sidebar-pop .el-menu .el-menu-item.is-active .el-icon {

@@ -5,7 +5,7 @@ const router = useRouter()
 
 <template>
   <section class="glass panel notfound">
-    <h1>404</h1>
+    <h1 class="text-gradient--peach">404</h1>
     <p>页面不存在。菜单外的地址不会出现在这里——业务路由全部来自 MenuTree。</p>
     <el-button type="primary" @click="router.push('/')">返回首页</el-button>
   </section>
@@ -22,10 +22,6 @@ const router = useRouter()
   font-size: 64px;
   font-weight: 600;
   letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   margin-bottom: 12px;
 }
 .notfound p {

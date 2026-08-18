@@ -15,22 +15,13 @@ import UserMenu from './UserMenu.vue'
 const ui = useUiStore()
 const route = useRoute()
 
-/** 从 route.matched 自动推导面包屑(零配置) */
-interface Crumb { label: string; path: string; last: boolean }
-const crumbs = computed<Crumb[]>(() => {
-  const list = route.matched
+/** 从 route.matched 自动推导面包屑(零配置);last 由循环索引推导,不存状态。 */
+interface Crumb { label: string; path: string }
+const crumbs = computed<Crumb[]>(() =>
+  route.matched
     .filter((r) => r.meta?.title)
-    .map((r) => ({ label: r.meta.title as string, path: r.path, last: false }))
-  if (list.length) list[list.length - 1]!.last = true
-  return list
-})
-
-/** ≤980px 简化为 … / 当前页 */
-const compactCrumbs = computed<Crumb[]>(() => {
-  if (crumbs.value.length <= 2) return crumbs.value
-  const last = crumbs.value[crumbs.value.length - 1]!
-  return [{ label: '…', path: '', last: false }, last]
-})
+    .map((r) => ({ label: r.meta.title as string, path: r.path })),
+)
 </script>
 
 <template>
@@ -44,18 +35,13 @@ const compactCrumbs = computed<Crumb[]>(() => {
           <component :is="ui.sidebarCollapsed ? Expand : Fold" />
         </el-icon>
       </button>
+      <!-- 单个列表,≤980px 由 CSS 收成「只留当前页」;省略号形态等出现
+           带标题的多级父路由后再补(现在所有有标题的路由都是 default 直接子级)。 -->
       <nav v-if="crumbs.length" class="crumbs" aria-label="Breadcrumb">
-        <template v-for="(c, i) in crumbs" :key="`w-${c.path}`">
-          <router-link v-if="!c.last" :to="c.path" class="crumb crumb-link">{{ c.label }}</router-link>
+        <template v-for="(c, i) in crumbs" :key="c.path">
+          <router-link v-if="i < crumbs.length - 1" :to="c.path" class="crumb crumb-link">{{ c.label }}</router-link>
           <span v-else class="crumb crumb-current">{{ c.label }}</span>
           <span v-if="i < crumbs.length - 1" class="crumb-sep">/</span>
-        </template>
-      </nav>
-      <nav v-if="crumbs.length" class="crumbs crumbs-compact" aria-label="Breadcrumb">
-        <template v-for="(c, i) in compactCrumbs" :key="`c-${c.path}`">
-          <router-link v-if="!c.last" :to="c.path || '#'" class="crumb crumb-link">{{ c.label }}</router-link>
-          <span v-else class="crumb crumb-current">{{ c.label }}</span>
-          <span v-if="i < compactCrumbs.length - 1" class="crumb-sep">/</span>
         </template>
       </nav>
     </div>
@@ -130,7 +116,6 @@ const compactCrumbs = computed<Crumb[]>(() => {
   font-size: 12px;
   letter-spacing: 0.02em;
 }
-.crumbs-compact { display: none; }
 
 .crumb { flex-shrink: 0; transition: color 0.14s; }
 .crumb-link { color: var(--ink-2); text-decoration: none; }
@@ -158,12 +143,12 @@ const compactCrumbs = computed<Crumb[]>(() => {
 .searchbox:focus-within {
   background: white;
   border-color: var(--acc-mint);
-  box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.2);
+  box-shadow: var(--ring);
 }
 .searchbox:hover {
   background: white;
   border-color: var(--acc-mint);
-  box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.15);
+  box-shadow: var(--ring-soft);
   transform: translateY(-1px);
 }
 .s-icon { font-size: 14px; color: var(--ink-3); flex-shrink: 0; }
@@ -188,8 +173,9 @@ const compactCrumbs = computed<Crumb[]>(() => {
 /* ── 响应式 ── */
 @media (max-width: 980px) {
   .toolbar { gap: 10px; padding: 0 10px; }
-  .crumbs { display: none; }
-  .crumbs-compact { display: flex; }
+  /* 窄屏只留当前页,链路/分隔符藏掉(见模板注释) */
+  .crumbs .crumb-link,
+  .crumbs .crumb-sep { display: none; }
 }
 @media (max-width: 720px) {
   .searchbox {
@@ -198,7 +184,5 @@ const compactCrumbs = computed<Crumb[]>(() => {
     justify-content: center;
   }
   .s-input { display: none; }
-  .crumbs-compact .crumb-link,
-  .crumbs-compact .crumb-sep { display: none; }
 }
 </style>

@@ -6,10 +6,14 @@ import PlaceholderView from '../views/PlaceholderView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
-import { titleForUri } from '../stores/menuGroups'
 import type { MenuNode } from '../types'
 
 export const LOGIN_PATH = '/login'
+
+/** 登录跳转统一出口:路由守卫、http 拦截器、用户菜单都从这里构造跳转。 */
+export function goToLogin(redirect?: string) {
+  return { path: LOGIN_PATH, query: redirect ? { redirect } : undefined }
+}
 
 // name 必须存在:addRoute('default', …) 以名字引用父路由
 const defaultRoute: RouteRecordRaw = {
@@ -42,7 +46,7 @@ function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
       path: uri,
       name: `menu:${uri}`,
       component: PlaceholderView,
-      meta: { title: titleForUri(uri, menu.tree) },
+      meta: { title: menu.titlesByUri.get(uri) },
     })
   }
 }
@@ -74,7 +78,7 @@ router.beforeEach(async (to) => {
     return true
   }
   if (!auth.accessToken) {
-    return { path: LOGIN_PATH, query: { redirect: to.fullPath }, replace: true }
+    return { ...goToLogin(to.fullPath), replace: true }
   }
 
   // 已登录:保证菜单已加载、路由已注册(ensureMenuRoutes 幂等,树未变时几乎零成本)。

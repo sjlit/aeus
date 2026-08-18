@@ -5,24 +5,19 @@
   - 登出走 auth.logout + 跳 /login,与旧项目行为一致
 -->
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { useAuthStore } from '../../stores/auth'
+import { goToLogin } from '../../router'
 
 const auth = useAuthStore()
 const router = useRouter()
 
-// profile(LoginResponse)与 userProfile(GET /user/profile)都可能先到,
-// 优先级与迁移前 DefaultLayout 中的一致。
-const username = computed(() => auth.userProfile?.username ?? auth.profile?.username ?? '')
-const displayName = computed(() => username.value || '—')
-const avatar = computed(() => username.value.slice(0, 2).toUpperCase() || '?')
-
+// 显示名/头像(用户名前两字符)由 auth store 的 getter 统一提供
 async function onLogout() {
   await auth.logout()
   // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
-  await router.push({ path: '/login', query: { redirect: router.currentRoute.value.fullPath } })
+  await router.push(goToLogin(router.currentRoute.value.fullPath))
 }
 
 function handleCommand(cmd: string) {
@@ -32,9 +27,9 @@ function handleCommand(cmd: string) {
 
 <template>
   <el-dropdown trigger="click" @command="handleCommand">
-    <button class="user-menu-trigger" type="button" :title="displayName">
-      <span class="um-avatar">{{ avatar }}</span>
-      <span class="um-name">{{ displayName }}</span>
+    <button class="user-menu-trigger" type="button" :title="auth.displayName">
+      <span class="um-avatar">{{ auth.initials }}</span>
+      <span class="um-name">{{ auth.displayName }}</span>
       <el-icon class="um-arrow"><ArrowDown /></el-icon>
     </button>
     <template #dropdown>

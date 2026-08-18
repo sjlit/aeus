@@ -45,6 +45,17 @@
   --el-font-family: var(--body);
 }
 
+// 浮层玻璃底:背景/毛玻璃/边框/圆角/阴影一次定义,各浮层组件按差异传参,
+// 避免 7 处重复同一段 5 行声明。
+@mixin glass-surface($blur: 28px, $radius: var(--r-lg), $shadow: 0 24px 64px rgba(30, 60, 60, 0.28)) {
+  background: var(--glass-strong) !important;
+  backdrop-filter: blur($blur) saturate(160%) !important;
+  -webkit-backdrop-filter: blur($blur) saturate(160%) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: $radius !important;
+  box-shadow: $shadow !important;
+}
+
 /* —— 卡片 / 菜单 / 输入框统一毛玻璃 ————————— */
 .el-card,
 .el-menu,
@@ -135,12 +146,7 @@
 }
 
 .el-dialog {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-lg) !important;
-  box-shadow: 0 24px 64px rgba(30, 60, 60, 0.28) !important;
+  @include glass-surface;
 }
 
 .el-dialog__header {
@@ -179,12 +185,7 @@
 
 /* —— MessageBox(ElMessageBox.confirm 等,复用 overlay 但无 dialog 外壳) ————————— */
 .el-message-box {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-lg) !important;
-  box-shadow: 0 24px 64px rgba(30, 60, 60, 0.28) !important;
+  @include glass-surface;
 }
 
 .el-message-box__title {
@@ -204,12 +205,10 @@
 .el-dropdown-menu,
 .el-select-dropdown,
 .el-popover {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-md) !important;
-  box-shadow: 0 12px 40px rgba(60, 40, 90, 0.18), 0 2px 8px rgba(60, 40, 90, 0.08) !important;
+  @include glass-surface(
+    $radius: var(--r-md),
+    $shadow: (0 12px 40px rgba(60, 40, 90, 0.18), 0 2px 8px rgba(60, 40, 90, 0.08))
+  );
 }
 
 .el-popper.is-light .el-popper__arrow::before {
@@ -350,13 +349,8 @@
 .el-popper.is-dark,
 .el-tooltip__popper,
 .el-popconfirm {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(24px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-sm) !important;
+  @include glass-surface($blur: 24px, $radius: var(--r-sm), $shadow: 0 8px 28px rgba(60, 40, 90, 0.18));
   color: var(--ink) !important;
-  box-shadow: 0 8px 28px rgba(60, 40, 90, 0.18) !important;
 }
 
 .el-popper.is-dark .el-popper__arrow::before,
@@ -375,12 +369,7 @@
 
 /* —— Message(ElMessage toast,固定浮层) ————————— */
 .el-message {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(24px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-md) !important;
-  box-shadow: 0 12px 40px rgba(60, 40, 90, 0.18) !important;
+  @include glass-surface($blur: 24px, $radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
 }
 
 .el-message .el-message__content {
@@ -406,12 +395,7 @@
 
 /* —— Notification(ElNotification,右上角浮层) ————————— */
 .el-notification {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-md) !important;
-  box-shadow: 0 16px 48px rgba(60, 40, 90, 0.2) !important;
+  @include glass-surface($radius: var(--r-md), $shadow: 0 16px 48px rgba(60, 40, 90, 0.2));
 }
 
 .el-notification__title {
@@ -441,13 +425,8 @@
 .el-date-picker,
 .el-date-range-picker,
 .el-time-panel {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-md) !important;
+  @include glass-surface($radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
   color: var(--ink-2) !important;
-  box-shadow: 0 12px 40px rgba(60, 40, 90, 0.18) !important;
 }
 
 .el-date-table td.in-range>div {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { fetchMenuTree } from '../api/menu'
-import { collectMenuUris, groupBySection, type Section } from './menuGroups'
+import { flattenMenu, groupBySection, type MenuFlat, type Section } from './menuGroups'
 import type { MenuNode } from '../types'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -14,8 +14,15 @@ export const useMenuStore = defineStore('menu', {
     sections(state): Section[] {
       return groupBySection(state.tree)
     },
-    uris(state): string[] {
-      return collectMenuUris(state.tree)
+    // 一次遍历同时产出 uris 与 uri→标题;下面的 getter 都从这里取,避免重复 DFS
+    flat(state): MenuFlat {
+      return flattenMenu(state.tree)
+    },
+    uris(): string[] {
+      return this.flat.uris
+    },
+    titlesByUri(): Map<string, string> {
+      return this.flat.titlesByUri
     },
   },
   actions: {
