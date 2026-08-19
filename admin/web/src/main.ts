@@ -7,7 +7,10 @@ import { router, ensureMenuRoutes, goToLogin } from './router'
 import { bindHttpContext } from './api/http'
 import { useAuthStore } from './stores/auth'
 import { setTabsRouter } from './stores/tabs'
+import { SchemaUIPlugin, SchemaUIConfig } from '@nobla/rest-ui'
+import '@nobla/rest-ui/dist/style.css'
 import './styles/app.scss'
+import { http } from '@/api/http'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -16,6 +19,10 @@ app.use(ElementPlus)
 // 注意:router **不在这里** use——vue-router 4 在 app.use(router) 后会立刻触发
 // 初始导航(microtask),那时 bootstrap 还没拿到菜单。下面 bootstrap 完成后
 // 再 use(router),保证首次导航时路由表已经备好。
+
+app.use(SchemaUIPlugin, <SchemaUIConfig>{
+  httpClient: http
+})
 
 const auth = useAuthStore()
 // 多标签的 cachedViews 依赖 router.getRoutes(),必须在首航前注入
