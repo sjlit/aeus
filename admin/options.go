@@ -26,6 +26,29 @@ type (
 		Router rest.Router
 
 		Logger logger.Logger
+
+		// VueOutputDir is the directory under which auto-generated
+		// Vue Index.vue files are written when registerModel sees a
+		// model with ModuleName + TableName set. The full path of a
+		// generated file is VueOutputDir / <ModuleName> / <Singular> /
+		// Index.vue — VueOutputDir itself is the conventional `views/`
+		// directory in Vite projects (i.e. the level immediately above
+		// the per-module directories). Singular comes from rest/v3's
+		// Naming (gorm.Tabler + the package inflector), mirroring
+		// deriveViewPath so the generated view lines up with the
+		// sys_menus.view_path row written by the same registerModel
+		// call.
+		//
+		// Set via WithVueOutputDir. An empty value disables Vue
+		// generation across all registered models — the per-call
+		// RegisterModel option can still opt a single model in (or
+		// override the per-call path) independently of this field.
+		//
+		// Generation is best-effort: a write failure is logged at Warn
+		// level and never blocks the menu / permission inserts, because
+		// the Vue template lives on the front-end side and isn't part
+		// of the server's correctness contract.
+		VueOutputDir string
 	}
 
 	// Option mutates Options.
@@ -138,5 +161,26 @@ func WithTenantResolver(r middleware.Resolver) Option {
 func WithRouter(router rest.Router) Option {
 	return func(o *Options) {
 		o.Router = router
+	}
+}
+
+// WithVueOutputDir sets the base directory into which registerModel
+// writes an auto-generated Index.vue per model. Pass an empty string
+// to disable generation for the entire Server.
+//
+// The directory should be the conventional Vite `views/` directory
+// (the level immediately above the per-module directories — e.g.
+// `<repo>/web/src/views`). The generator appends `<module>/<singular>/Index.vue`
+// using rest/v3's resolved Singular (see deriveViewPath); a model
+// whose ModuleName or Singular can't be resolved is silently skipped
+// since the matching sys_menus row can't be written either.
+//
+// A best-effort write failure is logged at Warn level and does not
+// abort the menu / permission inserts. Re-running Setup is also safe
+// — the generator skips files that already exist, so manual edits to
+// the generated template are preserved across restarts.
+func WithVueOutputDir(dir string) Option {
+	return func(o *Options) {
+		o.VueOutputDir = dir
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/rest/v3"
@@ -79,6 +80,11 @@ func (s *Server) getModels() []any {
 // application models registered later via RegisterModel — the
 // per-model insert is what makes the feature composable.
 //
+// The optional RegisterModelOption values override individual slices
+// of the per-call behaviour (MenuSpec, permission scenarios, Vue
+// output dir) without forcing the caller to fork their model type.
+// See admin.register_model_options.go for the full set.
+//
 // RegisterModel must NOT be called before Setup has run: rest/v3 needs
 // the schema meta-table and tenant-scope callbacks installed by Setup
 // to wire routes correctly.
@@ -89,7 +95,7 @@ func (s *Server) getModels() []any {
 // External callers that batch multiple RegisterModel calls and need
 // orphan-parent validation should run validateMenuParentsRef once at
 // the end of their batch.
-func (s *Server) RegisterModel(model any) error {
+func (s *Server) RegisterModel(model any, opts ...RegisterModelOption) error {
 	if s.opts.Router == nil {
 		return ErrHTTPRequired
 	}
@@ -97,7 +103,7 @@ func (s *Server) RegisterModel(model any) error {
 		return ErrDBRequired
 	}
 	resourceDB := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true})
-	return s.registerModel(model, resourceDB)
+	return s.registerModel(model, resourceDB, opts...)
 }
 
 // registerModel is the per-model implementation behind RegisterModel
@@ -145,7 +151,11 @@ func (s *Server) RegisterModel(model any) error {
 // UpdatedAt autoUpdateTime) because the session's statement still
 // carries the last parsed model's schema.  Plain data inserts don't
 // need the detached session.
-func (s *Server) registerModel(model any, resourceDB *gorm.DB) error {
+func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterModelOption) error {
+	rmCfg := &registerModelConfig{}
+	for _, o := range opts {
+		o(rmCfg)
+	}
 	cfg := rest.ResourceConfig{
 		Router:    s.opts.Router,
 		Responder: s.opts.Responder,
@@ -175,27 +185,108 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB) error {
 	if module, table := s.modelNaming(resource); module != "" && table != "" {
 		s.modelsByModuleTable[module+"/"+table] = model
 	}
-	if p, ok := model.(models.MenuProvider); ok {
-		// Migrate sys_menus on a CLEAN detached session: resourceDB's
-		// statement was left pointing at the last model rest/v3 parsed
-		// (see the session-caching note above).  gorm's migrator
-		// pre-seeds Table from the statement but re-parses the Schema,
-		// so a polluted statement makes AutoMigrate(Menu) compare
-		// Menu's fields against the wrong table — when that table's id
-		// type differs from Menu's uint (e.g. Tenant's char(60) id),
-		// the mismatch triggers a broken ALTER TABLE rebuild.
+	// Resolve the per-call menu spec: an override via WithRegisterMenuSpec
+	// wins over the MenuProvider's MenuEntry() — see
+	// register_model_options.go for the precedence rules.  A nil
+	// rmCfg.menuSpec combined with a model that doesn't implement
+	// MenuProvider is the existing "skip menu" branch; passing an
+	// explicit empty MenuSpec{} at the call site overrides the skip.
+	switch {
+	case rmCfg.menuSpec != nil:
+		// Caller supplied a spec — migrate Menu either way (mirrors
+		// the MenuProvider branch below), then insert.
 		if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
 			return fmt.Errorf("migrate sys_menus: %w", err)
 		}
-		spec := s.fillDerivedSpec(resource, p.MenuEntry())
+		spec := s.fillDerivedSpec(resource, *rmCfg.menuSpec)
 		if _, err := s.ensureMenuRow(s.opts.DB, spec); err != nil {
 			return fmt.Errorf("auto-create menu for %T: %w", model, err)
 		}
+	default:
+		if p, ok := model.(models.MenuProvider); ok {
+			// Migrate sys_menus on a CLEAN detached session: resourceDB's
+			// statement was left pointing at the last model rest/v3 parsed
+			// (see the session-caching note above).  gorm's migrator
+			// pre-seeds Table from the statement but re-parses the Schema,
+			// so a polluted statement makes AutoMigrate(Menu) compare
+			// Menu's fields against the wrong table — when that table's id
+			// type differs from Menu's uint (e.g. Tenant's char(60) id),
+			// the mismatch triggers a broken ALTER TABLE rebuild.
+			if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
+				return fmt.Errorf("migrate sys_menus: %w", err)
+			}
+			spec := s.fillDerivedSpec(resource, p.MenuEntry())
+			if _, err := s.ensureMenuRow(s.opts.DB, spec); err != nil {
+				return fmt.Errorf("auto-create menu for %T: %w", model, err)
+			}
+		}
 	}
-	if err := s.ensurePermissionRows(s.opts.DB, resource); err != nil {
+	if err := s.ensurePermissionRows(s.opts.DB, resource, rmCfg.scenarios); err != nil {
 		return err
 	}
+	// Vue generation is opt-in via either Server.Options.VueOutputDir
+	// (set by WithVueOutputDir) or WithRegisterVueOutputDir at the
+	// call site.  Per-call wins over server-default, matching the
+	// precedence documented on registerModelConfig.resolveVueOutputDir.
+	if dir := rmCfg.resolveVueOutputDir(s.opts.VueOutputDir); dir != "" {
+		s.generateVueForResource(resource, dir)
+	}
 	return nil
+}
+
+// generateVueForResource is the best-effort Vue-generation hook
+// invoked from registerModel when a Vue output directory has been
+// resolved (either at the Server level via WithVueOutputDir, or at
+// the call site via WithRegisterVueOutputDir).
+//
+// "Best-effort" means a write failure is logged at Warn level and
+// never returned: the Vue file lives on the front-end side of the
+// project, where transient FS issues (read-only mount during a
+// test, a packaged binary inside a container without the source
+// tree) shouldn't abort the menu / permission inserts that already
+// succeeded above.  registerModel's contract is the database
+// state; this hook is a developer-convenience.
+//
+// The skipped-existing-file check inside generateVueFile makes the
+// call idempotent across restarts — operators that hand-edit the
+// generated view are never clobbered.
+func (s *Server) generateVueForResource(resource *rest.Resource, outputDir string) {
+	if resource == nil || outputDir == "" {
+		return
+	}
+	content, err := buildVueContent(resource)
+	if err != nil || content == "" {
+		// Empty content is the (module, singular, table)-empty skip
+		// signal — same as the menu / permission skip path above.
+		// Logging at Debug would also be reasonable, but at Info
+		// verbosity this is a quiet no-op the caller should not see
+		// on the happy path either.  Operators that need the trace
+		// can flip the logger level.
+		return
+	}
+	n := resource.ModelValue().GetNaming()
+	path := vuePathForModel(outputDir, strings.ToLower(n.ModuleName), n.Singular)
+	if path == "" {
+		return
+	}
+	written, err := generateVueFile(path, content)
+	if err != nil {
+		s.opts.Logger.Warn(context.Background(),
+			"auto-generate Vue Index.vue failed",
+			"model", fmt.Sprintf("%T", resource.ModelValue().ModelType()),
+			"path", path,
+			"error", err.Error(),
+			"note", "the menu / permission rows are unaffected; rerun Setup or copy vue_gen.go's template manually",
+		)
+		return
+	}
+	if written {
+		s.opts.Logger.Info(context.Background(),
+			"auto-generated Vue Index.vue",
+			"path", path,
+			"model", fmt.Sprintf("%T", resource.ModelValue().ModelType()),
+		)
+	}
 }
 
 // Setup installs tenant scoping and registers every built-in model on

@@ -13,20 +13,25 @@ import (
 	"gorm.io/gorm"
 )
 
-// pascalWords returns PascalCase of s with "_" as the word boundary.
-// Empty input returns "". Empty segments (caused by leading / trailing /
-// consecutive "_") are dropped so "__sys_users" -> "SysUsers" rather
-// than "_SysUsers".
+// pascalWords returns PascalCase of s with both "_" and "-" as word
+// boundaries — the union mirrors what the front-end's
+// deriveComponentName helper (admin/web/src/router/viewPath.ts) does
+// for keep-alive component-name lookups, so the auto-generated
+// Vue template's defineOptions name matches whichever segment
+// convention a future model happens to use.
+//
+// Empty input returns "". Empty segments (caused by leading /
+// trailing / consecutive separators) are dropped so "__sys_users"
+// -> "SysUsers" rather than "_SysUsers".
 func pascalWords(s string) string {
 	if s == "" {
 		return ""
 	}
-	parts := strings.Split(s, "_")
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == '_' || r == '-'
+	})
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		if p == "" {
-			continue
-		}
 		out = append(out, strings.ToUpper(p[:1])+strings.ToLower(p[1:]))
 	}
 	return strings.Join(out, "")
@@ -333,12 +338,23 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 // are left untouched, missing ones are inserted, and fields an operator
 // edited manually (Description / Type, etc.) are never overwritten.
 //
+// overrideScenarios lets per-call RegisterModel options pin the
+// scenario set explicitly.  Precedence:
+//
+//   - override == nil:  fall through to permissionScenarios(resource)
+//     (ScenarioProvider or canonical 6).
+//   - override != nil:  use exactly this slice, even when empty.  An
+//     empty slice suppresses permission seeding for the model
+//     entirely, matching the "no api permission catalog for this
+//     model" intent — useful for write-only audit / log models whose
+//     security posture is enforced elsewhere.
+//
 // db is s.opts.DB, not resourceDB: permission inserts are plain data
 // writes and don't need rest/v3's detached session, which would in
 // fact misbehave on auto-timestamp fields because its statement still
 // points at the previous model's schema (same root cause as
 // ensureMenuRow).
-func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource) error {
+func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource, overrideScenarios []string) error {
 	if err := db.AutoMigrate(&models.Permission{}); err != nil {
 		return fmt.Errorf("migrate sys_permissions: %w", err)
 	}
@@ -351,6 +367,9 @@ func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource) erro
 		return nil
 	}
 	scenarios := permissionScenarios(resource)
+	if overrideScenarios != nil {
+		scenarios = overrideScenarios
+	}
 	for _, sc := range scenarios {
 		data, description := permissionCode(resource, sc)
 		if data == "" {
