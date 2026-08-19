@@ -4,26 +4,28 @@
 
 admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https://github.com/sjlit/rest) + GORM，为应用提供即开即用的系统管理能力：
 
-- **通用 REST CRUD**：用户、角色、部门、菜单、权限、角色-权限中间表、审计日志、登录日志 8 个模型自动注册为 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；
+- **通用 REST CRUD**：用户、角色、部门、菜单、权限、角色-权限中间表、审计日志、登录日志、租户 9 个模型自动注册为 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；
 - **JWT 认证**：登录 / 刷新 / 登出（`AuthService`），支持 Token 吊销与登录前后钩子；
-- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，未收录路由默认放行（详见[接口权限校验](#接口权限校验rbac)）；
+- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，未收录路由默认拒绝（fail-closed），业务 RPC 通过 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）；
 - **用户业务 RPC**（`UserService`）：个人资料、改密、管理员重置密码、头像、可见菜单、权限码；
 - **租户隔离**：通过 GORM 回调自动为所有租户模型追加 `tenant_id` 过滤与回填，业务代码零侵入。
 
 ## 特性
 
 - **声明式 CRUD**：模型上的 `scenarios` / `rule` / `enum` / `format` / `live` 标签直接驱动接口的字段可见性、校验规则与前端表单渲染
-- **自动密码哈希**：`models.User` 在 `BeforeCreate` / `BeforeUpdate` 中对密码做 bcrypt 哈希（对已哈希值幂等）
+- **自动密码哈希**：`models.User` 在 `BeforeCreate` / `BeforeUpdate` 中对密码做 bcrypt 哈希（对已哈希值幂等）；`LoginLog.AccessToken` 走 SHA-256（高熵随机串无须 bcrypt 慢哈希）
 - **密码策略**：8-32 位字母+数字基线（`CheckPasswordPolicy`），所有写密码路径经 GORM 钩子单点收口
-- **级联清理**：删除菜单/角色时自动清理 `sys_role_permissions` 中的关联权限；角色 Key 变更自动同步权限引用
+- **级联清理**：删除菜单/角色（含软删）时自动清理 `sys_role_permissions` 中的关联权限；角色 Key 变更自动同步 `sys_role_permissions.role_key` 与 `sys_users.role_key`（避免用户的角色 Key 失同步）
 - **统一响应格式**：内置 responder 输出 `{code, message, data}` envelope（成功 `code=0`），也可用 `WithResponder` 替换
 - **可选的 OpenAPI**：`WithOpenAPI(true)` 后每个资源暴露 `openapi.json`
 - **可插拔认证**：`AuthService` 始终由应用自行 `pb.RegisterAuthServiceRouter(...)` 注册，secret 必须来自运行时通道（见[设计约定](#设计约定)）
-- **自动菜单注册**：模型实现 `MenuProvider` 时，`Setup` / `RegisterModel` 会按 `MenuEntry()` 自动生成 `sys_menus` 行（`Component` / `Uri` / `ViewPath` 在缺失时由模块名 + 表名推导，可显式覆盖）
+- **自动菜单注册**：模型实现 `MenuProvider` 时，`Setup` / `RegisterModel` 会按 `MenuEntry()` 自动生成 `sys_menus` 行（`Component` / `Uri` / `ViewPath` 在缺失时由模块名 + 表名推导，可显式覆盖）。三个分区容器菜单（`SystemUserCenter` / `SystemLogs` / `SystemSettings`）由 `EnsureSectionMenus` 在 `Seed` 阶段写入，业务菜单 `Parent` 都引用这三个 Component。`Setup` 末尾 `validateMenuParentsRef` 会扫所有 `sys_menus`，若发现 `Parent` 指向不存在的 Component 只打 `Warn` 而**不**中断启动——`Menu.BuildTree` 会把孤儿行降级为根，导航树仍可工作；运维应通过 `/system/sys_menu` 修正
 - **自动权限目录**：每个挂载模型按 `rest.ScenarioProvider` 声明的场景集生成 `sys_permissions` 行（`Data` 形如 `"<METHOD> <URI>"`），重复启动幂等
-- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对（详见[接口权限校验](#接口权限校验rbac)）
-- **公开 `RegisterModel`**：应用自定义模型可与内置模型走同一条迁移+菜单+权限注册路径
-- **一键引导**：`admin.Seed(db, user, pass)` 幂等收敛到引导状态：超管角色（`key="admin"`, `is_super=true`）+ admin 用户 + 全量授权，每次启动自动补齐新增的菜单/权限
+- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-closed**——未收录路由拒绝，业务 RPC 通过 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）
+- **读穿透缓存**：权限目录与角色授权都走 `admin/dbcache` 的 SqlDependency 版本标记缓存，写授权后下一个请求就生效，无需应用显式失效
+- **公开 `RegisterModel`**：应用自定义模型可与内置模型走同一条迁移+菜单+权限注册路径；per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）按需覆盖
+- **Vue 视图自动生成**：`WithVueOutputDir` 启用后，每个模型按 `(module, singular)` 自动创建 `Index.vue`（SchemaViewer 占位），已存在的文件跳过不覆盖手写修改
+- **一键引导**：`admin.Seed(db, user, pass)` 幂等收敛到引导状态：分区容器菜单 + 默认租户（`id="00000000-..."`）+ 超管角色（`key="admin"`, `is_super=true`, `data_scope="all"`）+ admin 用户 + 全量授权 + per-tenant `sys_schemas` 克隆；详见 [Seed 收敛契约](#seed-的收敛契约)
 
 ## 安装
 
@@ -66,7 +68,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 1. 装配 admin Server：租户回调 + 8 个 CRUD 资源
+	// 1. 装配 admin Server：租户回调 + 9 个 CRUD 资源
 	httpSrv := ghttp.New()
 	s := admin.New(
 		admin.WithDB(db),
@@ -129,7 +131,7 @@ import (
 )
 
 // 1. admin.Server 通过 WithRouter 接管 HTTP server(任何 rest.Router 都行,
-//    不必是 *transport/http.Server),Setup 内部完成 schema 迁移与 8 个
+//    不必是 *transport/http.Server),Setup 内部完成 schema 迁移与 9 个
 //    CRUD 资源注册。
 httpSrv := ghttp.New()
 s := admin.New(
@@ -154,7 +156,23 @@ log.Fatal(httpSrv.Start(context.Background()))
 
 > **Seed 与 Setup 的时序约定**：授权补齐以 Seed 调用时刻的全局目录（`sys_menus` + `sys_permissions`）为准，因此必须先 `Setup`（建目录）后 `Seed`（授全量）。若先调 `Seed`，目录尚空，本次只确保角色 + 用户，授权会留到下一次启动补齐；应用升级注册新模型后，同样靠下一次启动的 Seed 补齐。
 >
-> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。
+> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。注意 PermissionChecker 默认 **fail-closed**，未通过 `WithCheckerAllowlist` 显式放行的业务 RPC 会被拒绝——P0 捷径里走到的 `/user/menus`、`/role/options`、`/tenant/options` 等都必须在 allowlist 里登记。
+
+### Seed 的收敛契约
+
+`admin.Seed(db, user, pass)` 在事务里一次性收敛以下状态，每条都是**幂等**的：
+
+1. **3 个分区容器菜单**（`EnsureSectionMenus`，Section 容器）：`FirstOrCreate` 写入 `SystemUserCenter`（用户中心）、`SystemLogs`（日志记录）、`SystemSettings`（系统设置），Icon 走 Element Plus 命名。后续所有内置模型的 `MenuEntry().Parent` 都引用这三个 Component；分区本身 `Parent=""`（无嵌套）；
+2. **默认租户**：`FirstOrCreate` 写入 `id="00000000-0000-0000-0000-000000000000"`、`name="默认租户"`、`status="enabled"`，作为新角色的 tenant_id 与新用户的归属；
+3. **超管角色**：`FirstOrCreate` 写入 `Key="admin"`、`Name="系统管理员"`、`Status="enabled"`、`Builtin=true`、`IsSuper=true`、`DataScope="all"`。已存在的 `Builtin && !IsSuper` 内置角色就地 `Update is_super=true`（兼容旧库升级）；非内置同名角色**不动**（运维自建）；
+4. **孤儿租户回填**：若超管角色的 `tenant_id` 不等于默认 uuid，再 `FirstOrCreate` 一条 `Name="默认租户"`、`Status="enabled"` 的同名租户，修复历史孤儿 uuid（早于 tenant 模型存在的库）；
+5. **超管用户**：`FirstOrCreate` 写入 `UID="admin"`、`Username=user`、`RoleKey="admin"`、`Password=pass`（`BeforeCreate` bcrypt），落到默认租户；
+6. **超管角色全量授权**：找到所有 `is_super=true` 的角色，按 `sys_menus.component` 与 `sys_permissions.data` 的差集补齐 `sys_role_permissions`（**add-only**，已存在的 / 已被运维手动删的会自愈，不删除现存的）；
+7. **per-tenant `sys_schemas` 克隆**：`rest/v3` 在 `Setup` 阶段写 `sys_schemas` 时 `tenant_id` 留空（模板态），Seed 把模板按 `(module, table, column)` 去重克隆到每个 active tenant，**add-only**（模板消失时保留旧副本；模板变更不覆盖现有副本）。
+
+> **不要在 `Setup` 之前调 `Seed`**：分区容器（步骤 1）走的是 `db.Create(&models.Menu{})`，需要 `Setup` 先 `AutoMigrate(&models.Menu{})`；授权补齐（步骤 6）需要 Setup 先建好 `sys_menus` 与 `sys_permissions`。否则步骤 1 失败，事务回滚；步骤 6 退化为空（无菜单可授）。
+>
+> **失败原子性**：整个 Seed 跑在单个 `db.Transaction` 里；任一步失败（如 bcrypt panic）回滚，库不会半 bootstrapped。
 
 登录响应字段(`{code, message, data}` envelope,data 内;`expires` 是 TTL **相对秒**,7200 = 2h):
 
@@ -245,7 +263,7 @@ log.Fatal(httpSrv.Start(context.Background()))
 
 ### 接口权限校验（RBAC）
 
-`admin.NewPermissionChecker(db)`（`permission.go`，db 为 nil 时 panic，与其它 Service 构造器一致）返回 JWT 中间件的 `PermissionCheckerFunc`，对**已收录进 `sys_permissions` 目录**的 HTTP 路由执行角色权限校验：
+`admin.NewPermissionChecker(db, opts...)`（`permission.go`，db 为 nil 时 panic，与其它 Service 构造器一致）返回 JWT 中间件的 `PermissionCheckerFunc`，对**已收录进 `sys_permissions` 目录**的 HTTP 路由按角色校验权限：
 
 ```go
 mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
@@ -259,19 +277,75 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 
 | 步骤 | 条件 | 结果 |
 |------|------|------|
-| 1. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 2；查无此行为**放行**（fail-open） |
-| 2. 授权查询 | `sys_role_permissions` 存在 `role_key + tenant_id + type=permission + data` 匹配的行 | **放行** |
-| 3. 否则 | 目录内但角色无授权 | **拒绝**：业务码 `4003 PermissionDenied` |
+| 1. 接线保护 | claims 不是 `*auth.Claims` | **拒绝**：`4005 AccessDenied` |
+| 2. 显式放行 | `WithCheckerAllowlist` 命中 | **放行** |
+| 3. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 4；查无此行（且未显式放行）**拒绝**（fail-closed） |
+| 4. 授权查询 | `sys_role_permissions` 存在 `role_key + tenant_id + type=permission + data` 匹配的行 | **放行** |
+| 5. 否则 | 目录内但角色无授权 | **拒绝**：业务码 `4003 PermissionDenied` |
 
 **设计要点**：
 
-- **fail-open 默认放行**：未收录路由（业务 RPC：`/user/menus`、`/role/options` 等）不受影响，由服务自身逻辑（如 `ResetPassword` 的 admin 角色检查）或应用中间件控制；
+- **fail-closed 默认拒绝**：未收录路由（业务 RPC：`/user/menus`、`/role/options`、`/tenant/options` 等）一律拒绝；需要放行的路由必须通过 `WithCheckerAllowlist` 显式声明，把每个 bypass 暴露在 code review 里（防止忘记给新路由登记权限目录就静默上线）；
 - **租户隔离显式化**：授权查询显式过滤 `tenant_id`——checker 运行时 claims 尚未进入 ctx，GORM 租户回调不会自动过滤，不显式传会导致跨租户串权；
 - **fail-closed 接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
 - **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker；
 - **超管授权窗口**：角色授权由 `admin.Seed` 每次启动补齐（以调用时刻的全局目录为准），新模型注册后需先 `Setup` 后 `Seed`，见[P0 一键集成](#p0-一键集成搭配-dashboardweb)的时序约定。
 
-测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005。
+**选项**：
+
+| 选项 | 说明 |
+|------|------|
+| `WithCheckerAllowlist(entries ...string)` | 显式放行 `entries`，每条 `"<METHOD> <pattern>"`（`METHOD` 为 `*` 或空表示任意方法；`pattern` 支持精确、`*` 通配、`<prefix>*` 段边界前缀）。常用于 `/user/menus`、`/role/options`、`/tenant/options` 等业务 RPC——这些端点的鉴权由其它机制负责（JWT 中间件 allowlist、`UserService.ResetPassword` 的 admin 检查等） |
+| `WithCheckerCache(cache.Cache)` | 注入共享缓存后端，覆盖默认内存后端（默认 `infra/cache/memory`，单进程）。多实例部署换成 Redis 等共享后端，避免每个进程的 catalog 独立陈旧 |
+
+**缓存**：api 目录与每个 `(tenant, role)` 的授权集合都通过 `admin/dbcache` 的读穿透 cacher 加载；catalog 用 `MAX(updated_at)` 作版本标记（无 TTL），grants 用 `SUM(id)` + 1 分钟 TTL（吸收标记盲区）。`dbcache` 的 1 秒宽限窗 + 版本标记组合让授权变更在下一个请求就生效，无需应用显式失效。
+
+测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由**拒绝** / 显式 allowlist 放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005。
+
+## dbcache 读穿透缓存
+
+`admin/dbcache` 提供带依赖版本标记的读穿透缓存，是 `NewPermissionChecker` 内部 cache 层的实现。它解决两个具体问题：
+
+- **避免每个请求一次目录/授权 SQL**：权限校验是热路径上每次请求都要跑的开销，原始实现每次请求两次 SQL（catalog + grant），在 catalog 稳定时几乎是浪费；
+- **让授权变更在下一个请求生效**：写一次 `sys_role_permissions`，下一个请求立刻看到，而不是等缓存 TTL 过期。
+
+### 核心 API
+
+```go
+c := dbcache.New(db,
+    dbcache.WithDependency(dbcache.NewSqlDependency(
+        dbcache.WithTable("sys_role_permissions"),
+        dbcache.WithColumn("SUM(id)"),
+        dbcache.WithCondition("deleted_at IS NULL"),
+    )),
+    dbcache.WithCacheDuration(time.Minute), // hard TTL
+)
+set, err := dbcache.Try(c, ctx, "perm:grant:tenant1:admin",
+    func(tx *gorm.DB) (map[string]struct{}, error) { /* ... */ })
+```
+
+- `Try(c, ctx, key, f)`：命中且未过期则直接返回；否则跑 `f(tx)`（singleflight 保证并发只跑一次），结果存进 cache；
+- `CacheDependency.GetValue(ctx, db)` 返回当前源表的一个紧凑版本标记；缓存项写入时记下当时的标记值，下次读取时若与当前值相等就视为未变更直接放行（节省源表扫描）。
+
+### 版本标记策略
+
+| 源表 | 标记列 | 备注 |
+|------|--------|------|
+| `sys_permissions` | `MAX(updated_at)` | catalog 行可在 admin CRUD 中被就地更新，MAX 跨秒数足够 |
+| `sys_role_permissions` | `SUM(id)` | junction 行从不被原地更新（assignment 是 soft delete + re-insert），SUM 自动吃掉软删/重建；自增 id 总比历史大 |
+
+两个标记都是**表全局**的，所以"任何位置一次写"都会让整张表的全部缓存键**惰性失效**——过度失效是安全的，失效不足才会泄露权限。
+
+### 宽限窗与 TTL
+
+- **1 秒宽限窗**：刚写入的缓存在 1 秒内不查 marker，避免写入瞬间的 burst read 每次都重跑 marker 查询；
+- **TTL 是硬上限**：版本标记存在同秒级盲区（catalog 的 `MAX(updated_at)` 在秒级，grants 的 SUM 也对同秒级 revoke+grant 漏检），硬 TTL 给一个 bound。catalog 用 0 TTL（标记足够），grants 用 1 分钟 TTL。
+
+### 后端切换
+
+默认 `infra/cache/memory.NewCache()`（单进程内存，`map[string]any`）。多实例部署时通过 `WithCache(cache.Cache)` 切到共享后端（如 Redis）；Redis 后端走 JSON 往返所以不会发生值别名问题，内存后端的值会与缓存项共享底层 slice/map——调用方不能修改返回值。
+
+测试覆盖见 `dbcache/cacher_test.go` 与 `dbcache/depend_test.go`。
 
 ## 租户隔离
 
@@ -320,15 +394,15 @@ admin.WithTenantResolver(func(ctx context.Context) string {
 
 | 模型 | 表名 | 租户 | 说明 |
 |------|------|------|------|
-| `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）。全局可见，无 `tenant_id` 列 |
-| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一）、`username`、`role_key`、`dept_id`、bcrypt `password`、`avatar`、`status`、`email`、`gender`、`description` |
-| `Role` | `sys_roles` | ✅ | 角色：`name` + `key`（机器标识，唯一）+ `builtin` + `is_super`（超管：授权由 Seed 自动管理，禁手动修改）。`key` 变更自动同步 `sys_role_permissions`；删除自动清理关联权限 |
-| `Menu` | `sys_menus` | ❌ | 菜单树：`parent`（父级菜单 Component，全局共享）、`name`（唯一，标题）、`component`（唯一，标识）、`uri`、`hidden` / `public`。删除自动清理 `sys_role_permissions` 中 `type=menu` 的行 |
-| `Department` | `sys_departments` | ✅ | 部门树：`parent_id` + `name` |
-| `Permission` | `sys_permissions` | ❌ | 全局权限目录：`type`（`api` 接口 / `button` 按钮 / `data_scope` 数据范围）+ `data`（权限标识，全租户共享）+ `description` |
-| `RolePermission` | `sys_role_permissions` | ✅ | 角色-权限中间表：`role_key`（角色 Key）+ `type`（`menu` 菜单 / `permission` 权限）+ `data`（菜单 Component / 权限标识），按租户生效 |
-| `Audit` | `sys_audits` | ✅ | 审计日志：`uid`、`action`、`module`、`table`、`data` |
-| `LoginLog` | `sys_login_logs` | ✅ | 登录日志：`uid`、`ip`、`browser`、`os`、`platform`、`access_token`、`user_agent` |
+| `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）、`created_at` / `updated_at`。全局可见，无 `tenant_id` 列 |
+| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一）、`username`、`role_key`、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description` |
+| `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`）、`status`（`enabled` / `disabled`）、`builtin`、`is_super`（超管：授权由 Seed 自动管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限 |
+| `Menu` | `sys_menus` | ❌ | 菜单树：`parent`（父级菜单 Component，全局共享）、`name`（唯一，标题）、`component`（唯一，标识，路由 keep-alive 用）、`uri`、`view_path`（自动生成的 Vue 路径 `@/views/<module>/<singular>/Index.vue`）、`icon`、`hidden` / `public`、`sort`、`description`。删除自动清理 `sys_role_permissions` 中 `type=menu` 的行 |
+| `Department` | `sys_departments` | ✅ | 部门树：`parent_id`、`name`、`description` |
+| `Permission` | `sys_permissions` | ❌ | 全局权限目录：`type`（`api` 接口 / `button` 按钮 / `data_scope` 数据范围）+ `data`（权限标识，全租户共享，形如 `"<METHOD> <URI>"`）+ `description` |
+| `RolePermission` | `sys_role_permissions` | ✅ | 角色-权限中间表：`role_key`（角色 Key）+ `type`（`menu` / `permission`）+ `data`（菜单 Component / 权限标识，按 type 决定宽度），按租户生效 |
+| `Audit` | `sys_audits` | ✅ | 审计日志：`uid`、`action`（`create` / `update` / `delete`，带颜色）、`module`、`table`、`data`（变更内容，size 10240） |
+| `LoginLog` | `sys_login_logs` | ✅ | 登录日志：`uid`、`ip`、`browser`、`os`、`platform`、SHA-256 `access_token`（不入参；audit 用）、`user_agent` |
 
 所有模型在 `Setup` 时由 rest/v3 自动 `AutoMigrate`，无需手动迁移。模型上的 `scenarios`、`rule`、`enum` 等标签驱动 rest/v3 的字段可见性与校验（如 `User.Uid` 的 `rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`）。
 
@@ -340,11 +414,141 @@ on every startup.  There is no hand-written SQL migration layer in this
 module (the project has not shipped, so destructive re-creates are
 acceptable over preserving historical data).
 
+## 应用自定义模型注册
+
+应用通常在 `Setup` 之后追加注册若干自带模型（业务表）。`Server.RegisterModel(model, opts...)` 是公开入口：
+
+```go
+if err := s.Setup(ctx); err != nil { /* ... */ }
+
+// 内置模型之外的应用模型：和 Setup 内置走同一条 迁移+菜单+权限 路径
+s.RegisterModel(&MyOrder{})
+s.RegisterModel(&MyProduct{},
+    admin.WithRegisterMenuSpec(models.MenuSpec{Name: "订单管理", Parent: "SystemSettings", Sort: 50}),
+    admin.WithRegisterScenarios(schema.ScenarioSearch, schema.ScenarioDetail),
+)
+```
+
+`RegisterModel` 的契约：
+
+- 必须在 `Setup` **之后**调用——`rest/v3` 需要 `Setup` 安装的 schema 元表和租户回调才能正确布线路由；
+- 失败返回 `ErrHTTPRequired` / `ErrDBRequired`，与 `Setup` 同源；
+- 自动按 `MenuProvider.MenuEntry()` + `ModuleName/TableName` 推导 `sys_menus` 行（详见[自动菜单注册](#特性)）；
+- 自动按 `rest.ScenarioProvider`（或缺省 6 个标准场景：create / update / delete / search / detail / export）生成 `sys_permissions` 行；
+- 若应用显式配置了 Server 级 `WithVueOutputDir`，自动生成 Vue `Index.vue`（见下一节）。
+
+### per-call 选项
+
+| 选项 | 作用 | 默认行为 |
+|------|------|---------|
+| `WithRegisterMenuSpec(spec MenuSpec)` | 覆盖模型 `MenuEntry()`；模型未实现 `MenuProvider` 时也可强制生成菜单行（传 `MenuSpec{}` 显式空 spec 仍会跳过） | 走 `MenuProvider.MenuEntry()`，未实现 `MenuProvider` 则跳过 |
+| `WithRegisterScenarios(scenarios ...string)` | 覆盖该模型的权限场景集 | 走 `ScenarioProvider`，未实现则用 6 个标准场景；传空 slice 表示**不为该模型生成任何权限行**（典型：写审计类模型，授权在其它地方） |
+| `WithRegisterVueOutputDir(dir string)` | 按模型粒度启用 / 禁用 Vue 生成（独立于 Server 级 `WithVueOutputDir`） | 继承 Server 级 `VueOutputDir`；传 `&""` 显式禁用该模型 |
+
+三个选项互相独立，按需组合。`RegisterModel` 自身签名 (`RegisterModel(model)`) 保持不变，所有选项都是新增的——向后兼容。
+
+应用批量注册完一批模型后，可调用 `admin.Server` 未导出的 `validateMenuParentsRef` 检查（或者直接调 `s.Setup` 的等价路径），把孤儿 parent 在请求到达之前**作为 Warn 日志**暴露出来——Setup 不再因此失败。
+
+## Vue Index.vue 自动生成
+
+admin 的 Server 在注册模型时，会按 `(ModuleName, Singular)` 自动写一份 Vue 3 `<script setup>` 模板到 `WithVueOutputDir` 指向的目录——典型的 Vite `views/` 根目录（`<repo>/web/src/views`）。这样新增一个内置模型后，前端不用手写 `Index.vue` 也能跑起 CRUD 页面。
+
+### 启用
+
+```go
+s := admin.New(
+    admin.WithDB(db),
+    admin.WithRouter(httpSrv),
+    admin.WithVueOutputDir("admin/web/src/views"), // 与 web/ 的 Vite alias 对齐
+)
+```
+
+或对单个模型（`web/` 里已有的 9 个 `sys_*` 视图是手写的，**不要**让生成器覆盖）：
+
+```go
+s.RegisterModel(&SomeNewModel{}, admin.WithRegisterVueOutputDir("admin/web/src/views"))  // 启用
+s.RegisterModel(&SysUsers{},    admin.WithRegisterVueOutputDir(""))                       // 显式跳过
+```
+
+### 生成内容
+
+每个 `Index.vue` 都是同一份模板（`vueTemplate` 常量），占位符替换：
+
+```vue
+<script setup lang="ts">
+defineOptions({ name: 'SystemSysUsers' })
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { SchemaViewer } from '@sjlit/rest-ui'
+const route = useRoute()
+const title = computed(() => (route.meta.title as string | undefined) || 'sys_users')
+</script>
+<template>
+  <SchemaViewer module="system" table="sys_users" :title="title" />
+</template>
+```
+
+文件路径：`{outputDir}/{module-lowercase}/{singular}/Index.vue`（与 `deriveViewPath` 写进 `sys_menus.view_path` 的路径同构）。
+
+### 行为契约
+
+- **幂等**：已存在的文件**直接跳过**（不覆盖手写修改），所以重启 Setup 不会破坏手写的视图；
+- **失败 warn 不中断**：文件系统失败（只读挂载、容器内无源码树）只 `Logger.Warn`，**不**回滚已经写入的菜单 / 权限——后者是数据库契约，前端文件是开发期便利；
+- **空 ModuleName/Singular 跳过**：与菜单 / 权限的 skip 信号一致，没有派生依据就不写；
+- **路径遍历保护**：`vuePathForModel` 拒绝包含 `..` 或路径分隔符的 module/singular，误信源（配置驱动的 TableName 解析器）也写不出 `Index.vue`。
+
+测试覆盖见 `vue_gen_test.go`：`buildVueContent` / `vuePathForModel` / `generateVueFile` / `generateVueForResource`。
+
+## 前端管理台（admin/web）
+
+`admin/web/` 是配套的 Vue 3 + Element Plus SPA，使用 [`@sjlit/rest-ui`](https://github.com/sjlit/rest-ui) 的 `SchemaViewer` 直接驱动整张 CRUD 页面。日常开发命令、目录约定、与 Element Plus 的视觉桥接都写在 [`admin/web/README.md`](web/README.md)；本节只描述**前后端契约**——前端依赖哪些后端端点、每个端点在哪一章定义，便于后端改动时同步检查前端。
+
+### 后端契约清单
+
+| 前端用法 | 后端端点 | 后端定义位置 |
+|---------|---------|-------------|
+| 任意模型 CRUD 页面（`SchemaViewer` 自动驱动） | `GET /schema/:module/:table`（列元数据）+ `GET /rest/model-types/:module/:table` / `GET /rest/model-tiers/:module/:table`（下拉数据） | [元数据 / 选项查询](#元数据--选项查询由-setup-挂载) |
+| 侧边栏（菜单树） | `GET /user/menus` | [UserService](#userservice) |
+| 每按钮 guard（前端按钮可见性） | `GET /user/permissions` | [UserService](#userservice) |
+| 当前用户右上角菜单 | `GET /user/profile` | [UserService](#userservice) |
+| 修改自己密码 | `POST /user/change-password` | [UserService](#userservice) |
+| 登录页 | `POST /auth/login` | [AuthService](#authservice) |
+| Token 刷新（access token 过期） | `POST /auth/refresh-token` | [AuthService](#authservice) |
+| 登出 | `POST /auth/logout` | [AuthService](#authservice) |
+| 角色编辑页下拉数据 | `GET /role/options` / `GET /permission/catalog` / `GET /menu/tree` | [RoleService / PermissionService / MenuService](#roleservice--permissionservice--menuservice) |
+| 角色授权编辑（按角色 preview） | `GET /role/permissions` / `GET /role/menus` / `PUT /role/permissions` | [RoleService / PermissionService / MenuService](#roleservice--permissionservice--menuservice) |
+| 切换租户（下拉） | `GET /tenant/options` / `GET /tenant/detail` | [TenantService](#tenantservice) |
+
+> **契约变更原则**：后端改这五个 RBAC 端点的请求 / 响应形状时，前端 `@sjlit/rest-ui` 与 `admin/web/src/api/*` 都要同步更新；改自动生成的 `Index.vue` 模板（`vueTemplate` 常量在 [`vue_gen.go`](vue_gen.go)）时，前端手写的 9 个 `web/src/views/system/sys_*/Index.vue` 需要逐一对比——前者是契约源，后者是参考实现。
+
+### 自动生成 vs 手写视图
+
+`admin/web/src/views/system/sys_*` 下**目前 9 个模型视图都是手写的**（在 `web/` 引入 SchemaViewer 之前完成；保留是因为这些页面有手写的 #gridview 插槽、`scenarios` 调优与少量 i18n），`WithVueOutputDir` 默认**不会**覆盖它们：
+
+```go
+// 这条 RegisterModel 显式告诉生成器：不要碰这个手写视图
+s.RegisterModel(&models.User{}, admin.WithRegisterVueOutputDir(""))
+```
+
+新增内置或应用模型时，`WithVueOutputDir` 自动生成的是"能跑起来就行"的占位 `SchemaViewer`——首屏跑通后再按需替换为带 `#gridview` 插槽的定制视图。详见 [Vue Index.vue 自动生成](#vue-indexvue-自动生成)。
+
+### 开发联调
+
+```bash
+# 1. 启后端（demo 启动器，固定 :8080，种子账号 admin / Admin123）
+cd admin/cmd/mock && go run .
+
+# 2. 启前端（:5173，/api 代理到 :8080）
+cd admin/web && npm install && npm run dev
+```
+
+打开 `http://localhost:5173`，用 `admin / Admin123` 登录。更多命令（`typecheck` / `test` / `build`）与前端内部约定（信封格式、auth 失败码、Hash 路由模式）见 [`admin/web/README.md`](web/README.md)。
+
 ## API 一览
 
 ### URL 形态约定
 
-admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `PermissionService` / `MenuService`）遵循同一规则：
+admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `PermissionService` / `MenuService` / `TenantService`）遵循同一规则：
 
 | HTTP 方法 | 参数位置 | 说明 |
 |---|---|---|
@@ -389,6 +593,7 @@ admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `
 | `RolePermission` | `/system/sys_role_permission` | `/system/sys_role_permissions` |
 | `Audit` | `/system/sys_audit` | `/system/sys_audits` |
 | `LoginLog` | `/system/sys_login_log` | `/system/sys_login_logs` |
+| `Tenant` | `/system/sys_tenant` | `/system/sys_tenants` |
 
 > 注意 `Menu` 的复数是 `sys_menuses`：复数是 rest/v3 对表名的机械转换（`inflector.Pluralize`），不做语义化处理。
 
@@ -467,7 +672,7 @@ pb.RegisterMenuServiceRouter(httpSrv, service.NewMenuService(service.WithMenuSer
 | `GET` | `/role/options` | 角色下拉项 `[{value: key, label: name}]`（按 key 升序） |
 | `GET` | `/role/permissions?role=…[&type=…]` | 某角色的权限（详见下方 type 语义） |
 | `PUT` | `/role/permissions` | 整体替换某角色权限，body: `{"role":"admin","menus":[菜单 Component...],"apis":[权限码...]}` |
-| `GET` | `/role/menus?role=…` | 某角色可见菜单（扁平，`name` = 菜单标题） |
+| `GET` | `/role/menus?role=…` | 某角色可见菜单（管理端预览，不限于当前用户角色；扁平，`name` = 菜单标题） |
 | `GET` | `/permission/catalog?type=…` | 全局目录权限码（可选 `?type=` 过滤） |
 | `GET` | `/menu/tree` | 完整菜单树（节点 `name` = 菜单 **Component**，非标题） |
 | `GET` | `/menu/options` | 层级下拉项（`value` = 菜单 **Component**，可直接作为 `parent` 提交） |
@@ -476,6 +681,8 @@ pb.RegisterMenuServiceRouter(httpSrv, service.NewMenuService(service.WithMenuSer
 > **枚举 query 参数**：`PermissionType`（`type`）是 proto 枚举，**只能传数字**（`0/1/2/3/4` = `PERMISSION_TYPE_UNSPECIFIED/MENU/API/BUTTON/DATA_SCOPE`）；字符串形式 `?type=menu` 无法通过 `MapFormWithTag` 绑定，会得到绑定错误。`role` / `id` 传字符串 / 数字字符串即可。详见[URL 形态约定](#url-形态约定)。
 >
 > **`GET /role/permissions` 的 type 过滤语义**：`type` 缺省（`UNSPECIFIED`）返回 `{menus, apis}` 合读（角色编辑页一屏展示）；`type=1`（MENU）只返菜单 Component、`apis` 为空；`type=2`（API）只返权限码、`menus` 为空。原 `GET /permission/role` 已于 2026-08-10 合并至本端点。
+>
+> **`GET /role/menus` 的归属**：`RoleMenus` 原属 `MenuService.ListVisibleMenusByRole`，2026-08-10 移入 `RoleService`，所有"角色相关"读端点统一归 `/role/*`；前端"按角色预览侧栏"路由固定调用本端点。
 >
 > **`GET /permission/catalog` 的 type 过滤语义**：菜单已不在全局目录中，因此 `type=1`（MENU）**返回全部目录权限码**（退化为 "all"）；要过滤 api 请用 `type=2`（API）。
 
@@ -566,30 +773,34 @@ pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
 admin/
 ├── auth/              # JWT Claims 类型与 ctx 提取（ClaimsFromContext / TenantIDFromContext）
 ├── middleware/        # Resolver 契约与默认实现 FromClaimsResolver
-├── models/            # GORM 模型（8 个）+ MenuSpec / MenuProvider / 级联清理钩子
-├── pb/                # proto 定义与生成代码（auth / user / role / permission / menu）
+├── models/            # GORM 模型（9 个）+ MenuSpec / MenuProvider / 级联清理钩子
+├── dbcache/           # 读穿透缓存 + SqlDependency 版本标记（PermissionChecker 用）
+├── pb/                # proto 定义与生成代码（auth / user / role / permission / menu / tenant）
 │   ├── auth.proto         # AuthService 定义
 │   ├── user.proto         # UserService 定义
 │   ├── role.proto         # RoleService 定义
 │   ├── permission.proto   # PermissionService 定义
 │   ├── menu.proto         # MenuService 定义
+│   ├── tenant.proto       # TenantService 定义
 │   └── *_http.pb.go       # 生成的路由注册代码
-├── service/           # AuthService / UserService / RoleService / PermissionService / MenuService 业务实现
+├── service/           # AuthService / UserService / RoleService / PermissionService / MenuService / TenantService 业务实现
 ├── third_party/       # protoc 依赖的 google api / validate proto
+├── web/               # Vue 3 + Element Plus 管理后台骨架（@sjlit/rest-ui 驱动 SchemaViewer）
 ├── cmd/mock/          # demo 启动器（ScopeContext + dev-only secret/seed defaults）
 ├── docs/              # 设计文档、INTEGRATION-TODO、设计约定 spec
-├── server.go          # Server 装配：租户回调安装 + 资源注册 + 可选 AuthService
+├── server.go          # Server 装配：租户回调安装 + 资源注册 + 端点挂载
 ├── tenant_scope.go    # GORM 租户回调（aeus:tenant:*）
-├── menu_derive.go     # 注册时按 ModuleName+TableName 推导 sys_menus 行
-├── permission_derive.go # 注册时按 ScenarioProvider 推导 sys_permissions 行
+├── derive.go          # 推导 Component/Uri/ViewPath + ensureMenuRow/ensurePermissionRows
 ├── permission.go      # NewPermissionChecker:对已收录路由执行角色权限校验(JWT 中间件钩子)
-├── schema_endpoint.go       # RegisterSchemaEndpoint（GET /schema/:module/:table）
-├── modeltypes_endpoint.go   # RegisterModelTypesEndpoint（GET /rest/model-types/:module/:table）
-├── modeltiers_endpoint.go   # RegisterModelTiersEndpoint（GET /rest/model-tiers/:module/:table）
-├── option.go          # Functional options
+├── register_model_options.go   # RegisterModel per-call 选项（WithRegisterMenuSpec / Scenarios / VueOutputDir）
+├── vue_gen.go         # 自动生成 Vue Index.vue（vueTemplate / vuePathForModel / buildVueContent）
+├── schema_endpoint.go        # RegisterSchemaEndpoint（GET /schema/:module/:table）
+├── modeltypes_endpoint.go    # RegisterModelTypesEndpoint（GET /rest/model-types/:module/:table）
+├── modeltiers_endpoint.go    # RegisterModelTiersEndpoint（GET /rest/model-tiers/:module/:table）
+├── options.go         # Functional options
 ├── responder.go       # 默认 envelope（{code,message,data}）
-├── seed.go            # admin.Seed 收敛引导（超管角色/用户 + 全量授权补齐）
-├── types.go           # 错误定义（ErrHttpRequired / ErrDBRequired）
+├── seed.go            # admin.Seed 收敛引导 + EnsureSectionMenus 分区容器
+├── errors.go          # 错误定义（ErrHTTPRequired / ErrDBRequired / ErrRouterRequired）
 └── Makefile           # proto 代码生成
 ```
 
@@ -612,15 +823,21 @@ go test ./...
 
 测试覆盖：
 
-- `admin_test.go` — `Server.Setup` 资源注册、迁移回调、Responder 集成
+- `setup_test.go` / `user_test.go` / `tenant_server_test.go` — `Server.Setup` 资源注册、迁移回调、Responder 集成、端到端 HTTP 调用（登录 + JWT 中间件 + CRUD 资源）
 - `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/回填）
-- `menu_derive_test.go` — `MenuSpec` 推导、Component/Uri/ViewPath 覆盖规则、孤儿 parent 校验
-- `permission_derive_test.go` — `permissionDataPattern` 正则、`ensurePermissionRows` 幂等
-- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005
+- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由**拒绝**（fail-closed） / 显式 allowlist 放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
 - `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table
-- `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` / `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
-- `seed_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动
+- `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` + `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
+- `register_model_options_test.go` — `RegisterModel` per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）的覆盖语义、显式空 spec / 空 scenarios 的边界
+- `vue_gen_test.go` — `buildVueContent` / `vuePathForModel` / `generateVueFile` / `generateVueForResource`：模板占位符替换、路径遍历保护、已存在文件跳过、失败 warn 不中断
+- `seed_test.go` / `seed_tenant_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动、跨租户孤儿回填、per-tenant `sys_schemas` 克隆
 - `responder_test.go` — envelope 解包、wrapped error 链透传、`{code,message,data}` 形状
-- `admin_e2e_test.go` — `Setup` + 自动注册 AuthService 的端到端 HTTP 调用
-- `login_log_test.go` — `recordLogin` 成功/失败各分支
-- `service/` 下的 `*_test.go` — AuthService 全流程（登录/刷新/登出/钩子/无状态模式）、UserService RPC、RoleService / PermissionService / MenuService 的 HTTP 集成测试（含 `live:"type:dropdown;url:/role/options"` 注解解析）
+- `models/menu_method_test.go` / `models/permission_method_test.go` / `models/role_method_test.go` / `models/tenant_test.go` / `models/user_test.go` / `models/loginlog_test.go` — `Menu.BuildTree` / `Role.BeforeUpdate` Key 同步 + 软删级联 / `Role.AfterDelete` 硬删级联 / `Permission.ListByType` / `Tenant.BeforeCreate` uuid 回填 / `User.ValidatePassword` / `LoginLog.BeforeCreate` token 哈希 等模型方法的单测
+- `dbcache/cacher_test.go` / `dbcache/depend_test.go` — 读穿透缓存命中 / miss / reload / 版本标记失配重载 / 宽限窗 / 共享 cache 后端
+- `service/auth_test.go` — AuthService 全流程（登录/刷新/登出/钩子/无状态模式）
+- `service/user_test.go` / `service/user_cache_test.go` — UserService RPC + 缓存场景
+- `service/role_test.go` / `service/role_cache_test.go` — RoleService 端到端（含 `ReplacePermissions` 事务 + 缓存）
+- `service/menu_test.go` / `service/menu_cache_test.go` — MenuService `MenuTree` / `MenuOptions` / `MenuBreadcrumb` 集成
+- `service/permission_test.go` — PermissionService `ListCatalog` 集成
+- `service/tenant_test.go` / `service/tenant_login_test.go` — TenantService + 登录态 tenant 校验
+- `service/convert_test.go` / `service/memory_token_store_test.go` — 类型转换、内存 TokenStore
