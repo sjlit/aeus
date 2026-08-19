@@ -143,7 +143,7 @@ func backfillTenantID(rv reflect.Value, tid string) {
 		for i := 0; i < rv.Len(); i++ {
 			backfillTenantID(rv.Index(i), tid)
 		}
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
 			return
 		}

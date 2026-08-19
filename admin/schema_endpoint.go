@@ -27,7 +27,7 @@ import (
 //	on the matching error path. The HTTP status stays 200 in
 //	every case — the envelope's code field is the contract the
 //	frontend branches on.
-const SchemaEndpointPath = "/schema/:module/:table"
+const SchemaEndpointPath = "/rest/schema/:module/:table"
 
 // RegisterSchemaEndpoint wires GET SchemaEndpointPath onto opts.Router
 // and returns the registered handler for direct invocation.
@@ -84,13 +84,13 @@ func RegisterSchemaEndpoint(opts *Options) (http.HandlerFunc, error) {
 // pattern (resource.go:159-180).
 func parseSchemaPath(p string) (module, table string, ok bool) {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
-	if len(parts) != 3 || parts[0] != "schema" {
+	if len(parts) != 4 || parts[0] != "rest" {
 		return "", "", false
 	}
-	if parts[1] == "" || parts[2] == "" {
+	if parts[2] == "" || parts[3] == "" {
 		return "", "", false
 	}
-	return parts[1], parts[2], true
+	return parts[2], parts[3], true
 }
 
 // querySchemas pulls the full rest/v3 schema row set for a
@@ -103,5 +103,6 @@ func parseSchemaPath(p string) (module, table string, ok bool) {
 // its own scenarios/visible/readonly/disable metadata, which the
 // renderer evaluates per-scenario at use time.
 func querySchemas(ctx context.Context, db *gorm.DB, module, table string) ([]schema.Schema, error) {
-	return schema.GetSchemas(ctx, db, module, table)
+	tx := db.Unscoped()
+	return schema.GetSchemas(ctx, tx, module, table)
 }
