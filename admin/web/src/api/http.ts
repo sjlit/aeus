@@ -20,8 +20,8 @@ export interface HttpContext {
 let ctx: HttpContext | null = null
 
 /** 必须在应用启动时调用一次。 */
-export function bindHttpContext(c: HttpContext): void {
-  ctx = c
+export function bindHttpContext(context: HttpContext): void {
+  ctx = context
 }
 
 /**

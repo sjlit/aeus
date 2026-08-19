@@ -63,9 +63,9 @@ function onTabsListKeydown(e: KeyboardEvent) {
 
     e.preventDefault()
     if (nextIdx === null) return
-    const target2 = list[nextIdx]
-    if (!target2) return
-    switchTab(target2)
+    const nextTab = list[nextIdx]
+    if (!nextTab) return
+    switchTab(nextTab)
     nextTick(() => {
         const nodes = tabsContainer.value?.querySelectorAll<HTMLElement>('.tab')
         const el = nodes?.[nextIdx!]
@@ -104,7 +104,7 @@ function openContextMenu(e: MouseEvent, tab: Tab) {
     })
 }
 
-function handleContextMenuAction(action: string) {
+function onContextMenuAction(action: string) {
     const tab = contextMenuTab.value
     if (!tab) return
     switch (action) {
@@ -237,39 +237,39 @@ watch(() => tabs.value.length, () => nextTick(checkScroll))
                 left: contextMenuPosition.x + 'px',
                 top: contextMenuPosition.y + 'px',
             }">
-                <button class="menu-item" role="menuitem" type="button" @click="handleContextMenuAction('refresh')">
+                <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('refresh')">
                     <el-icon>
                         <Refresh />
                     </el-icon>
                     刷新当前
                 </button>
                 <button v-if="contextMenuTab?.closable" class="menu-item" role="menuitem" type="button"
-                    @click="handleContextMenuAction('close')">
+                    @click="onContextMenuAction('close')">
                     <el-icon>
                         <Close />
                     </el-icon>
                     关闭当前
                 </button>
-                <button class="menu-item" role="menuitem" type="button" @click="handleContextMenuAction('closeOthers')">
+                <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('closeOthers')">
                     <el-icon>
                         <CircleClose />
                     </el-icon>
                     关闭其他
                 </button>
-                <button class="menu-item" role="menuitem" type="button" @click="handleContextMenuAction('closeLeft')">
+                <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('closeLeft')">
                     <el-icon>
                         <Back />
                     </el-icon>
                     关闭左侧
                 </button>
-                <button class="menu-item" role="menuitem" type="button" @click="handleContextMenuAction('closeRight')">
+                <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('closeRight')">
                     <el-icon>
                         <Right />
                     </el-icon>
                     关闭右侧
                 </button>
                 <div class="menu-divider"></div>
-                <button class="menu-item" role="menuitem" type="button" @click="handleContextMenuAction('closeAll')">
+                <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('closeAll')">
                     <el-icon>
                         <Close />
                     </el-icon>

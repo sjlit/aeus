@@ -44,7 +44,7 @@ export const useMenuStore = defineStore('menu', {
     /**
      * uri → 服务端下发的 stable component ID。registerMenuRoutes 把它写到
      * meta.componentName,然后 <keep-alive :include>(= tabs.cachedViews)就能
-     * 精确匹配到对应 view 文件 declareOptions({ name })。
+     * 精确匹配到对应 view 文件 defineOptions({ name })。
      */
     componentsByUri(): Map<string, string> {
       return this.flatIndex.componentsByUri

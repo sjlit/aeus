@@ -1,7 +1,7 @@
 /**
  * useMediaQuery · 响应式媒体查询组合式函数
  * 返回 Ref<boolean>,mounted 时初始化,媒体查询变化时自动更新。
- * (复制自参考项目,HeaderTabStrip 移动端下拉需要)
+ * (复制自参考项目,TabStrip 移动端下拉需要)
  */
 import { onMounted, onBeforeUnmount, shallowRef, type Ref } from 'vue'
 

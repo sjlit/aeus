@@ -13,13 +13,13 @@ async function onLogout() {
     await router.push(goToLogin(router.currentRoute.value.fullPath))
 }
 
-function handleCommand(cmd: string) {
+function onCommand(cmd: string) {
     if (cmd === 'logout') void onLogout()
 }
 </script>
 
 <template>
-    <el-dropdown trigger="click" @command="handleCommand">
+    <el-dropdown trigger="click" @command="onCommand">
         <button class="user-menu-trigger" type="button" :title="auth.displayName">
             <span class="um-avatar">{{ auth.initials }}</span>
             <span class="um-name">{{ auth.displayName }}</span>

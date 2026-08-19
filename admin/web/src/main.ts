@@ -31,7 +31,7 @@ app.use(SchemaUIPlugin, <SchemaUIConfig>{
 
 const auth = useAuthStore()
 // 多标签的 cachedViews 依赖 router.getRoutes(),必须在首航前注入
-// (与 setNavRouter 同模式,避免 store → router 的循环依赖)
+// (依赖注入模式,避免 store → router 的循环依赖)
 setTabsRouter(router)
 bindHttpContext({
   getToken: () => auth.accessToken,
