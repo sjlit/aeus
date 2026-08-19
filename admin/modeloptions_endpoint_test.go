@@ -133,7 +133,7 @@ func setupOptionDB(t *testing.T) (*gorm.DB, *ghttp.Server) {
 // engine and returns the recorded response.  qs (if non-empty) is
 // appended as a URL-encoded query string.  Same shape as
 // callEndpoint, but separated so the test's intent (it's hitting the
-// option endpoints, not /rest/schema) is visible at the call site.
+// option endpoints, not /schema) is visible at the call site.
 func callOptionEndpoint(t *testing.T, httpSrv *ghttp.Server, path, qs string) *httptest.ResponseRecorder {
 	t.Helper()
 	full := path

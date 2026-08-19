@@ -27,7 +27,7 @@ import (
 //	on the matching error path. The HTTP status stays 200 in
 //	every case — the envelope's code field is the contract the
 //	frontend branches on.
-const SchemaEndpointPath = "/rest/schema/:module/:table"
+const SchemaEndpointPath = "/schema/:module/:table"
 
 // RegisterSchemaEndpoint wires GET SchemaEndpointPath onto opts.Router
 // and returns the registered handler for direct invocation.
@@ -84,13 +84,13 @@ func RegisterSchemaEndpoint(opts *Options) (http.HandlerFunc, error) {
 // pattern (resource.go:159-180).
 func parseSchemaPath(p string) (module, table string, ok bool) {
 	parts := strings.Split(strings.Trim(p, "/"), "/")
-	if len(parts) != 4 || parts[0] != "rest" {
+	if len(parts) != 3 || parts[0] != "schema" {
 		return "", "", false
 	}
-	if parts[2] == "" || parts[3] == "" {
+	if parts[1] == "" || parts[2] == "" {
 		return "", "", false
 	}
-	return parts[2], parts[3], true
+	return parts[1], parts[2], true
 }
 
 // querySchemas pulls the full rest/v3 schema row set for a

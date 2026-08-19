@@ -398,7 +398,7 @@ admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `
 
 | 方法 | 路径 | 必填 query | 可选 query | 说明 |
 |------|------|-----------|-----------|------|
-| `GET` | `/rest/schema/:module/:table` | — | — | 返回该表的全量列元数据（`[]schema.Schema`），前端按列渲染表单字段 |
+| `GET` | `/schema/:module/:table` | — | — | 返回该表的全量列元数据（`[]schema.Schema`），前端按列渲染表单字段 |
 | `GET` | `/rest/model-types/:module/:table` | `label`, `value` | `valueType`（默认 `string`；支持 `int`/`int64`/`uint`/`uint64`）、`tenant` | 返回该模型的扁平选项列表 `[{label, value}, ...]`，给下拉框使用 |
 | `GET` | `/rest/model-tiers/:module/:table` | `parent`, `label`, `value` | `valueType`（同上）、`tenant` | 返回该模型的层级树 `[{label, value, children:[...]}, ...]`，给树形选择器使用（典型：菜单 `parent` 字段） |
 
@@ -430,7 +430,7 @@ Authorization: Bearer <token>
 }
 ```
 
-> **为什么 schema 端点也在这里**：`/rest/schema/:module/:table` 由 `RegisterSchemaEndpoint`（`schema_endpoint.go`）挂载，与本节两个端点共用同一套"Setup 末尾自动注册"的契约——前端 `@nobla/rest-ui` 同时拉取 schema 与下拉数据来驱动整张 CRUD 页面。把三个端点放在同一节便于前端同学一眼看到完整契约。
+> **为什么 schema 端点也在这里**：`/schema/:module/:table` 由 `RegisterSchemaEndpoint`（`schema_endpoint.go`）挂载，与本节两个端点共用同一套"Setup 末尾自动注册"的契约——前端 `@nobla/rest-ui` 同时拉取 schema 与下拉数据来驱动整张 CRUD 页面。把三个端点放在同一节便于前端同学一眼看到完整契约。
 
 ### AuthService
 
@@ -583,7 +583,7 @@ admin/
 ├── menu_derive.go     # 注册时按 ModuleName+TableName 推导 sys_menus 行
 ├── permission_derive.go # 注册时按 ScenarioProvider 推导 sys_permissions 行
 ├── permission.go      # NewPermissionChecker:对已收录路由执行角色权限校验(JWT 中间件钩子)
-├── schema_endpoint.go       # RegisterSchemaEndpoint（GET /rest/schema/:module/:table）
+├── schema_endpoint.go       # RegisterSchemaEndpoint（GET /schema/:module/:table）
 ├── modeltypes_endpoint.go   # RegisterModelTypesEndpoint（GET /rest/model-types/:module/:table）
 ├── modeltiers_endpoint.go   # RegisterModelTiersEndpoint（GET /rest/model-tiers/:module/:table）
 ├── option.go          # Functional options

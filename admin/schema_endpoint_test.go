@@ -18,7 +18,7 @@ import (
 // setupSchemaDB opens an in-memory SQLite, migrates the schema meta-table,
 // and runs admin.Server.Setup which auto-registers all admin built-in
 // models (writing one sys_schemas row per column) and mounts the schema
-// endpoint at GET /rest/schema/:module/:table. Returns the *gorm.DB and the
+// endpoint at GET /schema/:module/:table. Returns the *gorm.DB and the
 // HTTP server (already wired as opts.Router).
 func setupSchemaDB(t *testing.T) (*gorm.DB, *ghttp.Server) {
 	t.Helper()
@@ -53,18 +53,18 @@ func TestParseSchemaPath(t *testing.T) {
 		table  string
 		wantOK bool
 	}{
-		{"/rest/schema/system/sys_users", "system", "sys_users", true},
-		{"/rest/schema/system/sys_roles", "system", "sys_roles", true},
+		{"/schema/system/sys_users", "system", "sys_users", true},
+		{"/schema/system/sys_roles", "system", "sys_roles", true},
 		// missing one segment
-		{"/rest/schema/system", "", "", false},
-		{"/rest/schema", "", "", false},
-		// wrong prefix (4 segments, but first isn't "rest")
+		{"/schema/system", "", "", false},
+		{"/schema", "", "", false},
+		// wrong prefix (3 segments, but first isn't "schema")
 		{"/wrong/system/sys_users", "", "", false},
 		// empty segment values
-		{"/rest/schema//sys_users", "", "", false},
-		{"/rest/schema/system/", "", "", false},
+		{"/schema//sys_users", "", "", false},
+		{"/schema/system/", "", "", false},
 		// trailing slash is OK
-		{"/rest/schema/system/sys_users/", "system", "sys_users", true},
+		{"/schema/system/sys_users/", "system", "sys_users", true},
 	}
 	for _, c := range cases {
 		m, tab, ok := parseSchemaPath(c.path)
@@ -113,7 +113,7 @@ func TestRegisterSchemaEndpoint_NilOpts(t *testing.T) {
 
 func TestSchemaEndpoint_HappyPath(t *testing.T) {
 	_, httpSrv := setupSchemaDB(t)
-	rec := callEndpoint(t, httpSrv, "/rest/schema/system/sys_users")
+	rec := callEndpoint(t, httpSrv, "/schema/system/sys_users")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
@@ -147,7 +147,7 @@ func TestSchemaEndpoint_HappyPath(t *testing.T) {
 
 func TestSchemaEndpoint_UnknownModuleTable(t *testing.T) {
 	_, httpSrv := setupSchemaDB(t)
-	rec := callEndpoint(t, httpSrv, "/rest/schema/system/nonexistent_table")
+	rec := callEndpoint(t, httpSrv, "/schema/system/nonexistent_table")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (envelope carries code); body=%s", rec.Code, rec.Body.String())
@@ -167,11 +167,11 @@ func TestSchemaEndpoint_UnknownModuleTable(t *testing.T) {
 	}
 }
 
-// Note: 4001 (Invalid) for malformed /rest/schema/ paths is unreachable
-// through the gin engine — `/rest/schema/system` doesn't match the
-// `/rest/schema/:module/:table` route pattern, so gin returns 404 before
+// Note: 4001 (Invalid) for malformed /schema/ paths is unreachable
+// through the gin engine — `/schema/system` doesn't match the
+// `/schema/:module/:table` route pattern, so gin returns 404 before
 // our handler runs. The same parseSchemaPath logic is unit-tested by
-// TestParseSchemaPath which asserts `/rest/schema/system` → ok=false, which
+// TestParseSchemaPath which asserts `/schema/system` → ok=false, which
 // the handler maps to 4001.
 
 func TestSchemaEndpoint_RouteRegistered(t *testing.T) {
@@ -179,13 +179,13 @@ func TestSchemaEndpoint_RouteRegistered(t *testing.T) {
 	routes := httpSrv.Engine().Routes()
 	var seen bool
 	for _, r := range routes {
-		if r.Method == http.MethodGet && r.Path == "/rest/schema/:module/:table" {
+		if r.Method == http.MethodGet && r.Path == "/schema/:module/:table" {
 			seen = true
 			break
 		}
 	}
 	if !seen {
-		t.Errorf("route GET /rest/schema/:module/:table not registered; routes=%v", routes)
+		t.Errorf("route GET /schema/:module/:table not registered; routes=%v", routes)
 	}
 }
 
