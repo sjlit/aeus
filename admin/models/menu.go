@@ -36,7 +36,7 @@ type Menu struct {
 	// Parent stores a Menu.Component reference, so its width must match
 	// Component's size:120 (SQLite masks length issues; MySQL strict mode
 	// rejects the mismatch).
-	Parent      string `json:"parent" yaml:"parent" xml:"parent" gorm:"index;size:120;column:parent" comment:"父级菜单(引用 Menu.Component)" scenarios:"create;update;view;export" format:"menu" props:"readonly:update" live:"type:dropdown;url:/menu/options"`
+	Parent      string `json:"parent" yaml:"parent" xml:"parent" gorm:"index;size:120;column:parent" comment:"父级菜单(引用 Menu.Component)" scenarios:"create;update;view;export" format:"menu" props:"readonly:update" live:"type:dropdown;url:/rest/model-tiers/system/sys_menus?parent=parent&label=name&value=component"`
 	Name        string `json:"name" yaml:"name" xml:"name" gorm:"index;size:60;column:name" comment:"菜单标题" props:"readonly:update" rule:"required"`
 	Component   string `json:"component" yaml:"component" xml:"component" gorm:"size:120;column:component" comment:"组件名称" rule:"required;unique"`
 	Uri         string `json:"uri" yaml:"uri" xml:"uri" gorm:"size:512;column:uri" comment:"菜单链接" scenarios:"create;update;view;export" rule:"required"`

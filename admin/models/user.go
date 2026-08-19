@@ -132,9 +132,9 @@ type User struct {
 	UID      string `json:"uid" yaml:"uid" xml:"uid" gorm:"index;size:20;column:uid" comment:"用户工号" props:"readonly:update" rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`
 	Username string `json:"username" yaml:"username" xml:"username" gorm:"size:20;column:username" comment:"用户名称" rule:"required"`
 	// RoleKey holds Role.Key (machine identifier); size:30 matches Role.Key.
-	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"所属角色 Key" format:"role" rule:"required" live:"type:dropdown;url:/role/options"`
+	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"所属角色 Key" format:"role" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
 	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:normal;column:status" comment:"状态" scenarios:"create,update,list,search" enum:"normal:正常;disabled:禁用"`
-	DeptID      int64  `json:"dept_id" yaml:"deptId" xml:"deptId" gorm:"not null;default:0;column:dept_id" comment:"所属部门" format:"department" rule:"required" live:"type:dropdown;url:/department/labels"`
+	DeptID      int64  `json:"dept_id" yaml:"deptId" xml:"deptId" gorm:"not null;default:0;column:dept_id" comment:"所属部门" format:"department" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_departments?label=name&value=id&valueType=uint64"`
 	Password    string `json:"password" yaml:"password" xml:"password" gorm:"size:120;column:password" comment:"用户密码" scenarios:"create" rule:"required;regexp:^[A-Za-z0-9]{8,32}$"`
 	Email       string `json:"email" yaml:"email" xml:"email" gorm:"size:60;column:email" comment:"用户邮箱" scenarios:"create;update;view;list;export"`
 	Avatar      string `json:"avatar" yaml:"avatar" xml:"avatar" gorm:"size:1024;column:avatar" comment:"用户头像" scenarios:"view"`
