@@ -177,8 +177,12 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 			return err
 		}
 		if _, ok := catalogSet[code]; !ok {
-			// Uncatalogued and not on the allowlist: pass.
-			return nil
+			// Uncatalogued and not on the allowlist: deny. The fail-closed
+			// default (documented on NewPermissionChecker) means a route
+			// that has no catalog entry is never silently exposed — a
+			// developer who forgets to register a permission row for a
+			// new route must get a visible denial, not a quiet pass.
+			return errs.ErrPermissionDenied
 		}
 
 		// Catalogued: the role must hold the matching grant on the
