@@ -2,13 +2,18 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// 自托管可变字体(替代 Google Fonts CDN,国内网络不可达)。
+// 必须在 app.scss 之前引入,保证 @font-face 先于使用处加载。
+import '@fontsource-variable/bricolage-grotesque/opsz.css'
+import '@fontsource-variable/inter-tight'
+import '@fontsource-variable/jetbrains-mono'
 import App from './App.vue'
 import { router, ensureMenuRoutes, goToLogin } from './router'
 import { bindHttpContext } from './api/http'
 import { useAuthStore } from './stores/auth'
 import { setTabsRouter } from './stores/tabs'
-import { SchemaUIPlugin, SchemaUIConfig } from '@nobla/rest-ui'
-import '@nobla/rest-ui/dist/style.css'
+import { SchemaUIPlugin, SchemaUIConfig } from '@sjlit/rest-ui'
+import '@sjlit/rest-ui/dist/style.css'
 import './styles/app.scss'
 import { http } from '@/api/http'
 
@@ -21,7 +26,8 @@ app.use(ElementPlus)
 // 再 use(router),保证首次导航时路由表已经备好。
 
 app.use(SchemaUIPlugin, <SchemaUIConfig>{
-  httpClient: http
+  httpClient: http,
+  apiPrefix: '',
 })
 
 const auth = useAuthStore()

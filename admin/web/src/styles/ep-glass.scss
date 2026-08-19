@@ -127,11 +127,11 @@
 .el-button--primary.is-link {
   background: transparent !important;
   border: none !important;
-  color: #2f7d63 !important;
+  color: var(--acc-mint-deep) !important;
 }
 
 .el-button--primary.is-link:hover {
-  color: #245f4c !important;
+  color: var(--acc-mint-deeper) !important;
 }
 
 .el-checkbox {

@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
 import { useTabsStore } from '../stores/tabs'
 import type { MenuNode } from '../types'
-import { normalizeGlobPath } from './viewPath'
+import { normalizeGlobPath, deriveComponentName } from './viewPath'
 
 export const LOGIN_PATH = '/login'
 
@@ -28,9 +28,19 @@ const defaultRoute: RouteRecordRaw = {
 export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: LOGIN_PATH, name: 'login', component: LoginView },
+    {
+      path: LOGIN_PATH,
+      name: 'login',
+      component: LoginView,
+      meta: { componentName: deriveComponentName('@/views/public/LoginView.vue') },
+    },
     defaultRoute,
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundView },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
+      meta: { componentName: deriveComponentName('@/views/public/NotFoundView.vue') },
+    },
   ],
 })
 
@@ -77,13 +87,19 @@ function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
   for (const uri of menu.uris) {
     if (router.hasRoute(`menu:${uri}`)) continue
     const viewPath = menu.viewsByUri.get(uri)
+    // meta.componentName 是 <keep-alive :include>(= tabs.cachedViews) 命中的依据。
+    // 优先用服务端 menu.component(稳定 ID,view 文件用 defineOptions({ name })
+    // 对齐它);缺失时回退 deriveComponentName(viewPath),避免无 component 字段
+    // 的菜单数据破坏多 tab 缓存。
+    const componentName =
+      menu.componentsByUri.get(uri) ?? deriveComponentName(viewPath)
     router.addRoute('default', {
       path: uri,
       name: `menu:${uri}`,
       component: resolveView(viewPath),
       meta: {
         title: menu.titlesByUri.get(uri),
-        componentName: viewPath,
+        componentName,
       },
     })
   }

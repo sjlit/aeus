@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>aeus</title>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     /* Vue 挂载前占位:bootstrap 期间的 loading。
        #app 有内容后会被覆盖,这里无需清理。 */
@@ -12,9 +11,13 @@
     .boot {
       position: fixed; inset: 0;
       display: grid; place-items: center;
-      background: linear-gradient(135deg, #f7f9f7 0%, #eef3ee 100%);
-      font-family: 'Inter Tight', system-ui, sans-serif;
-      color: #6c7a72;
+      /* 与 style.scss 的 --bg-base 及极光底色对齐,避免启动瞬间闪另一套色调 */
+      background:
+        radial-gradient(at 20% 10%, #e3f3ea 0%, transparent 50%),
+        radial-gradient(at 80% 0%, #fde9e0 0%, transparent 55%),
+        #f9fcfb;
+      font-family: 'Inter Tight Variable', 'Inter Tight', system-ui, sans-serif;
+      color: #5b7a78;
       font-size: 12px;
       letter-spacing: 0.2em;
       text-transform: uppercase;
@@ -25,7 +28,7 @@
       margin-right: 12px; box-shadow: 0 0 16px #6cc5a866;
       animation: boot-pulse 1.2s ease-in-out infinite;
     }
-    /* 名字不能叫 pulse:keyframes 是全局的,会覆盖 shared-b2.css 里 .kicker .dot 用的同名动画。 */
+    /* 名字不能叫 pulse:keyframes 是全局的,会覆盖组件里同名动画。 */
     @keyframes boot-pulse {
       0%, 100% { opacity: 0.4; transform: scale(0.85); }
       50%      { opacity: 1;   transform: scale(1.1); }

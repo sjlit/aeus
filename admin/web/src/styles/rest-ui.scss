@@ -1,0 +1,62 @@
+/* =========================================================
+   @nobla/rest-ui 主题对齐
+   rest-ui/dist/style.css 在 main.ts 里先于 app.scss 引入,
+   此文件经 app.scss 的 @use 排在其后,同优先级选择器可自然覆盖。
+   rest-ui 的 token 走 --su-* 前缀:引用 --el-* 的部分(--su-bg /
+   --su-border / --su-radius 等)已随 ep-glass 自动跟随,这里主要
+   覆盖其硬编码的蓝灰色系,并把页面主体卡片纳入玻璃体系。
+========================================================= */
+
+:root {
+  /* 原值为蓝灰系(#213547 / #95aac9 / #d2ddec / #0067b8 …),
+     与极光薄荷主题冲突;统一映射到 ink / acc 色板 */
+  --su-text-color-primary: var(--ink);
+  --su-text-color-muted: var(--ink-2);
+  --su-placeholder-text-color: var(--el-text-color-placeholder);
+  --su-placeholder-text-size: 0.75rem;
+  --su-form-control-border-color: var(--el-border-color);
+  --su-text-color-available: var(--acc-mint-deep);
+  --su-text-color-link: var(--acc-mint-deep);
+  --su-radius: var(--r-sm);
+  --su-shadow: 0 2px 12px var(--shadow-soft);
+  --su-shadow-hover: 0 8px 28px var(--shadow);
+}
+
+/* 页面外层 padding 归零:内容列与 topbar / el-main 的 36px 对齐
+   (rest-ui 默认再垫 12px,会偏离顶栏玻璃卡的竖列) */
+.schema-page {
+  padding: 0;
+}
+
+/* 页面标题跟 display 字体家族,与品牌/hero 一致 */
+.schema-page-header .header-left h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 主体卡片玻璃化:rest-ui 只给了 background-color(--su-bg 在本主题
+   下是透明的),这里补齐毛玻璃/边框/圆角/阴影,与 chrome 的玻璃卡同质 */
+.schema-page-body {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 16px var(--shadow-soft);
+}
+
+/* 搜索表单的 textarea 硬编码 #f2f3f5 灰底 + 0.8s 慢过渡,改玻璃 + 常规速度 */
+.schema-form .el-input .el-textarea__inner {
+  background-color: var(--glass-soft);
+}
+
+.schema-form .el-input .el-textarea__inner:hover {
+  background-color: var(--glass);
+}
+
+.schema-form .el-input .el-input__wrapper {
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}

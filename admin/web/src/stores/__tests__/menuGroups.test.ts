@@ -327,6 +327,13 @@ describe('flattenMenu', () => {
     expect(viewsByUri.has('/system/nope')).toBe(false)
   })
 
+  it('同时产出 uri → server component 映射(供 keep-alive :include 命中)', () => {
+    const { componentsByUri } = flattenMenu(tree)
+    expect(componentsByUri.get('/system/sys-users')).toBe('SystemSysUsers')
+    expect(componentsByUri.get('/system/sys-roles')).toBe('SystemSysRoles')
+    expect(componentsByUri.has('/system/nope')).toBe(false)
+  })
+
   it('section container 的空 uri 不会进入映射', () => {
     const { uris, viewsByUri } = flattenMenu(tree)
     for (const sec of tree) {

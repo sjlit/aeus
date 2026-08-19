@@ -41,6 +41,14 @@ export const useMenuStore = defineStore('menu', {
     viewsByUri(): Map<string, string> {
       return this.flatIndex.viewsByUri
     },
+    /**
+     * uri → 服务端下发的 stable component ID。registerMenuRoutes 把它写到
+     * meta.componentName,然后 <keep-alive :include>(= tabs.cachedViews)就能
+     * 精确匹配到对应 view 文件 declareOptions({ name })。
+     */
+    componentsByUri(): Map<string, string> {
+      return this.flatIndex.componentsByUri
+    },
   },
   actions: {
     async load(force = false) {

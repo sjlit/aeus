@@ -1,6 +1,8 @@
 @use './style';
 // Element Plus 玻璃化覆盖(迁移自参考项目),完整 EP token + 组件样式
 @use './ep-glass';
+// @nobla/rest-ui(schema 驱动页)的主题对齐,必须排在 ep-glass 之后
+@use './rest-ui';
 
 // L3 模板的 body 有 padding:28px,管理台不需要
 body {
@@ -91,11 +93,10 @@ body {
     margin-bottom: 22px;
 
     .nav-section-title {
-      // 对齐参考项目的 nav-title:等宽字体 + ink-3
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
+      // 分组名是中文:不能用 mono(mono 无 CJK 字形会回落系统字体),
+      // 10px + uppercase 也是纯拉丁写法;改为 12px 正文家族 + 弱字距
+      font-size: 12px;
+      letter-spacing: 0.05em;
       color: var(--ink-3);
       padding: 0 8px;
       margin-bottom: 6px;
@@ -217,8 +218,17 @@ body {
 
     // 折叠态(图标栏):关掉 hover 位移与左侧竖条,图标保持居中
     &.el-menu--collapse {
+      // EP 默认给折叠菜单固定宽度 64px(icon 24 + 左右级距 20×2),
+      // 但 aside 折叠态扣掉内边距后内容区只有 48px:菜单溢出会在
+      // nav-scroll 底部撑出横向滚动条,图标也比居中的品牌点偏右 8px。
+      // 改为撑满容器 + 级距归零 + flex 居中,图标即与品牌点对齐。
+      width: 100%;
+      --el-menu-base-level-padding: 0px;
+
       .el-menu-item,
       .el-sub-menu__title {
+        justify-content: center;
+
         &:hover {
           transform: none;
 
@@ -238,6 +248,11 @@ body {
 // ---- 桌面折叠态下隐藏文字 ----
 // 挂到 .sidebar 上而非 .menu-chrome,保证抽屉不受影响。
 .sidebar.is-collapsed {
+  // nav-scroll 展开态的 2px 滚动条留白会让折叠态图标比品牌点左偏 1px
+  .nav-scroll {
+    padding-right: 0;
+  }
+
   .brand {
     justify-content: center;
     padding: 0 0 18px;
@@ -323,6 +338,30 @@ body {
     em {
       font-style: italic;
     }
+  }
+}
+
+// ---- 通用内容页容器(不走 SchemaViewer 的手写视图用) ----
+// schema 驱动页自带 rest-ui 的 .schema-page 骨架(见 rest-ui.scss);
+// 手写视图用 .page 包一层、正文区套 .glass 工具类,得到同样的节奏。
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  h2 {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 }
 

@@ -8,6 +8,7 @@ import { useMediaQuery } from '@/composables/useMediaQuery'
 import HeaderBar from './HeaderBar.vue'
 import TabStrip from './TabStrip.vue'
 import SidebarContent from './SidebarContent.vue'
+import CommandPalette from './CommandPalette.vue'
 
 const menu = useMenuStore()
 const ui = useUiStore()
@@ -62,5 +63,8 @@ watch(isMobile, (now) => {
                 </router-view>
             </el-main>
         </el-container>
+
+        <!-- ⌘K 命令面板:teleport 到 body,全局热键开关 -->
+        <CommandPalette />
     </el-container>
 </template>

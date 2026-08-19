@@ -126,16 +126,22 @@ export interface MenuFlat {
   iconsByUri: Map<string, string>
   /** uri → 服务端下发的视图路径(view_path);路由注册时按此查表。 */
   viewsByUri: Map<string, string>
+  /** uri → 服务端下发的稳定 component ID(后端 MenuEntry.component);
+   *  优先作为 <keep-alive :include> 的匹配名(meta.componentName),
+   *  这样 view 文件里 defineOptions({ name }) 可以直接对齐服务端语义,
+   *  无需再从 view_path 派生。fallback 时再走 deriveComponentName(viewPath)。 */
+  componentsByUri: Map<string, string>
 }
 
-/** 单次深度优先遍历,同时产出 uri 列表、uri → 标题/图标/view_path 映射。
- *  标题来自 n.name(后端 MenuNode 用 name 作显示名);view_path 由服务端下发,
- *  客户端不做推导。 */
+/** 单次深度优先遍历,同时产出 uri 列表、uri → 标题/图标/view_path/component 映射。
+ *  标题来自 n.name(后端 MenuNode 用 name 作显示名);view_path 与 component 由
+ *  服务端下发,客户端不推导。 */
 export function flattenMenu(nodes: MenuNode[]): MenuFlat {
   const uris: string[] = []
   const titlesByUri = new Map<string, string>()
   const iconsByUri = new Map<string, string>()
   const viewsByUri = new Map<string, string>()
+  const componentsByUri = new Map<string, string>()
   const seen = new Set<string>()
   const walk = (ns: MenuNode[]) => {
     for (const n of ns) {
@@ -145,10 +151,11 @@ export function flattenMenu(nodes: MenuNode[]): MenuFlat {
         titlesByUri.set(n.uri, n.name)
         iconsByUri.set(n.uri, n.icon)
         if (n.view_path) viewsByUri.set(n.uri, n.view_path)
+        if (n.component) componentsByUri.set(n.uri, n.component)
       }
       if (n.children?.length) walk(n.children)
     }
   }
   walk(nodes)
-  return { uris, titlesByUri, iconsByUri, viewsByUri }
+  return { uris, titlesByUri, iconsByUri, viewsByUri, componentsByUri }
 }

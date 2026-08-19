@@ -23,6 +23,9 @@
   --acc-mint: #6cc5a8;
   --acc-lilac: #9b85c4;
   --acc-peach: #f4a484;
+  /* 深一档的 mint:链接/悬浮态用,替代散落的 #2f7d63 / #245f4c */
+  --acc-mint-deep: #2f7d63;
+  --acc-mint-deeper: #245f4c;
   /* 菜单激活态渐变:参考项目深一档的 mint/lilac(替代散落的硬编码 hex) */
   --menu-active-1: #3f9b7e;
   --menu-active-2: #6f4fa6;
@@ -30,9 +33,11 @@
   /* 聚焦/悬浮光环:acc-mint 的 15%/20% 透明版本 */
   --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.15);
   --ring: 0 0 0 3px rgba(108, 197, 168, 0.2);
-  --display: 'Bricolage Grotesque', 'Inter Tight', sans-serif;
-  --body: 'Inter Tight', -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', monospace;
+  /* 字体由 @fontsource-variable 自托管(main.ts 引入),族名带 "Variable" 后缀。
+     西文走自托管字体,中文回退到系统中文字体(苹方/雅黑/思源)。 */
+  --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --body: 'Inter Tight Variable', 'Inter Tight', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
 
   /* ---- 几何 ---- */
   --r-lg: 24px;

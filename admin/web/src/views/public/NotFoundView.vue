@@ -1,4 +1,8 @@
 <script setup lang="ts">
+// 与 router/index.ts 里 NotFoundView 路由 meta.componentName (= deriveComponentName('@/views/public/NotFoundView.vue')) 对齐。
+// 给 <keep-alive :include> 一个稳定可匹配的组件名,防止异步组件包装层丢失 name 导致视图不缓存。
+defineOptions({ name: 'PublicNotFoundView' })
+
 import { useRouter } from 'vue-router'
 const router = useRouter()
 import { usePageTitle } from '@/composables/usePageTitle'

@@ -39,6 +39,11 @@ const toggleLabel = computed(() => {
     if (isMobile.value) return '打开菜单'
     return ui.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'
 })
+
+// 命令面板快捷键提示:macOS 显示 ⌘,其余显示 Ctrl
+const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent)
+    ? '⌘'
+    : 'Ctrl'
 </script>
 
 <template>
@@ -63,12 +68,15 @@ const toggleLabel = computed(() => {
             </nav>
         </div>
 
-        <div v-if="!isMobile" class="searchbox">
+        <!-- 搜索入口:唤起 ⌘K 命令面板(CommandPalette 挂在 Layout,热键全局可用) -->
+        <button v-if="!isMobile" type="button" class="searchbox" :aria-label="`搜索菜单(${modKey} K)`"
+            :title="`搜索菜单(${modKey} K)`" @click="ui.openPalette()">
             <el-icon class="s-icon">
                 <Search />
             </el-icon>
-            <input class="s-input" type="text" placeholder="搜索…" aria-label="搜索" />
-        </div>
+            <span class="s-text">搜索菜单…</span>
+            <kbd class="s-kbd">{{ modKey }} K</kbd>
+        </button>
 
         <div class="cluster right">
             <UserMenu />
@@ -138,7 +146,7 @@ const toggleLabel = computed(() => {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
-    font-family: var(--mono);
+    /* 面包屑是中文标题,mono 无 CJK 字形会回落系统字体,统一走正文家族 */
     font-size: 12px;
     letter-spacing: 0.02em;
 }
@@ -167,7 +175,7 @@ const toggleLabel = computed(() => {
     user-select: none;
 }
 
-/* ── 搜索框 ── */
+/* ── 搜索入口(命令面板触发器) ── */
 .searchbox {
     display: inline-flex;
     align-items: center;
@@ -182,7 +190,17 @@ const toggleLabel = computed(() => {
     justify-self: center;
     color: var(--ink-2);
     font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-align: left;
+    cursor: pointer;
     transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.searchbox:focus-visible {
+    outline: none;
+    border-color: var(--acc-mint);
+    box-shadow: var(--ring);
 }
 
 .searchbox:focus-within {
@@ -204,23 +222,24 @@ const toggleLabel = computed(() => {
     flex-shrink: 0;
 }
 
-.s-input {
+.s-text {
     flex: 1;
     min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    font-family: inherit;
-    font-size: 12px;
-    color: var(--ink);
-    letter-spacing: 0.02em;
-}
-
-.s-input::placeholder {
     color: var(--ink-3);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.s-kbd {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-3);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    flex-shrink: 0;
 }
 
 /* ── 响应式 ── */

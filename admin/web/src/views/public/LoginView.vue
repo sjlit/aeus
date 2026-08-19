@@ -1,4 +1,8 @@
 <script setup lang="ts">
+// 与 router/index.ts 里 LoginView 路由 meta.componentName (= deriveComponentName('@/views/public/LoginView.vue')) 对齐。
+// 给 <keep-alive :include> 一个稳定可匹配的组件名,防止异步组件包装层丢失 name 导致视图不缓存。
+defineOptions({ name: 'PublicLoginView' })
+
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -74,7 +78,7 @@ async function submit() {
       </el-form>
 
       <div class="footer-row">
-        <span>v0.1.0</span>
+        <span class="ver">v0.1.0</span>
         <span class="live">系统一切正常</span>
       </div>
     </div>
@@ -168,7 +172,9 @@ h1 {
   position: relative;
 }
 
-/* label-position="top" 的标签:对齐参考项目的 10px 大写小标签 */
+/* label-position="top" 的标签。参考项目是 10px 大写拉丁小标签,
+   但这里标签是中文(用户名/密码):mono 无 CJK 字形、10px 过小、
+   uppercase 无意义,改为 12px 正文家族。 */
 :deep(.el-form-item) {
   margin-bottom: 16px;
 }
@@ -178,10 +184,9 @@ h1 {
   height: auto;
   line-height: 1.4;
   padding-bottom: 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--ink-2);
 }
 
@@ -201,7 +206,7 @@ h1 {
 }
 
 .form-actions a:hover {
-  color: #2f7d63;
+  color: var(--acc-mint-deep);
 }
 
 .el-button {
@@ -214,15 +219,18 @@ h1 {
 .footer-row {
   display: flex;
   justify-content: space-between;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
   color: var(--ink-2);
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px dashed rgba(30, 90, 90, 0.15);
   position: relative;
+}
+
+/* 版本号是纯拉丁,保留 mono 味道;状态文案是中文,随正文家族 */
+.footer-row .ver {
+  font-family: var(--mono);
 }
 
 .live {
