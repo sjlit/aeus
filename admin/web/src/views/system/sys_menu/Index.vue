@@ -6,6 +6,8 @@ defineOptions({ name: 'SystemSysMenuses' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import IconPicker from '@/components/widgets/IconPicker.vue'
+import { resolveIcon } from '../../../utils/icons'
 import {
   createMenu,
   deleteMenu,
@@ -279,7 +281,15 @@ async function onDelete(row: MenuRow) {
       <el-table-column prop="component" label="组件" min-width="180" />
       <el-table-column prop="uri" label="路由" min-width="160" />
       <el-table-column prop="view_path" label="视图路径" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="icon" label="图标" min-width="100" />
+      <el-table-column prop="icon" label="图标" min-width="120">
+        <template #default="{ row }">
+          <span v-if="resolveIcon(row.icon)" class="menu-row-icon">
+            <el-icon><component :is="resolveIcon(row.icon)" /></el-icon>
+            <span class="menu-row-icon__name">{{ row.icon }}</span>
+          </span>
+          <span v-else class="dim">{{ row.icon || '—' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="sort" label="排序" width="80" align="center" />
       <el-table-column label="公开" width="80" align="center">
         <template #default="{ row }">
@@ -340,7 +350,7 @@ async function onDelete(row: MenuRow) {
           <el-input v-model="form.view_path" placeholder="@/views/system/sys_menus/Index.vue" />
         </el-form-item>
         <el-form-item label="图标" prop="icon">
-          <el-input v-model="form.icon" placeholder="例如 house / setting" />
+          <IconPicker v-model="form.icon" placeholder="选择 element-plus 图标" />
         </el-form-item>
         <el-form-item label="排序" prop="sort">
           <el-input-number v-model="form.sort" :min="0" :step="10" />
@@ -396,5 +406,16 @@ async function onDelete(row: MenuRow) {
 
 .dim {
   color: var(--el-text-color-placeholder);
+}
+
+.menu-row-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-row-icon__name {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>
