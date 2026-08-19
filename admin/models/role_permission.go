@@ -14,11 +14,11 @@ import (
 type RolePermission struct {
 	TenantModel
 	// RoleKey holds Role.Key (machine identifier); size:30 matches Role.Key.
-	RoleKey string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key;index:idx_rp_role_key" comment:"角色 Key" rule:"required"`
-	Type    string `json:"type" yaml:"type" xml:"type" gorm:"size:20;not null;default:'';column:type" comment:"绑定类型" rule:"required" enum:"menu:菜单;permission:权限"`
+	RoleKey string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key;index:idx_rp_role_key" comment:"角色" rule:"required"`
+	Type    string `json:"type" yaml:"type" xml:"type" gorm:"size:20;not null;default:'';column:type" comment:"类型" rule:"required" enum:"menu:菜单;permission:权限"`
 	// Data holds Menu.Component when type=menu — Component is size:120,
 	// so the width must match (MySQL strict mode rejects the mismatch).
-	Data string `json:"data" yaml:"data" xml:"data" gorm:"size:120;not null;default:'';column:data" comment:"绑定目标 (Menu.Component 或 Permission.Data)"`
+	Data string `json:"data" yaml:"data" xml:"data" gorm:"size:120;not null;default:'';column:data" comment:"绑定目标"`
 }
 
 // RolePermission.Type values.

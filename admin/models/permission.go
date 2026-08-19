@@ -17,7 +17,7 @@ type Permission struct {
 	// "POST /system/sys_user"); the regex mirrors rest/v3's
 	// buildUri output. Width 60 covers deeper paths like
 	// "GET /system/sys_user/detail/:id" with room.
-	Type        string `json:"type" yaml:"type" xml:"type" gorm:"index;size:20;not null;default:'';column:type" comment:"权限类型" rule:"required" enum:"api:接口;button:按钮;data_scope:数据范围"`
+	Type        string `json:"type" yaml:"type" xml:"type" gorm:"index;size:20;not null;default:'';column:type" comment:"类型" rule:"required" enum:"api:接口;button:按钮;data_scope:数据范围"`
 	Data        string `json:"data" yaml:"data" xml:"data" gorm:"index;size:60;not null;default:'';column:data" comment:"权限标识" rule:"required"`
 	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;not null;default:'';column:description" comment:"权限说明"`
 }

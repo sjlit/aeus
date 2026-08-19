@@ -106,15 +106,15 @@ func (m *Role) AfterDelete(tx *gorm.DB) error {
 // scope.
 type Role struct {
 	TenantModel
-	Key         string `json:"key" yaml:"key" xml:"key" gorm:"size:30;column:key;index:idx_sys_roles_key" comment:"角色 Key(机器标识,创建后不可改)" props:"readonly:update" rule:"required;regexp:^[a-z][a-z0-9_]*$"`
-	Name        string `json:"name" yaml:"name" xml:"name" gorm:"size:60;column:name;index:idx_role_tenant_name" comment:"角色名称(可改名)" rule:"required"`
+	Key         string `json:"key" yaml:"key" xml:"key" gorm:"size:30;column:key;index:idx_sys_roles_key" comment:"角色标识" props:"readonly:update" rule:"required;regexp:^[a-z][a-z0-9_]*$"`
+	Name        string `json:"name" yaml:"name" xml:"name" gorm:"size:60;column:name;index:idx_role_tenant_name" comment:"角色名称" rule:"required"`
 	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:enabled;column:status" comment:"状态" scenarios:"create;update;list;export" enum:"enabled:启用;disabled:禁用"`
-	Builtin     bool   `json:"builtin" yaml:"builtin" xml:"builtin" gorm:"default:false;column:builtin" comment:"系统预置(禁止删除/改 Key)" scenarios:"list;view"`
-	IsSuper     bool   `json:"is_super" yaml:"isSuper" xml:"isSuper" gorm:"default:false;column:is_super" comment:"超级管理员(拥有全部权限,授权自动管理)" scenarios:"create;update;list;view"`
+	Builtin     bool   `json:"builtin" yaml:"builtin" xml:"builtin" gorm:"default:false;column:builtin" comment:"系统预置" scenarios:"list;view"`
+	IsSuper     bool   `json:"is_super" yaml:"isSuper" xml:"isSuper" gorm:"default:false;column:is_super" comment:"超级管理员" scenarios:"create;update;list;view"`
 	DataScope   string `json:"data_scope" yaml:"dataScope" xml:"dataScope" gorm:"size:20;default:all;column:data_scope" comment:"数据范围" scenarios:"create;update;view" enum:"all:全部;dept:本部门;self:仅本人;custom:自定义"`
 	Sort        int64  `json:"sort" yaml:"sort" xml:"sort" gorm:"default:0;column:sort" comment:"排序" scenarios:"create;update;list"`
 	CreatedBy   string `json:"created_by" yaml:"createdBy" xml:"createdBy" gorm:"size:20;column:created_by" comment:"创建人" scenarios:"view"`
-	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注说明" scenarios:"list;create;update;export" format:"textarea"`
+	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"list;create;update;export" format:"textarea"`
 }
 
 // TableName returns the physical table name (gorm.Tabler).

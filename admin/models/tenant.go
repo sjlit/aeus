@@ -23,8 +23,8 @@ func (m *Tenant) BeforeCreate(tx *gorm.DB) error {
 // tenant_id column, which is exactly the global visibility tenant
 // management requires).
 type Tenant struct {
-	ID        string         `json:"id" yaml:"id" xml:"id" gorm:"primaryKey;column:id;type:char(60)" comment:"租户ID" props:"readonly:update" scenarios:"update;view;list;search;detail;export"`
-	Name      string         `json:"name" yaml:"name" xml:"name" gorm:"size:60;column:name" comment:"租户名称" rule:"required" scenarios:"create;update;view;list;search;export"`
+	ID        string         `json:"id" yaml:"id" xml:"id" gorm:"primaryKey;column:id;type:char(60)" comment:"租户" props:"readonly:update" scenarios:"update;view;list;search;detail;export"`
+	Name      string         `json:"name" yaml:"name" xml:"name" gorm:"size:60;column:name" comment:"租户名" rule:"required" scenarios:"create;update;view;list;search;export"`
 	Status    string         `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:enabled;column:status" comment:"状态" scenarios:"create;update;view;list;search;export" enum:"enabled:启用;disabled:禁用"`
 	CreatedAt int64          `json:"created_at" yaml:"createdAt" xml:"createdAt" gorm:"column:created_at" comment:"创建时间" scenarios:"view;export"`
 	UpdatedAt int64          `json:"updated_at" yaml:"updatedAt" xml:"updatedAt" gorm:"index;autoUpdateTime;column:updated_at" comment:"更新时间" scenarios:"view;export"`

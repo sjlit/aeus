@@ -130,16 +130,16 @@ func (m *LoginLog) BeforeCreate(tx *gorm.DB) error {
 type User struct {
 	TenantModel
 	UID      string `json:"uid" yaml:"uid" xml:"uid" gorm:"index;size:20;column:uid" comment:"用户工号" props:"readonly:update" rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`
-	Username string `json:"username" yaml:"username" xml:"username" gorm:"size:20;column:username" comment:"用户名称" rule:"required"`
+	Username string `json:"username" yaml:"username" xml:"username" gorm:"size:20;column:username" comment:"用户名" rule:"required"`
 	// RoleKey holds Role.Key (machine identifier); size:30 matches Role.Key.
-	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"所属角色 Key" format:"role" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
-	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:normal;column:status" comment:"状态" scenarios:"create,update,list,search" enum:"normal:正常;disabled:禁用"`
+	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"用户角色" format:"role" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
+	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:normal;column:status" comment:"状态" scenarios:"create;update;list;search" enum:"normal:正常;disabled:禁用"`
 	DeptID      int64  `json:"dept_id" yaml:"deptId" xml:"deptId" gorm:"not null;default:0;column:dept_id" comment:"所属部门" format:"department" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_departments?label=name&value=id&valueType=uint64"`
 	Password    string `json:"password" yaml:"password" xml:"password" gorm:"size:120;column:password" comment:"用户密码" scenarios:"create" rule:"required;regexp:^[A-Za-z0-9]{8,32}$"`
-	Email       string `json:"email" yaml:"email" xml:"email" gorm:"size:60;column:email" comment:"用户邮箱" scenarios:"create;update;view;list;export"`
-	Avatar      string `json:"avatar" yaml:"avatar" xml:"avatar" gorm:"size:1024;column:avatar" comment:"用户头像" scenarios:"view"`
-	Gender      string `json:"gender" yaml:"gender" xml:"gender" gorm:"size:20;default:man;column:gender" comment:"用户性别" scenarios:"list;create;update;view;export" rule:"required" enum:"man:男;woman:女;other:其他"`
-	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注说明" scenarios:"create;update;view;export" format:"textarea"`
+	Email       string `json:"email" yaml:"email" xml:"email" gorm:"size:60;column:email" comment:"邮箱" scenarios:"create;update;view;list;export"`
+	Avatar      string `json:"avatar" yaml:"avatar" xml:"avatar" gorm:"size:1024;column:avatar" comment:"头像" scenarios:"view"`
+	Gender      string `json:"gender" yaml:"gender" xml:"gender" gorm:"size:20;default:man;column:gender" comment:"性别" scenarios:"list;create;update;view;export" rule:"required" enum:"man:男;woman:女;other:其他"`
+	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"create;update;view;export" format:"textarea"`
 }
 
 // LoginLog records one login attempt per row.  AccessToken is hashed
@@ -147,7 +147,7 @@ type User struct {
 type LoginLog struct {
 	TenantModel
 	UID      string `json:"uid" yaml:"uid" xml:"uid" gorm:"index;size:20;column:uid" comment:"用户" format:"user" props:"readonly:update" rule:"required"`
-	IP       string `json:"ip" yaml:"ip" xml:"ip" gorm:"size:128;column:ip" comment:"登录地址" scenarios:"list;view;export"`
+	IP       string `json:"ip" yaml:"ip" xml:"ip" gorm:"size:128;column:ip" comment:"登录 IP" scenarios:"list;view;export"`
 	Browser  string `json:"browser" yaml:"browser" xml:"browser" gorm:"size:128;column:browser" comment:"浏览器" scenarios:"list;view;export"`
 	OS       string `json:"os" yaml:"os" xml:"os" gorm:"size:128;column:os" comment:"操作系统" scenarios:"list;view;export"`
 	Platform string `json:"platform" yaml:"platform" xml:"platform" gorm:"size:128;column:platform" comment:"系统平台" scenarios:"list;view;export"`

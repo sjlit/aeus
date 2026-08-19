@@ -17,6 +17,6 @@ type (
 	// by admin.Server.Setup.
 	TenantModel struct {
 		BaseModel
-		TenantID string `json:"tenant_id" gorm:"column:tenant_id;type:char(60);index" comment:"租户ID"`
+		TenantID string `json:"tenant_id" gorm:"column:tenant_id;type:char(60);index" scenarios:"view;export" props:"readonly:update" comment:"所属租户"`
 	}
 )
