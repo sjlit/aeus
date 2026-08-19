@@ -104,6 +104,40 @@ func menusToProtoList(in []models.Menu) *pb.ListVisibleMenusResponse {
 	}
 }
 
+// menuItemsToPb flattens []models.Menu into the wire MenuItem list.
+// Unpaged on purpose — MenuListAll is explicitly a single-shot
+// read for the management UI.
+//
+// An empty input returns nil so json omits the field instead of
+// producing []; the proto3 default rendering would otherwise emit
+// `"items": []` for an empty table, which Vue's el-table misreads as
+// "one empty row" rather than "no rows".
+func menuItemsToPb(in []models.Menu) []*pb.MenuItem {
+	if len(in) == 0 {
+		return nil
+	}
+	items := make([]*pb.MenuItem, 0, len(in))
+	for i := range in {
+		m := in[i]
+		items = append(items, &pb.MenuItem{
+			Id:          uint64(m.ID),
+			Parent:      m.Parent,
+			Name:        m.Name,
+			Component:   m.Component,
+			Uri:         m.Uri,
+			ViewPath:    m.ViewPath,
+			Icon:        m.Icon,
+			Hidden:      m.Hidden,
+			Public:      m.Public,
+			Sort:        m.Sort,
+			Description: m.Description,
+			CreatedAt:   m.CreatedAt,
+			UpdatedAt:   m.UpdatedAt,
+		})
+	}
+	return items
+}
+
 // PermissionTypeFromPb converts the proto enum to the models-layer
 // string constant. Unknown values map to PermissionTypeUnspec so a
 // future proto addition (without a models update) does not panic —

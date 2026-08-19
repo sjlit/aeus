@@ -173,6 +173,199 @@ func (x *MenuNode) GetChildren() []*MenuNode {
 	return nil
 }
 
+// MenuItem is one Menu row with the full CRUD field set, returned
+// flat (no children) by MenuListAll. parent stores Menu.Component —
+// the same identifier Menu.Parent references — so the management UI
+// can rebuild the tree purely from the items list. created_at /
+// updated_at are Unix seconds, mirroring BaseModel.
+type MenuItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Parent        string                 `protobuf:"bytes,2,opt,name=parent,proto3" json:"parent,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Component     string                 `protobuf:"bytes,4,opt,name=component,proto3" json:"component,omitempty"`
+	Uri           string                 `protobuf:"bytes,5,opt,name=uri,proto3" json:"uri,omitempty"`
+	ViewPath      string                 `protobuf:"bytes,6,opt,name=view_path,json=viewPath,proto3" json:"view_path,omitempty"`
+	Icon          string                 `protobuf:"bytes,7,opt,name=icon,proto3" json:"icon,omitempty"`
+	Hidden        bool                   `protobuf:"varint,8,opt,name=hidden,proto3" json:"hidden,omitempty"`
+	Public        bool                   `protobuf:"varint,9,opt,name=public,proto3" json:"public,omitempty"`
+	Sort          int64                  `protobuf:"varint,10,opt,name=sort,proto3" json:"sort,omitempty"`
+	Description   string                 `protobuf:"bytes,11,opt,name=description,proto3" json:"description,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MenuItem) Reset() {
+	*x = MenuItem{}
+	mi := &file_menu_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MenuItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MenuItem) ProtoMessage() {}
+
+func (x *MenuItem) ProtoReflect() protoreflect.Message {
+	mi := &file_menu_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MenuItem.ProtoReflect.Descriptor instead.
+func (*MenuItem) Descriptor() ([]byte, []int) {
+	return file_menu_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MenuItem) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *MenuItem) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+func (x *MenuItem) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MenuItem) GetComponent() string {
+	if x != nil {
+		return x.Component
+	}
+	return ""
+}
+
+func (x *MenuItem) GetUri() string {
+	if x != nil {
+		return x.Uri
+	}
+	return ""
+}
+
+func (x *MenuItem) GetViewPath() string {
+	if x != nil {
+		return x.ViewPath
+	}
+	return ""
+}
+
+func (x *MenuItem) GetIcon() string {
+	if x != nil {
+		return x.Icon
+	}
+	return ""
+}
+
+func (x *MenuItem) GetHidden() bool {
+	if x != nil {
+		return x.Hidden
+	}
+	return false
+}
+
+func (x *MenuItem) GetPublic() bool {
+	if x != nil {
+		return x.Public
+	}
+	return false
+}
+
+func (x *MenuItem) GetSort() int64 {
+	if x != nil {
+		return x.Sort
+	}
+	return 0
+}
+
+func (x *MenuItem) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *MenuItem) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *MenuItem) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+// MenuListAllResponse carries the flat item list emitted by
+// MenuListAll. Unpaged on purpose — menus are a global, typically
+// small set (~100 rows) and the management UI renders them all at
+// once inside an el-table with tree-props.
+type MenuListAllResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*MenuItem            `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MenuListAllResponse) Reset() {
+	*x = MenuListAllResponse{}
+	mi := &file_menu_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MenuListAllResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MenuListAllResponse) ProtoMessage() {}
+
+func (x *MenuListAllResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_menu_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MenuListAllResponse.ProtoReflect.Descriptor instead.
+func (*MenuListAllResponse) Descriptor() ([]byte, []int) {
+	return file_menu_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MenuListAllResponse) GetItems() []*MenuItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 // MenuOptionsResponse carries cascader options; value is the
 // Menu.Component, usable directly as Menu.Parent (see MenuOptions).
 type MenuOptionsResponse struct {
@@ -184,7 +377,7 @@ type MenuOptionsResponse struct {
 
 func (x *MenuOptionsResponse) Reset() {
 	*x = MenuOptionsResponse{}
-	mi := &file_menu_proto_msgTypes[2]
+	mi := &file_menu_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -196,7 +389,7 @@ func (x *MenuOptionsResponse) String() string {
 func (*MenuOptionsResponse) ProtoMessage() {}
 
 func (x *MenuOptionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_menu_proto_msgTypes[2]
+	mi := &file_menu_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -209,7 +402,7 @@ func (x *MenuOptionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MenuOptionsResponse.ProtoReflect.Descriptor instead.
 func (*MenuOptionsResponse) Descriptor() ([]byte, []int) {
-	return file_menu_proto_rawDescGZIP(), []int{2}
+	return file_menu_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MenuOptionsResponse) GetItems() []*OptionNode {
@@ -233,7 +426,7 @@ type OptionNode struct {
 
 func (x *OptionNode) Reset() {
 	*x = OptionNode{}
-	mi := &file_menu_proto_msgTypes[3]
+	mi := &file_menu_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -245,7 +438,7 @@ func (x *OptionNode) String() string {
 func (*OptionNode) ProtoMessage() {}
 
 func (x *OptionNode) ProtoReflect() protoreflect.Message {
-	mi := &file_menu_proto_msgTypes[3]
+	mi := &file_menu_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -258,7 +451,7 @@ func (x *OptionNode) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OptionNode.ProtoReflect.Descriptor instead.
 func (*OptionNode) Descriptor() ([]byte, []int) {
-	return file_menu_proto_rawDescGZIP(), []int{3}
+	return file_menu_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *OptionNode) GetValue() string {
@@ -300,7 +493,7 @@ type MenuBreadcrumbRequest struct {
 
 func (x *MenuBreadcrumbRequest) Reset() {
 	*x = MenuBreadcrumbRequest{}
-	mi := &file_menu_proto_msgTypes[4]
+	mi := &file_menu_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -312,7 +505,7 @@ func (x *MenuBreadcrumbRequest) String() string {
 func (*MenuBreadcrumbRequest) ProtoMessage() {}
 
 func (x *MenuBreadcrumbRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_menu_proto_msgTypes[4]
+	mi := &file_menu_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -325,7 +518,7 @@ func (x *MenuBreadcrumbRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MenuBreadcrumbRequest.ProtoReflect.Descriptor instead.
 func (*MenuBreadcrumbRequest) Descriptor() ([]byte, []int) {
-	return file_menu_proto_rawDescGZIP(), []int{4}
+	return file_menu_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *MenuBreadcrumbRequest) GetId() uint32 {
@@ -348,7 +541,7 @@ type MenuBreadcrumbResponse struct {
 
 func (x *MenuBreadcrumbResponse) Reset() {
 	*x = MenuBreadcrumbResponse{}
-	mi := &file_menu_proto_msgTypes[5]
+	mi := &file_menu_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +553,7 @@ func (x *MenuBreadcrumbResponse) String() string {
 func (*MenuBreadcrumbResponse) ProtoMessage() {}
 
 func (x *MenuBreadcrumbResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_menu_proto_msgTypes[5]
+	mi := &file_menu_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +566,7 @@ func (x *MenuBreadcrumbResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MenuBreadcrumbResponse.ProtoReflect.Descriptor instead.
 func (*MenuBreadcrumbResponse) Descriptor() ([]byte, []int) {
-	return file_menu_proto_rawDescGZIP(), []int{5}
+	return file_menu_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MenuBreadcrumbResponse) GetPath() []string {
@@ -399,7 +592,26 @@ const file_menu_proto_rawDesc = "" +
 	"\x04icon\x18\x05 \x01(\tR\x04icon\x12\x16\n" +
 	"\x06hidden\x18\x06 \x01(\bR\x06hidden\x12\x16\n" +
 	"\x06public\x18\a \x01(\bR\x06public\x12(\n" +
-	"\bchildren\x18\b \x03(\v2\f.pb.MenuNodeR\bchildren\";\n" +
+	"\bchildren\x18\b \x03(\v2\f.pb.MenuNodeR\bchildren\"\xcb\x02\n" +
+	"\bMenuItem\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x16\n" +
+	"\x06parent\x18\x02 \x01(\tR\x06parent\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1c\n" +
+	"\tcomponent\x18\x04 \x01(\tR\tcomponent\x12\x10\n" +
+	"\x03uri\x18\x05 \x01(\tR\x03uri\x12\x1b\n" +
+	"\tview_path\x18\x06 \x01(\tR\bviewPath\x12\x12\n" +
+	"\x04icon\x18\a \x01(\tR\x04icon\x12\x16\n" +
+	"\x06hidden\x18\b \x01(\bR\x06hidden\x12\x16\n" +
+	"\x06public\x18\t \x01(\bR\x06public\x12\x12\n" +
+	"\x04sort\x18\n" +
+	" \x01(\x03R\x04sort\x12 \n" +
+	"\vdescription\x18\v \x01(\tR\vdescription\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\f \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\r \x01(\x03R\tupdatedAt\"9\n" +
+	"\x13MenuListAllResponse\x12\"\n" +
+	"\x05items\x18\x01 \x03(\v2\f.pb.MenuItemR\x05items\";\n" +
 	"\x13MenuOptionsResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.pb.OptionNodeR\x05items\"|\n" +
 	"\n" +
@@ -411,10 +623,11 @@ const file_menu_proto_rawDesc = "" +
 	"\x15MenuBreadcrumbRequest\x12\x17\n" +
 	"\x02id\x18\x01 \x01(\rB\a\xfaB\x04*\x02(\x01R\x02id\",\n" +
 	"\x16MenuBreadcrumbResponse\x12\x12\n" +
-	"\x04path\x18\x01 \x03(\tR\x04path2\x95\x02\n" +
+	"\x04path\x18\x01 \x03(\tR\x04path2\xe8\x02\n" +
 	"\vMenuService\x12L\n" +
 	"\bMenuTree\x12\x16.google.protobuf.Empty\x1a\x14.pb.MenuTreeResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
-	"/menu/tree\x12U\n" +
+	"/menu/tree\x12Q\n" +
+	"\vMenuListAll\x12\x16.google.protobuf.Empty\x1a\x17.pb.MenuListAllResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/menu/all\x12U\n" +
 	"\vMenuOptions\x12\x16.google.protobuf.Empty\x1a\x17.pb.MenuOptionsResponse\"\x15\x82\xd3\xe4\x93\x02\x0f\x12\r/menu/options\x12a\n" +
 	"\x0eMenuBreadcrumb\x12\x19.pb.MenuBreadcrumbRequest\x1a\x1a.pb.MenuBreadcrumbResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/menu/breadcrumbB#Z!github.com/sjlit/aeus/admin/pb;pbb\x06proto3"
 
@@ -430,32 +643,37 @@ func file_menu_proto_rawDescGZIP() []byte {
 	return file_menu_proto_rawDescData
 }
 
-var file_menu_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_menu_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_menu_proto_goTypes = []any{
 	(*MenuTreeResponse)(nil),       // 0: pb.MenuTreeResponse
 	(*MenuNode)(nil),               // 1: pb.MenuNode
-	(*MenuOptionsResponse)(nil),    // 2: pb.MenuOptionsResponse
-	(*OptionNode)(nil),             // 3: pb.OptionNode
-	(*MenuBreadcrumbRequest)(nil),  // 4: pb.MenuBreadcrumbRequest
-	(*MenuBreadcrumbResponse)(nil), // 5: pb.MenuBreadcrumbResponse
-	(*emptypb.Empty)(nil),          // 6: google.protobuf.Empty
+	(*MenuItem)(nil),               // 2: pb.MenuItem
+	(*MenuListAllResponse)(nil),    // 3: pb.MenuListAllResponse
+	(*MenuOptionsResponse)(nil),    // 4: pb.MenuOptionsResponse
+	(*OptionNode)(nil),             // 5: pb.OptionNode
+	(*MenuBreadcrumbRequest)(nil),  // 6: pb.MenuBreadcrumbRequest
+	(*MenuBreadcrumbResponse)(nil), // 7: pb.MenuBreadcrumbResponse
+	(*emptypb.Empty)(nil),          // 8: google.protobuf.Empty
 }
 var file_menu_proto_depIdxs = []int32{
 	1, // 0: pb.MenuTreeResponse.items:type_name -> pb.MenuNode
 	1, // 1: pb.MenuNode.children:type_name -> pb.MenuNode
-	3, // 2: pb.MenuOptionsResponse.items:type_name -> pb.OptionNode
-	3, // 3: pb.OptionNode.children:type_name -> pb.OptionNode
-	6, // 4: pb.MenuService.MenuTree:input_type -> google.protobuf.Empty
-	6, // 5: pb.MenuService.MenuOptions:input_type -> google.protobuf.Empty
-	4, // 6: pb.MenuService.MenuBreadcrumb:input_type -> pb.MenuBreadcrumbRequest
-	0, // 7: pb.MenuService.MenuTree:output_type -> pb.MenuTreeResponse
-	2, // 8: pb.MenuService.MenuOptions:output_type -> pb.MenuOptionsResponse
-	5, // 9: pb.MenuService.MenuBreadcrumb:output_type -> pb.MenuBreadcrumbResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // 2: pb.MenuListAllResponse.items:type_name -> pb.MenuItem
+	5, // 3: pb.MenuOptionsResponse.items:type_name -> pb.OptionNode
+	5, // 4: pb.OptionNode.children:type_name -> pb.OptionNode
+	8, // 5: pb.MenuService.MenuTree:input_type -> google.protobuf.Empty
+	8, // 6: pb.MenuService.MenuListAll:input_type -> google.protobuf.Empty
+	8, // 7: pb.MenuService.MenuOptions:input_type -> google.protobuf.Empty
+	6, // 8: pb.MenuService.MenuBreadcrumb:input_type -> pb.MenuBreadcrumbRequest
+	0, // 9: pb.MenuService.MenuTree:output_type -> pb.MenuTreeResponse
+	3, // 10: pb.MenuService.MenuListAll:output_type -> pb.MenuListAllResponse
+	4, // 11: pb.MenuService.MenuOptions:output_type -> pb.MenuOptionsResponse
+	7, // 12: pb.MenuService.MenuBreadcrumb:output_type -> pb.MenuBreadcrumbResponse
+	9, // [9:13] is the sub-list for method output_type
+	5, // [5:9] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_menu_proto_init() }
@@ -469,7 +687,7 @@ func file_menu_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_menu_proto_rawDesc), len(file_menu_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

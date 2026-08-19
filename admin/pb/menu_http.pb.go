@@ -14,6 +14,11 @@ type MenuServiceHttpServer interface {
 	// admin menu manager's read endpoint.
 	// Wire format: GET /menu/tree.
 	MenuTree(ctx context.Context, req *Empty) (res *MenuTreeResponse, err error)
+	// Flat, unpaged list of every menu row, exposed with the full
+	// CRUD field set so the management UI can render a tree directly
+	// (parent references parent for nesting) and edit each row in place.
+	// Wire format: GET /menu/all.
+	MenuListAll(ctx context.Context, req *Empty) (res *MenuListAllResponse, err error)
 	// Menu cascader options (value = Menu.Component, usable directly as
 	// Menu.Parent).  Wire format: GET /menu/options.
 	MenuOptions(ctx context.Context, req *Empty) (res *MenuOptionsResponse, err error)
@@ -35,6 +40,19 @@ type MenuServiceServerWrapper struct {
 func (s *MenuServiceServerWrapper) wrapHttpMenuServiceMenuTree(ctx *http.Context) (err error) {
 	req := &Empty{}
 	if res, err := s.server.MenuTree(ctx.Context(), req); err != nil {
+		if er, ok := err.(*errs.Error); ok {
+			return ctx.Error(int(er.Code), er.Message)
+		} else {
+			return ctx.Error(int(errs.CodeUnavailable), err.Error())
+		}
+	} else {
+		return ctx.Success(res)
+	}
+}
+
+func (s *MenuServiceServerWrapper) wrapHttpMenuServiceMenuListAll(ctx *http.Context) (err error) {
+	req := &Empty{}
+	if res, err := s.server.MenuListAll(ctx.Context(), req); err != nil {
 		if er, ok := err.(*errs.Error); ok {
 			return ctx.Error(int(er.Code), er.Message)
 		} else {
@@ -78,6 +96,8 @@ func RegisterMenuServiceRouter(hs *http.Server, s MenuServiceHttpServer, opts ..
 	is.opts = http.NewRouteOptions(opts...)
 	// register MenuService.MenuTree http handler
 	hs.GET("/menu/tree", is.wrapHttpMenuServiceMenuTree)
+	// register MenuService.MenuListAll http handler
+	hs.GET("/menu/all", is.wrapHttpMenuServiceMenuListAll)
 	// register MenuService.MenuOptions http handler
 	hs.GET("/menu/options", is.wrapHttpMenuServiceMenuOptions)
 	// register MenuService.MenuBreadcrumb http handler

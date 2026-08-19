@@ -20,6 +20,16 @@ service MenuService {
     };
   }
 
+  // Flat, unpaged list of every menu row, exposed with the full
+  // CRUD field set so the management UI can render a tree directly
+  // (parent references parent for nesting) and edit each row in place.
+  // Wire format: GET /menu/all.
+  rpc MenuListAll(google.protobuf.Empty) returns (MenuListAllResponse) {
+    option (google.api.http) = {
+      get: "/menu/all"
+    };
+  }
+
   // Menu cascader options (value = Menu.Component, usable directly as
   // Menu.Parent).  Wire format: GET /menu/options.
   rpc MenuOptions(google.protobuf.Empty) returns (MenuOptionsResponse) {
@@ -58,6 +68,35 @@ message MenuNode {
   bool              hidden    = 6;
   bool              public    = 7;
   repeated MenuNode children  = 8;
+}
+
+// MenuItem is one Menu row with the full CRUD field set, returned
+// flat (no children) by MenuListAll. parent stores Menu.Component —
+// the same identifier Menu.Parent references — so the management UI
+// can rebuild the tree purely from the items list. created_at /
+// updated_at are Unix seconds, mirroring BaseModel.
+message MenuItem {
+  uint64 id          = 1;
+  string parent      = 2;
+  string name        = 3;
+  string component   = 4;
+  string uri         = 5;
+  string view_path   = 6;
+  string icon        = 7;
+  bool   hidden      = 8;
+  bool   public      = 9;
+  int64  sort        = 10;
+  string description = 11;
+  int64  created_at  = 12;
+  int64  updated_at  = 13;
+}
+
+// MenuListAllResponse carries the flat item list emitted by
+// MenuListAll. Unpaged on purpose — menus are a global, typically
+// small set (~100 rows) and the management UI renders them all at
+// once inside an el-table with tree-props.
+message MenuListAllResponse {
+  repeated MenuItem items = 1;
 }
 
 // MenuOptionsResponse carries cascader options; value is the

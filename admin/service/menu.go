@@ -114,6 +114,47 @@ func (s *MenuService) menuTreeDirect(ctx context.Context) (*pb.MenuTreeResponse,
 	return &pb.MenuTreeResponse{Items: menuNodesToPb((&models.Menu{}).BuildTree(all))}, nil
 }
 
+// MenuListAll returns every menu row, flat, fully populated. The
+// management UI receives the rows once and rebuilds the tree from
+// MenuItem.Parent (which references Menu.Component). The endpoint
+// deliberately bypasses pagination — sys_menus is a global, small
+// table and the UI renders all rows at once inside an el-table with
+// tree-props.
+//
+// Caching is shared with MenuTree (same Cacher, same SUM(id) marker):
+// any create / update / delete that invalidates one invalidates the
+// other, so the management view can never see a stale tree while
+// MenuTree (which the sidebar consumes) is refreshed.
+func (s *MenuService) MenuListAll(ctx context.Context, _ *pb.Empty) (*pb.MenuListAllResponse, error) {
+	if s.menusCacher == nil {
+		return s.menuListAllDirect(ctx)
+	}
+	all, err := dbcache.Try(s.menusCacher, ctx, "menu:all", func(tx *gorm.DB) ([]models.Menu, error) {
+		var rows []models.Menu
+		if err := tx.WithContext(ctx).Order("parent ASC, id ASC").Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		return rows, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.MenuListAllResponse{Items: menuItemsToPb(all)}, nil
+}
+
+// menuListAllDirect is the cache-bypass path used when no Cacher is
+// available.
+func (s *MenuService) menuListAllDirect(ctx context.Context) (*pb.MenuListAllResponse, error) {
+	if s.opts.DB == nil {
+		return nil, errs.Newf(errs.CodeUnavailable, "menu service has no database")
+	}
+	var all []models.Menu
+	if err := s.opts.DB.WithContext(ctx).Order("parent ASC, id ASC").Find(&all).Error; err != nil {
+		return nil, err
+	}
+	return &pb.MenuListAllResponse{Items: menuItemsToPb(all)}, nil
+}
+
 // MenuOptions returns the parent-picker tier list keyed on
 // Menu.Component (the value a parent dropdown must submit).
 func (s *MenuService) MenuOptions(ctx context.Context, _ *pb.Empty) (*pb.MenuOptionsResponse, error) {
