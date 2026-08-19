@@ -1,6 +1,6 @@
 @use './style';
 // Element Plus 玻璃化覆盖(迁移自参考项目),完整 EP token + 组件样式
-@use './ep-glass';
+@use './glass';
 // @nobla/rest-ui(schema 驱动页)的主题对齐,必须排在 ep-glass 之后
 @use './rest-ui';
 
@@ -10,9 +10,11 @@ body {
 }
 
 // ---- L3 chrome 布局(el-container 接管 flex,这里只填装饰) ----
-.app {
+.app-main {
   // 让外层容器占满视口;高度交给 el-container 自身 100% 推断
   height: 100vh;
+
+  --el-main-padding: 20px;
 }
 
 // 左侧栏(el-aside):只在桌面下挂载(移动端切到 .mobile-menu 抽屉)
@@ -248,6 +250,7 @@ body {
 // ---- 桌面折叠态下隐藏文字 ----
 // 挂到 .sidebar 上而非 .menu-chrome,保证抽屉不受影响。
 .sidebar.is-collapsed {
+
   // nav-scroll 展开态的 2px 滚动条留白会让折叠态图标比品牌点左偏 1px
   .nav-scroll {
     padding-right: 0;
@@ -274,11 +277,6 @@ body {
   min-width: 0;
 }
 
-// el-main 默认有 padding:20px;复刻原 .main 的 28px 36px
-.main,
-.content > .el-main {
-  padding: 28px 36px;
-}
 
 .topbar {
   // 整张玻璃卡片:与 sidebar 视觉对称,sticky 留 12px 顶部边距
@@ -294,7 +292,7 @@ body {
   padding: 0;
   // 左右留 36px 与 el-main 的内容区(padding: 28px 36px)对齐,
   // 玻璃卡片不再横贯整个内容区
-  margin: 0 36px 18px;
+  margin: 0 var(--el-main-padding) 0;
   // 高度由内容决定:工具栏 52px + 分隔线 + 多标签栏 42px
   height: auto;
 }
@@ -416,8 +414,9 @@ body {
 // 桌面端在 980/720 还有自己的一套折叠,但 .sidebar 在这里已被 v-if 干掉,
 // 只剩内容区需要重排 padding/margin 与 topbar 留白。
 @media (max-width: 768px) {
+
   // 内容区让出顶部 topbar 高度的 12px,左右贴边各 12px
-  .content > .el-main {
+  .content>.el-main {
     padding: 16px 14px;
   }
 
@@ -432,6 +431,7 @@ body {
 // ---- 移动端抽屉外观 ----
 // el-drawer 默认 panel 是白底,这里套上主题玻璃风,跟侧栏一致。
 .sidebar-drawer {
+
   // el-drawer 根容器(append-to-body),只调整外层
   .el-drawer__header {
     display: none;
