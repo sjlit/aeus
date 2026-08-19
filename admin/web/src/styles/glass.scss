@@ -213,15 +213,6 @@
   color: var(--el-color-warning) !important;
 }
 
-/* —— 下拉 / 弹出浮层(teleport 到 body) ————————— */
-.el-popper.is-light,
-.el-dropdown-menu,
-.el-select-dropdown,
-.el-popover {
-  @include glass-surface($radius: var(--r-md),
-    $shadow: (0 12px 40px rgba(60, 40, 90, 0.18), 0 2px 8px rgba(60, 40, 90, 0.08)));
-}
-
 .el-popper.is-light .el-popper__arrow::before {
   background: var(--glass-strong) !important;
   border-color: var(--glass-border) !important;

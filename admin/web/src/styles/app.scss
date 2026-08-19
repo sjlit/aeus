@@ -365,15 +365,9 @@ body {
 
 // ---- el-sub-menu 浮层(teleport 到 body,scoped 够不着,放全局) ----
 .sidebar-pop {
-  padding: 4px !important;
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(40px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-radius: var(--r-md, 16px) !important;
-  box-shadow:
-    0 12px 40px rgba(60, 40, 90, 0.18),
-    0 2px 8px rgba(60, 40, 90, 0.08) !important;
+  background: var(--el-color-white);
+  opacity: 1;
+  padding: 4px;
 }
 
 .sidebar-pop .el-menu {
@@ -395,8 +389,8 @@ body {
 }
 
 .sidebar-pop .el-menu .el-menu-item:hover {
-  background: var(--glass-soft) !important;
-  color: var(--ink) !important;
+  background: var(--glass-soft);
+  color: var(--ink);
 }
 
 .sidebar-pop .el-menu .el-menu-item.is-active {
