@@ -1,5 +1,5 @@
 /** 触发静默刷新的业务码(pkg/errs/const.go)。 */
-export const AUTH_FAILURE_CODES: readonly number[] = [4001, 4002, 4006]
+const AUTH_FAILURE_CODES: readonly number[] = [4001, 4002, 4006]
 
 /** 取信封 code;非信封(网络层错误等)返回 -1。 */
 export function envelopeCode(body: unknown): number {

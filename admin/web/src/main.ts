@@ -9,13 +9,12 @@ import '@fontsource-variable/inter-tight'
 import '@fontsource-variable/jetbrains-mono'
 import App from './App.vue'
 import { router, ensureMenuRoutes, goToLogin } from './router'
-import { bindHttpContext } from './api/http'
+import { bindHttpContext, http } from './api/http'
 import { useAuthStore } from './stores/auth'
 import { setTabsRouter } from './stores/tabs'
 import { SchemaUIPlugin, SchemaUIConfig } from '@sjlit/rest-ui'
 import '@sjlit/rest-ui/dist/style.css'
 import './styles/app.scss'
-import { http } from '@/api/http'
 
 const app = createApp(App)
 const pinia = createPinia()

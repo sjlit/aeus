@@ -44,8 +44,7 @@ export function deriveComponentName(viewPath: string | undefined): string {
 function pascalize(seg: string): string {
   // snake_case / kebab-case -> PascalCase("sys_user" -> "SysUser","foo-bar" -> "FooBar")
   // 已是大写开头的段("Bar")也保持兼容
-  const camel = seg
+  return seg
     .replace(/[-_]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
     .replace(/^(.)/, (_, c) => c.toUpperCase())
-  return camel
 }

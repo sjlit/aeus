@@ -1,5 +1,3 @@
-import type { MenuNode } from '../types'
-
 /** 兜底分组名:在 SECTION_DEFINITIONS 里写一个 `{ name: 此常量, components: [] }`
  *  的条目即可把它声明为 catcher,吸纳所有未被显式列出的顶级节点。
  *  catcher 在侧栏的渲染位置由它在数组里的声明顺序决定(用户完全控制)。 */
@@ -31,18 +29,3 @@ export const SECTION_DEFINITIONS: SectionDefinition[] = [
   // 想完全去掉"其它"分组,删掉这一行,未列入的顶级节点会被静默丢弃。
   { name: DEFAULT_SECTION_NAME, components: [] },
 ]
-
-/** SectionDefinition 引用的 component 是否存在于给定树里(便于启动期检查配置漂移)。 */
-export function findMissingComponents(
-  definitions: SectionDefinition[],
-  tree: MenuNode[],
-): string[] {
-  const known = new Set(tree.map((n) => n.component))
-  const missing: string[] = []
-  for (const def of definitions) {
-    for (const comp of def.components) {
-      if (!known.has(comp)) missing.push(comp)
-    }
-  }
-  return missing
-}

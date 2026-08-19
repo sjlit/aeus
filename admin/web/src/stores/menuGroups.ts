@@ -1,6 +1,5 @@
 import type { MenuNode } from '../types'
 import {
-  DEFAULT_SECTION_NAME,
   SECTION_DEFINITIONS,
   type SectionDefinition,
 } from './menuSections'
@@ -8,12 +7,6 @@ import {
 export interface Section {
   name: string
   items: MenuNode[]
-}
-
-/** 取 uri 首段('/system/sys-users' → 'system');空 → 'general'。 */
-export function uriSegment(uri: string): string {
-  const parts = uri.split('/').filter(Boolean)
-  return parts[0] ?? 'general'
 }
 
 /** 一级菜单容器:无 uri 且有 children,后端把它插在 sys_menus 里用作

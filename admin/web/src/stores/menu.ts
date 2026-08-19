@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { fetchMenuTree } from '../api/menu'
+import { fetchMenuTree } from '../api/user'
 import {
   buildTree,
   flattenMenu,

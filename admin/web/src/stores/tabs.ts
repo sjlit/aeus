@@ -90,9 +90,7 @@ export const useTabsStore = defineStore('tabs', () => {
     const idx = tabs.value.findIndex(t => t.path === path)
     if (idx <= 0) return
 
-    tabs.value = [
-      ...tabs.value.filter((t, i) => i >= idx || !t.closable),
-    ]
+    tabs.value = tabs.value.filter((t, i) => i >= idx || !t.closable)
     // 如果当前激活标签被关闭,切换到目标标签
     if (!tabs.value.find(t => t.path === activeTab.value)) {
       activeTab.value = path
@@ -103,9 +101,7 @@ export const useTabsStore = defineStore('tabs', () => {
     const idx = tabs.value.findIndex(t => t.path === path)
     if (idx === -1) return
 
-    tabs.value = [
-      ...tabs.value.filter((t, i) => i <= idx || !t.closable),
-    ]
+    tabs.value = tabs.value.filter((t, i) => i <= idx || !t.closable)
     // 如果当前激活标签被关闭,切换到目标标签
     if (!tabs.value.find(t => t.path === activeTab.value)) {
       activeTab.value = path

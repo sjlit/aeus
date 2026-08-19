@@ -5,13 +5,8 @@ import {
   groupBySection,
   isSectionContainer,
   shouldRenderAsSubMenu,
-  uriSegment,
 } from '../menuGroups'
-import {
-  DEFAULT_SECTION_NAME,
-  SECTION_DEFINITIONS,
-  findMissingComponents,
-} from '../menuSections'
+import { DEFAULT_SECTION_NAME } from '../menuSections'
 import type { MenuNode } from '../../types'
 
 /** 构造一个 MenuNode,children 默认空数组、parent 默认空、其它默认空串/false。 */
@@ -75,17 +70,6 @@ const flat = [
 ]
 
 const tree = buildTree(flat)
-
-describe('uriSegment', () => {
-  it('取首段', () => {
-    expect(uriSegment('/system/sys-users')).toBe('system')
-    expect(uriSegment('system')).toBe('system')
-  })
-  it('空返回 general', () => {
-    expect(uriSegment('')).toBe('general')
-    expect(uriSegment('/')).toBe('general')
-  })
-})
 
 describe('isSectionContainer', () => {
   it('uri 空 + 有 children → true', () => {
@@ -279,20 +263,6 @@ describe('groupBySection', () => {
     const secs = groupBySection(mixed, custom)
     expect(secs.map((s) => s.name)).toEqual(['审计'])
     expect(secs[0].items.map((n) => n.component)).toEqual(['SystemLogs'])
-  })
-})
-
-describe('findMissingComponents', () => {
-  it('definitions 引用了树里没有的 component → 返回缺失列表', () => {
-    const missing = findMissingComponents(
-      [{ name: '工作台', components: ['NonExistent', 'SystemLogs'] }],
-      tree,
-    )
-    expect(missing).toEqual(['NonExistent'])
-  })
-
-  it('全部引用都存在 → 返回空数组', () => {
-    expect(findMissingComponents(SECTION_DEFINITIONS, tree)).toEqual([])
   })
 })
 
