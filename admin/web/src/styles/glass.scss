@@ -98,24 +98,37 @@
   background: rgba(255, 255, 255, 0.4) !important;
 }
 
-.el-input__wrapper {
-  padding: 4px 12px !important;
-  box-shadow: none !important;
+// 玻璃态 wrapper 上下 padding 用 4px(对齐 select),inner 高度相应减 8px,
+// 总高保持 --el-component-size(默认 32px),与 el-select 等高
+.el-input,
+.el-input--large,
+.el-input--small {
+  --el-input-inner-height: calc(var(--el-input-height, 32px) - 8px);
 }
 
+.el-input__wrapper {
+  padding: 4px 12px !important;
+}
+
+// 交互态统一:input / select 在 hover / focus 时叠加薄荷描边圈,
+// 同时保留上方玻璃块的投影(与 select 此前只有投影、无反馈对齐)
 .el-input__wrapper:hover,
-.el-input.is-focus .el-input__wrapper {
-  box-shadow: 0 0 0 1px var(--acc-mint) inset !important;
+.el-input.is-focus .el-input__wrapper,
+.el-select__wrapper.is-hovering,
+.el-select__wrapper.is-focused {
+  box-shadow:
+    0 0 0 1px var(--acc-mint) inset,
+    0 4px 16px var(--shadow-soft);
 }
 
 .el-button {
-  border-radius: var(--r-sm) !important;
-  font-weight: 500 !important;
-  transition: all 0.2s !important;
+  border-radius: var(--r-sm);
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
 .el-button:hover {
-  transform: translateY(-1px) !important;
+  transform: translateY(-1px);
 }
 
 .el-button--primary:not(.is-link) {
@@ -205,10 +218,8 @@
 .el-dropdown-menu,
 .el-select-dropdown,
 .el-popover {
-  @include glass-surface(
-    $radius: var(--r-md),
-    $shadow: (0 12px 40px rgba(60, 40, 90, 0.18), 0 2px 8px rgba(60, 40, 90, 0.08))
-  );
+  @include glass-surface($radius: var(--r-md),
+    $shadow: (0 12px 40px rgba(60, 40, 90, 0.18), 0 2px 8px rgba(60, 40, 90, 0.08)));
 }
 
 .el-popper.is-light .el-popper__arrow::before {
@@ -313,16 +324,6 @@
 .el-pagination button:hover,
 .el-pagination .el-pager li:hover {
   color: var(--ink) !important;
-}
-
-.el-pagination .el-pager li.is-active {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
-  color: white !important;
-  border: none !important;
-}
-
-.el-pagination .el-pager li.is-active:hover {
-  color: white !important;
 }
 
 /* —— 开关(激活色继承主题 primary) ————————— */
