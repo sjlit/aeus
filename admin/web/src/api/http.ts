@@ -1,5 +1,10 @@
 import axios from 'axios'
-import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import type {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios'
 import { ElMessage } from 'element-plus'
 import { envelopeCode, envelopeMessage, isAuthFailureCode } from './envelope'
 
@@ -19,10 +24,26 @@ export function bindHttpContext(c: HttpContext): void {
   ctx = c
 }
 
+/**
+ * 响应拦截器已解包业务信封,业务码 0 的成功路径直接把 data 作为结果返回。
+ * SchemaUIPlugin 等按"data"约定使用的 httpClient 因此可以共用同一个实例。
+ */
+type UnwrappedHttp = Omit<
+  AxiosInstance,
+  'get' | 'post' | 'put' | 'delete' | 'patch' | 'request'
+> & {
+  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T>
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T>
+  patch<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  request<T = unknown>(config: AxiosRequestConfig): Promise<T>
+}
+
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
   timeout: 10_000,
-})
+}) as unknown as UnwrappedHttp
 
 http.interceptors.request.use((config) => {
   const token = ctx?.getToken()
@@ -57,7 +78,7 @@ let refreshing: Promise<boolean> | null = null
  */
 async function refreshAndRetry(
   config: InternalAxiosRequestConfig | undefined,
-): Promise<AxiosResponse> {
+): Promise<unknown> {
   if (!config || isRefreshRequest(config)) return handleSessionExpired()
   refreshing ??= (ctx?.refresh() ?? Promise.resolve(false)).finally(() => {
     refreshing = null
@@ -71,20 +92,23 @@ async function refreshAndRetry(
   }
   if (!ok) return handleSessionExpired()
   // 仅复用原请求配置;Authorization 由请求拦截器在重试时重新注入。
+  // 重试走本 http,会再次经过响应拦截器,成功时返回的是解包后的 data。
   return http.request(config)
 }
 
 http.interceptors.response.use(
-  async (response) => {
+  (response) => {
     const body = response.data
     const code = envelopeCode(body)
     if (code === 0) {
-      // 成功:把信封解包,调用方拿到 data
-      response.data = body?.data ?? null
-      return response
+      // 成功:把信封解包后直接返回 data,调用方和 SchemaUIPlugin 都不再需要 .data。
+      // 这里 cast 是为了让 axios 拦截器签名满意,运行时返回的就是业务数据。
+      return (body?.data ?? null) as unknown as AxiosResponse
     }
     if (isAuthFailureCode(code)) {
-      return refreshAndRetry(response.config)
+      // 重试走本 http,响应拦截器会把成功路径再解包为 data;这里 cast 是为了让
+      // axios 拦截器签名满意,运行时与成功路径行为一致。
+      return refreshAndRetry(response.config) as Promise<AxiosResponse>
     }
     const msg = envelopeMessage(body) || `业务错误 code=${code}`
     ElMessage.error(msg)
