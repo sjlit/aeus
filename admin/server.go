@@ -27,11 +27,24 @@ import (
 // responsibility too — admin only ships the resource registrations.
 type Server struct {
 	opts *Options
+	// modelsByModuleTable indexes every registered model by
+	// "<module>/<table>" so the ModelTypes / ModelTiers endpoints can
+	// resolve a model instance from the (module, table) path params
+	// without forcing callers to repeat the model list.  Populated by
+	// registerModel (the same code path used by Setup's getModels()
+	// loop and RegisterModel's external calls), so any model wired in
+	// via either route is automatically available through the
+	// endpoints below.  nil-safe; only the endpoints that need model
+	// lookup ever read it.
+	modelsByModuleTable map[string]any
 }
 
 // New builds a Server from the supplied options.
 func New(opts ...Option) *Server {
-	return &Server{opts: newOptions(opts...)}
+	return &Server{
+		opts:                 newOptions(opts...),
+		modelsByModuleTable:  make(map[string]any),
+	}
 }
 
 func (s *Server) getModels() []any {
@@ -151,6 +164,17 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	// Index this model by (module, table) so the ModelTypes / ModelTiers
+	// endpoints can resolve an instance from path params.  We use the
+	// canonical Naming rest/v3 just resolved (via ModuleNamer +
+	// gorm.Tabler), not a duplicate type-assertion here — keeps the
+	// lookup in sync with modelNaming / ensureMenuRow.  A model without
+	// either ModuleName or TableName is silently skipped: it cannot be
+	// referenced via the (module, table) URL anyway, and the lookup
+	// table never sees a half-formed key.
+	if module, table := s.modelNaming(resource); module != "" && table != "" {
+		s.modelsByModuleTable[module+"/"+table] = model
+	}
 	if p, ok := model.(models.MenuProvider); ok {
 		// Migrate sys_menus on a CLEAN detached session: resourceDB's
 		// statement was left pointing at the last model rest/v3 parsed
@@ -229,6 +253,17 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// instead of at first request time.
 	if _, err = RegisterSchemaEndpoint(s.opts); err != nil {
 		return fmt.Errorf("register schema endpoint: %w", err)
+	}
+	// Mount GET /rest/model-types and /rest/model-tiers so the
+	// front-end can fetch option lists (e.g. dropdowns) keyed by
+	// (module, table).  Must follow the getModels() loop above so
+	// s.modelsByModuleTable is populated when the endpoint handlers
+	// resolve a model from path params.
+	if _, err = RegisterModelTypesEndpoint(s); err != nil {
+		return fmt.Errorf("register model-types endpoint: %w", err)
+	}
+	if _, err = RegisterModelTiersEndpoint(s); err != nil {
+		return fmt.Errorf("register model-tiers endpoint: %w", err)
 	}
 	return nil
 }

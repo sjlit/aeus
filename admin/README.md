@@ -392,6 +392,46 @@ admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `
 
 > 注意 `Menu` 的复数是 `sys_menuses`：复数是 rest/v3 对表名的机械转换（`inflector.Pluralize`），不做语义化处理。
 
+### 元数据 / 选项查询（由 Setup 挂载）
+
+`Server.Setup` 在注册完所有内置模型之后，自动在 `s.opts.Router` 上挂载三个 `GET` 端点，给前端 CRUD 渲染与下拉选择器提供元数据查询能力。它们都按 `(module, table)` 定位已注册的模型，无需应用再装配。
+
+| 方法 | 路径 | 必填 query | 可选 query | 说明 |
+|------|------|-----------|-----------|------|
+| `GET` | `/rest/schema/:module/:table` | — | — | 返回该表的全量列元数据（`[]schema.Schema`），前端按列渲染表单字段 |
+| `GET` | `/rest/model-types/:module/:table` | `label`, `value` | `valueType`（默认 `string`；支持 `int`/`int64`/`uint`/`uint64`）、`tenant` | 返回该模型的扁平选项列表 `[{label, value}, ...]`，给下拉框使用 |
+| `GET` | `/rest/model-tiers/:module/:table` | `parent`, `label`, `value` | `valueType`（同上）、`tenant` | 返回该模型的层级树 `[{label, value, children:[...]}, ...]`，给树形选择器使用（典型：菜单 `parent` 字段） |
+
+**实现细节**：
+
+- **模型查找**：路径参数 `(module, table)` 通过 `Server.modelsByModuleTable["<module>/<table>"]` 反查模型实例，索引在 `registerModel` 时统一建立——`Setup` 内置循环与外部 `RegisterModel` 两种路径都会自动覆盖。未注册的 `(module, table)` 返回 `4004 NotFound`，方便前端区分 URL 拼写错误与真实 DB 错误。
+- **租户隔离**：与 `rest/v3` 通用 CRUD 一致——`tenant` query 参数优先，否则走 `s.opts.TenantResolver(r.Context())`，传 `""` 表示跨租户（与 `rest.ModelTypes` 自身行为对齐）。`Menu` / `Permission` / `Tenant` 等无 `tenant_id` 列的全局模型传 `""` 即可。
+- **valueType 分发**：`model-types` / `model-tiers` 端点按 `valueType` 路由到对应的 `rest.ModelTypes[T]` / `rest.ModelTiers[T]` 泛型实例，使前端无需在拼装 payload 时做类型转换（`uint` 字段直接以 JSON 数字形式回传，不会被强制转字符串）。
+- **响应格式**：统一走 admin envelope `{"code":0,"message":"","data":[...]}`；HTTP 状态恒为 200，业务码分流（`1001 Invalid` / `4004 NotFound`）由前端按 `body.code` 处理，与 CRUD 端点一致。
+- **认证**：必须挂在 JWT 中间件之后（同 CRUD 端点）。`Setup` 不引入新的鉴权层，三个端点的可见性与路由前缀由应用网关决定。
+
+**典型调用**（菜单管理页的"父级菜单"下拉）：
+
+```http
+GET /rest/model-tiers/system/sys_menus?parent=parent&label=name&value=component HTTP/1.1
+Authorization: Bearer <token>
+
+→ 200 OK
+{
+  "code": 0,
+  "message": "",
+  "data": [
+    { "label": "系统设置", "value": "SystemSettings", "children": [
+        { "label": "菜单管理", "value": "SystemSysMenus", "children": [] },
+        ...
+    ]},
+    ...
+  ]
+}
+```
+
+> **为什么 schema 端点也在这里**：`/rest/schema/:module/:table` 由 `RegisterSchemaEndpoint`（`schema_endpoint.go`）挂载，与本节两个端点共用同一套"Setup 末尾自动注册"的契约——前端 `@nobla/rest-ui` 同时拉取 schema 与下拉数据来驱动整张 CRUD 页面。把三个端点放在同一节便于前端同学一眼看到完整契约。
+
 ### AuthService
 
 | 方法 | 路径 | 请求体 | 说明 |
@@ -543,6 +583,9 @@ admin/
 ├── menu_derive.go     # 注册时按 ModuleName+TableName 推导 sys_menus 行
 ├── permission_derive.go # 注册时按 ScenarioProvider 推导 sys_permissions 行
 ├── permission.go      # NewPermissionChecker:对已收录路由执行角色权限校验(JWT 中间件钩子)
+├── schema_endpoint.go       # RegisterSchemaEndpoint（GET /rest/schema/:module/:table）
+├── modeltypes_endpoint.go   # RegisterModelTypesEndpoint（GET /rest/model-types/:module/:table）
+├── modeltiers_endpoint.go   # RegisterModelTiersEndpoint（GET /rest/model-tiers/:module/:table）
 ├── option.go          # Functional options
 ├── responder.go       # 默认 envelope（{code,message,data}）
 ├── seed.go            # admin.Seed 收敛引导（超管角色/用户 + 全量授权补齐）
@@ -574,6 +617,8 @@ go test ./...
 - `menu_derive_test.go` — `MenuSpec` 推导、Component/Uri/ViewPath 覆盖规则、孤儿 parent 校验
 - `permission_derive_test.go` — `permissionDataPattern` 正则、`ensurePermissionRows` 幂等
 - `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005
+- `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table
+- `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` / `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
 - `seed_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动
 - `responder_test.go` — envelope 解包、wrapped error 链透传、`{code,message,data}` 形状
 - `admin_e2e_test.go` — `Setup` + 自动注册 AuthService 的端到端 HTTP 调用
