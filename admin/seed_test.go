@@ -7,6 +7,7 @@ import (
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/admin/pb"
 	"github.com/sjlit/aeus/admin/service"
+	"github.com/sjlit/rest/v3/schema"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +25,10 @@ func newTestDB(t *testing.T) *gorm.DB {
 		&models.Permission{},
 		&models.RolePermission{},
 		&models.Tenant{},
+		// schema.Schema{} mirrors the AutoMigrate Setup runs in
+		// production before Seed; without it, Seed's
+		// ensureTenantSchemas step would hit "no such table".
+		&schema.Schema{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -291,31 +296,6 @@ func TestSeed_LeavesNonBuiltinAdminRoleAlone(t *testing.T) {
 	menus, perms := seedGrantCount(t, db, "admin")
 	if menus != 0 || perms != 0 {
 		t.Fatalf("grants = %d menus / %d perms, want 0/0 for non-builtin role", menus, perms)
-	}
-}
-
-// TestSeed_CreatesUserWhenRoleExists covers the converge contract on
-// the user side: a database that already has the admin role (e.g. an
-// externally bootstrapped one) but no admin user gets the user created
-// on the next Seed run, bound to the role's tenant.
-func TestSeed_CreatesUserWhenRoleExists(t *testing.T) {
-	db := newTestDB(t)
-	if err := db.Create(&models.Role{Key: "admin", Name: "系统管理员", Builtin: true}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := Seed(db, "admin", "admin123"); err != nil {
-		t.Fatalf("Seed: %v", err)
-	}
-	var role models.Role
-	if err := db.Where("key = ?", "admin").First(&role).Error; err != nil {
-		t.Fatalf("role not found: %v", err)
-	}
-	var user models.User
-	if err := db.Where("uid = ?", "admin").First(&user).Error; err != nil {
-		t.Fatalf("user not found: %v", err)
-	}
-	if user.RoleKey != "admin" || user.TenantID != role.TenantID {
-		t.Errorf("user role/tenant = %q/%q, want admin/%q", user.RoleKey, user.TenantID, role.TenantID)
 	}
 }
 

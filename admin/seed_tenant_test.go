@@ -76,15 +76,24 @@ func TestSeed_ConvergesLegacyOrphanTenant(t *testing.T) {
 		t.Fatalf("tenant row not created for legacy tenant id: %v", err)
 	}
 
-	// Second run must not create a second tenant row.
+	// Snapshot the tenant count after the first Seed.  The default
+	// tenant (00000000-...) is also materialized by Seed, so the
+	// absolute count depends on whether the legacy uuid differs from
+	// it — what the test really pins is that a second Seed leaves the
+	// count untouched (Seed must converge, not duplicate).
+	var firstCount int64
+	if err := db.Model(&models.Tenant{}).Count(&firstCount).Error; err != nil {
+		t.Fatal(err)
+	}
+
 	if err := Seed(db, "admin", "admin123"); err != nil {
 		t.Fatalf("second Seed: %v", err)
 	}
-	var count int64
-	if err := db.Model(&models.Tenant{}).Count(&count).Error; err != nil {
+	var secondCount int64
+	if err := db.Model(&models.Tenant{}).Count(&secondCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Errorf("tenant rows = %d, want 1 (Seed must converge, not duplicate)", count)
+	if secondCount != firstCount {
+		t.Errorf("tenant rows: first Seed = %d, second Seed = %d (Seed must converge, not duplicate)", firstCount, secondCount)
 	}
 }

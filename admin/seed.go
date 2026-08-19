@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/pkg/errs"
+	"github.com/sjlit/rest/v3/schema"
 	"gorm.io/gorm"
 )
 
@@ -92,11 +92,16 @@ func EnsureSectionMenus(db *gorm.DB) error {
 //     tenant.  The user is ensured even when the role already existed,
 //     so a half-bootstrapped database converges instead of
 //     short-circuiting.
-//   - a sys_tenants entity row for the role's tenant: Name="默认租户",
-//     Status="enabled", id = the role's tenant_id.  A pre-existing
-//     role's tenant id is followed, so databases bootstrapped before
-//     the tenant model existed converge to a real tenant row instead
-//     of an orphan uuid.
+//   - a default sys_tenants entity row: id = the fixed uuid
+//     "00000000-0000-0000-0000-000000000000", Name="默认租户",
+//     Status="enabled".  Materialized BEFORE the role/user ensures
+//     so a fresh role's tenant_id and the user that follows both
+//     resolve to a real tenant row in the same pass.
+//   - a sys_tenants entity row for the role's tenant when it differs
+//     from the default: Name="默认租户", Status="enabled",
+//     id = the role's tenant_id.  A pre-existing role's tenant id is
+//     followed, so databases bootstrapped before the tenant model
+//     existed converge to a real tenant row instead of an orphan uuid.
 //   - full grants for every IsSuper role: each run diffs the global
 //     catalogs (sys_menus components + sys_permissions datas) against
 //     the role's sys_role_permissions rows and inserts the missing
@@ -105,6 +110,16 @@ func EnsureSectionMenus(db *gorm.DB) error {
 //     healed; manual edits to a super role's grants are rejected at
 //     the API layer (RoleService.ReplaceRolePermissions), this heal is
 //     the safety net for anything that slips through.
+//   - per-tenant sys_schemas clones: every active row in sys_tenants
+//     gets its own copy of every schema template row — those written
+//     by rest/v3's schema.AutoMigrate with tenant_id left at the Go
+//     zero value (empty string).  The copy's tenant_id is set to the
+//     tenant id, primary key / timestamps reset so the database
+//     assigns fresh values, and the (module_name, table_name, column)
+//     triple is the per-tenant uniqueness key.  Runs LAST so any
+//     new schema templates registered by an application upgrade are
+//     picked up on the next Seed call and fanned out to every tenant
+//     in a single pass.
 //
 // The grants reflect the catalogs as of the Seed call: run Setup (which
 // populates sys_menus / sys_permissions) before Seed so a fresh database
@@ -125,8 +140,14 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		return errs.New(errs.CodeInvalid, "admin: Seed requires non-empty adminUser and adminPassword")
 	}
 
-	role := &models.Role{
-		TenantModel: models.TenantModel{TenantID: uuid.NewString()},
+	tenantModel := &models.Tenant{
+		ID:     "00000000-0000-0000-0000-000000000000",
+		Name:   "默认租户",
+		Status: "enabled",
+	}
+
+	roleModel := &models.Role{
+		TenantModel: models.TenantModel{TenantID: tenantModel.ID},
 		Key:         "admin",
 		Name:        "系统管理员",
 		Status:      "enabled",
@@ -135,11 +156,11 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		DataScope:   "all",
 	}
 
-	user := &models.User{
-		TenantModel: models.TenantModel{TenantID: role.TenantID},
+	userModel := &models.User{
+		TenantModel: models.TenantModel{TenantID: tenantModel.ID},
 		UID:         "admin",
 		Username:    adminUser,
-		RoleKey:     role.Key,
+		RoleKey:     roleModel.Key,
 		Status:      "normal",
 		Password:    adminPassword, // BeforeCreate bcrypts it
 		Gender:      "other",
@@ -154,34 +175,41 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 			return err
 		}
 
+		// Ensure the default tenant row exists, mirroring userModel's
+		// FirstOrCreate below.  Idempotent — re-runs on every Seed
+		// without touching a row that's already there.
+		if err := tx.Where("id = ?", tenantModel.ID).Attrs(*tenantModel).FirstOrCreate(tenantModel).Error; err != nil {
+			return err
+		}
+
 		// FirstOrCreate with a key-clause is the canonical "ensure exists"
 		// idiom.  RowsAffected==0 means the row was already there (any
 		// tenant_id) and has been loaded into role — including its
 		// existing tenant_id, which the user ensure below follows.
-		res := tx.Where("key = ?", role.Key).Attrs(*role).FirstOrCreate(role)
+		res := tx.Where("key = ?", roleModel.Key).Attrs(*roleModel).FirstOrCreate(roleModel)
 		if res.Error != nil {
 			return res.Error
 		}
-		if res.RowsAffected == 0 && role.Builtin && !role.IsSuper {
+		if res.RowsAffected == 0 && roleModel.Builtin && !roleModel.IsSuper {
 			// Upgrade a pre-existing builtin admin role created before
 			// IsSuper existed so the converge pass below covers it.
 			if err := tx.Model(&models.Role{}).
-				Where("id = ?", role.ID).
+				Where("id = ?", roleModel.ID).
 				Update("is_super", true).Error; err != nil {
 				return err
 			}
-			role.IsSuper = true
+			roleModel.IsSuper = true
 		}
 
-		// Ensure the sys_tenants entity row for the role's tenant so
-		// Login's resolveTenant returns a real name.  Runs after the
-		// role ensure because a pre-existing role carries its own
-		// tenant id (a legacy orphan uuid gains its row here), while a
-		// fresh role uses the uuid generated above.  Guarded on
+		// Ensure a sys_tenants entity row for the role's tenant so
+		// Login's resolveTenant returns a real name.  The default
+		// tenant is already materialized above; this branch only fires
+		// when a pre-existing role carries a different tenant id
+		// (legacy orphan uuid gains its row here).  Guarded on
 		// non-empty: roles created by out-of-band tooling may have no
 		// tenant id, and a tenant row keyed on "" would be meaningless.
-		if role.TenantID != "" {
-			tenant := &models.Tenant{ID: role.TenantID, Name: "默认租户", Status: "enabled"}
+		if roleModel.TenantID != "" && roleModel.TenantID != tenantModel.ID {
+			tenant := &models.Tenant{ID: roleModel.TenantID, Name: "默认租户", Status: "enabled"}
 			if err := tx.Where("id = ?", tenant.ID).Attrs(*tenant).FirstOrCreate(tenant).Error; err != nil {
 				return err
 			}
@@ -189,8 +217,8 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 
 		// user was built against the fresh tenant before the role lookup;
 		// re-point it at the tenant the role actually lives on.
-		user.TenantID = role.TenantID
-		if err := tx.Where("uid = ?", user.UID).Attrs(*user).FirstOrCreate(user).Error; err != nil {
+		userModel.TenantID = tenantModel.ID
+		if err := tx.Where("uid = ?", userModel.UID).Attrs(*userModel).FirstOrCreate(userModel).Error; err != nil {
 			return err
 		}
 
@@ -205,6 +233,16 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 			if err := grantFullCatalog(tx, &supers[i]); err != nil {
 				return err
 			}
+		}
+
+		// Materialize per-tenant sys_schemas clones last.  Depends on
+		// the tenant rows being in place (the default tenant above and
+		// any legacy tenant ensured earlier), and on the catalog diff
+		// having no business competing for the same rows.  A failure
+		// here rolls back the entire transaction so the database never
+		// lands in a half-bootstrapped state.
+		if err := ensureTenantSchemas(tx); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -229,4 +267,102 @@ func grantFullCatalog(tx *gorm.DB, role *models.Role) error {
 	}
 
 	return (&models.Role{}).GrantMissingPermissions(tx, ctx, role.Key, role.TenantID, menus, datas)
+}
+
+// schemaTuple is the per-tenant uniqueness key for a sys_schemas
+// row.  Matches the implicit dedupe used by rest/v3's
+// schema.AutoMigrate, which treats a column as uniquely identified
+// by its (module, table, column) triple within a given tenant.
+type schemaTuple struct {
+	module string
+	table  string
+	column string
+}
+
+// ensureTenantSchemas fans the schema templates (every sys_schemas
+// row whose tenant_id is the empty string) out to every active row
+// in sys_tenants.  Rest/v3's schema.AutoMigrate writes templates
+// with TenantID at its Go zero value during Setup — that produces
+// a single, global catalog the rest of the codebase queries
+// module-by-module — and this function is the bridge that gives
+// each tenant its own scoped copy so future per-tenant reads can
+// filter by tenant_id without losing the column catalog.
+//
+// Order of operations inside Seed matters: this runs AFTER
+// grantFullCatalog so the role/user/grants converge is already
+// durable when the schema clones start landing.  The function
+// makes no assumption about which tenants exist beyond what's in
+// sys_tenants at call time — adding a new tenant and re-running
+// Seed will clone the templates for it.
+//
+// Idempotent: the (module, table, column) set already present
+// for each tenant is computed in memory after a single bulk
+// fetch, so a fully-cloned tenant makes this loop a no-op.
+// Templates that vanish between Setup and Seed are silently left
+// in the per-tenant copies — no DELETE — because rest/v3 does not
+// expose a removal path through the schema endpoint, and a
+// template that returns later (e.g. after an upgrade) would
+// otherwise need a manual cleanup.  Add-only is the safe default.
+//
+// No row update: if a template's column metadata changes (label,
+// type, format, rules, …) the existing per-tenant copy is left
+// alone and the operator is expected to reconcile through the
+// rest/v3 schema surface.  Updating would silently overwrite any
+// per-tenant customization, which we don't yet have a contract
+// for.
+//
+// Seed runs without JWT claims, so the tenant callbacks'
+// resolver returns "" and the create-callback bails out before
+// backfilling TenantID — explicit TenantID values on each copy
+// therefore win, as intended.
+func ensureTenantSchemas(tx *gorm.DB) error {
+	var tenants []models.Tenant
+	if err := tx.Find(&tenants).Error; err != nil {
+		return fmt.Errorf("ensureTenantSchemas: list tenants: %w", err)
+	}
+	if len(tenants) == 0 {
+		return nil
+	}
+
+	var templates []schema.Schema
+	if err := tx.Where("tenant_id = ?", "").Find(&templates).Error; err != nil {
+		return fmt.Errorf("ensureTenantSchemas: list schema templates: %w", err)
+	}
+	if len(templates) == 0 {
+		return nil
+	}
+
+	for i := range tenants {
+		tenant := &tenants[i]
+		var existing []schema.Schema
+		if err := tx.Where("tenant_id = ?", tenant.ID).
+			Find(&existing).Error; err != nil {
+			return fmt.Errorf("ensureTenantSchemas: list schemas for tenant %q: %w", tenant.ID, err)
+		}
+		seen := make(map[schemaTuple]struct{}, len(existing))
+		for _, e := range existing {
+			seen[schemaTuple{e.ModuleName, e.TableName, e.Column}] = struct{}{}
+		}
+
+		missing := make([]schema.Schema, 0, len(templates))
+		for _, tmpl := range templates {
+			key := schemaTuple{tmpl.ModuleName, tmpl.TableName, tmpl.Column}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			cp := tmpl
+			cp.Id = 0        // let the DB assign a fresh primary key
+			cp.TenantID = tenant.ID
+			cp.CreatedAt = 0 // let autoCreateTime stamp the new row
+			cp.UpdatedAt = 0 // let autoUpdateTime stamp the new row
+			missing = append(missing, cp)
+		}
+		if len(missing) == 0 {
+			continue
+		}
+		if err := tx.Create(&missing).Error; err != nil {
+			return fmt.Errorf("ensureTenantSchemas: insert tenant schemas for %q: %w", tenant.ID, err)
+		}
+	}
+	return nil
 }
