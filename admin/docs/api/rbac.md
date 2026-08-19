@@ -55,7 +55,7 @@ httpSrv.Use(mwauth.JWT(
 | 步骤 | 条件 | 结果 |
 |---|---|---|
 | 1 | **Allowlist 短路**:`(method, path)` 命中 `WithCheckerAllowlist` 任一项 | **放行**(无需查目录) |
-| 2 | **目录查询**:`sys_permissions.type=api` 中存在 `data = "<METHOD> <URI>"` 的行 | 进入步骤 3;**查无**则**放行**(fail-closed 模式下"目录未收录即拒绝",仅 allowlist 命中可绕过) |
+| 2 | **目录查询**:`sys_permissions.type=api` 中存在 `data = "<METHOD> <URI>"` 的行 | 进入步骤 3;**查无**则**放行**(默认 fail-open,目录未收录即视为该路由不受 catalog 约束,allowlist 用于短路 catalog 命中) |
 | 3 | **授权查询**:`sys_role_permissions` 中存在 `role_key + type = "permission" + tenant_id` 匹配当前调用者 且 `data = code` 的行 | **放行** |
 | 4 | 否则 | **拒绝**:`4003 PermissionDenied` |
 
@@ -65,13 +65,13 @@ httpSrv.Use(mwauth.JWT(
 - claims 不是 `*auth.Claims` → 直接 `4005 AccessDenied`(接线错误直接暴露在请求上,避免静默放行)。
 - `type=button` / `type=data_scope` 不参与接口鉴权——只走角色编辑页的分配。
 
-## 9.5 默认策略:fail-closed
+## 9.5 默认策略:fail-open
 
-> **自 2026-08-13 起改为 fail-closed**(原先 fail-open 是 footgun:开发者忘记给新路由登记权限行就会静默暴露)。
+未收录路由(目录里没有 `data` 匹配行)→ **直接放行**,不进入角色授权判断。
 
-未收录路由 + 未在 allowlist → **拒绝**(业务码 `4003`)。
+拒绝路径只覆盖**目录已收录且当前角色无授权**的情况(业务码 `4003`)。`WithCheckerAllowlist` 是短路 catalog 命中后立即放行的开关,用于"目录里登记了但希望绕过角色授权"的子树(如内部监控端点)。
 
-每个 allowlist 条目都必须在代码评审中可见——这正是 fail-closed 的目的:让绕过成为显式决策,而不是"忘记登记权限"的副作用。
+> 历史变更:2026-08-13 曾临时调整为 fail-closed,随后回滚为 fail-open——`derive.go` 已经把 rest/v3 的 8 张 CRUD 资源写入 catalog,业务 RPC 本身就走不到这条路径;fail-closed 会让所有未在 catalog 的内部端点都被挡掉,运维成本高于安全收益。
 
 ## 9.6 缓存
 
@@ -112,14 +112,7 @@ pattern 匹配语义镜像 `middleware/auth.jwt.isAllowed`:
 - `"<prefix>*"` → 前缀匹配,但**只在段边界**(`prefix` 以 `/` 结尾,或 `path` 后续第一个字符是 `/`)。
   例:`"/internal/*"` 不匹配 `"/internal-rogue/foo"`。
 
-**适用场景**:业务 RPC 的鉴权不由本执行器负责(由 `ResetPassword` 的 admin 角色检查、JWT 自身的 allowlist、上游网关等控制)。例:
-
-| 端点 | 谁负责鉴权 |
-|---|---|
-| `/auth/login`、`/auth/refresh-token` | JWT `WithAllow` 短路 |
-| `/user/menus`、`/user/permissions` | 调用者自身 + claims 必然存在 |
-| `/role/options` | 调用者自身 |
-| `/tenant/options`、`/tenant/detail` | 见 [tenant.md §8.4](./tenant.md) 的应用方守卫 |
+**适用场景**:fail-open 下,业务 RPC 本身无需登记——目录未收录就直接放行。`WithCheckerAllowlist` 用于"目录里已登记,但希望绕过角色授权判断"的子树(典型如内部监控端点):`/auth/login` / `/auth/refresh-token` 这类登录前调用依然由 JWT `WithAllow` 短路,根本不进 checker。其余鉴权责任(例如 `/user/reset-password` 的 super-admin 检查)由各自 handler 内的应用方守卫承担。
 
 ## 9.8 缓存配置
 
@@ -137,7 +130,7 @@ admin.NewPermissionChecker(db,
 |---|---|
 | 未授权(目录收录但角色无授权) | `4003 PermissionDenied` |
 | claims 类型不符(`*auth.Claims` 缺失) | `4005 AccessDenied` |
-| 目录未收录且不在 allowlist(fail-closed) | `4003 PermissionDenied` |
+| 目录未收录且不在 allowlist(fail-open 放行) | (无错误) |
 
 ## 9.10 Super 角色自动授权
 

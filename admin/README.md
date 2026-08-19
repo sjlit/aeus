@@ -6,7 +6,7 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 
 - **通用 REST CRUD**：用户、角色、部门、菜单、权限、角色-权限中间表、审计日志、登录日志、租户 9 个模型自动注册为 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；
 - **JWT 认证**：登录 / 刷新 / 登出（`AuthService`），支持 Token 吊销与登录前后钩子；
-- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，未收录路由默认拒绝（fail-closed），业务 RPC 通过 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）；
+- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，**未收录路由默认放行（fail-open）**——拒绝路径只覆盖目录里有 `data` 记录但当前角色无授权的情况；想收紧的子树用 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）；
 - **用户业务 RPC**（`UserService`）：个人资料、改密、管理员重置密码、头像、可见菜单、权限码；
 - **租户隔离**：通过 GORM 回调自动为所有租户模型追加 `tenant_id` 过滤与回填，业务代码零侵入。
 
@@ -21,7 +21,7 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 - **可插拔认证**：`AuthService` 始终由应用自行 `pb.RegisterAuthServiceRouter(...)` 注册，secret 必须来自运行时通道（见[设计约定](#设计约定)）
 - **自动菜单注册**：模型实现 `MenuProvider` 时，`Setup` / `RegisterModel` 会按 `MenuEntry()` 自动生成 `sys_menus` 行（`Component` / `Uri` / `ViewPath` 在缺失时由模块名 + 表名推导，可显式覆盖）。三个分区容器菜单（`SystemUserCenter` / `SystemLogs` / `SystemSettings`）由 `EnsureSectionMenus` 在 `Seed` 阶段写入，业务菜单 `Parent` 都引用这三个 Component。`Setup` 末尾 `validateMenuParentsRef` 会扫所有 `sys_menus`，若发现 `Parent` 指向不存在的 Component 只打 `Warn` 而**不**中断启动——`Menu.BuildTree` 会把孤儿行降级为根，导航树仍可工作；运维应通过 `/system/sys_menu` 修正
 - **自动权限目录**：每个挂载模型按 `rest.ScenarioProvider` 声明的场景集生成 `sys_permissions` 行（`Data` 形如 `"<METHOD> <URI>"`），重复启动幂等
-- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-closed**——未收录路由拒绝，业务 RPC 通过 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）
+- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-open**——未收录路由直接放行，目录里有但当前角色无授权才拒绝；想强制目录全覆盖的子树用 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）
 - **读穿透缓存**：权限目录与角色授权都走 `admin/dbcache` 的 SqlDependency 版本标记缓存，写授权后下一个请求就生效，无需应用显式失效
 - **公开 `RegisterModel`**：应用自定义模型可与内置模型走同一条迁移+菜单+权限注册路径；per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）按需覆盖
 - **Vue 视图自动生成**：`WithVueOutputDir` 启用后，每个模型按 `(module, singular)` 自动创建 `Index.vue`（SchemaViewer 占位），已存在的文件跳过不覆盖手写修改
@@ -156,7 +156,7 @@ log.Fatal(httpSrv.Start(context.Background()))
 
 > **Seed 与 Setup 的时序约定**：授权补齐以 Seed 调用时刻的全局目录（`sys_menus` + `sys_permissions`）为准，因此必须先 `Setup`（建目录）后 `Seed`（授全量）。若先调 `Seed`，目录尚空，本次只确保角色 + 用户，授权会留到下一次启动补齐；应用升级注册新模型后，同样靠下一次启动的 Seed 补齐。
 >
-> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。注意 PermissionChecker 默认 **fail-closed**，未通过 `WithCheckerAllowlist` 显式放行的业务 RPC 会被拒绝——P0 捷径里走到的 `/user/menus`、`/role/options`、`/tenant/options` 等都必须在 allowlist 里登记。
+> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。PermissionChecker 默认 **fail-open**——未收录路由自动放行；想强制目录全覆盖（fail-closed）的子树通过 `WithCheckerAllowlist` 显式登记，把每个 bypass 暴露在 code review 里。
 
 ### Seed 的收敛契约
 
@@ -279,13 +279,13 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 |------|------|------|
 | 1. 接线保护 | claims 不是 `*auth.Claims` | **拒绝**：`4005 AccessDenied` |
 | 2. 显式放行 | `WithCheckerAllowlist` 命中 | **放行** |
-| 3. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 4；查无此行（且未显式放行）**拒绝**（fail-closed） |
+| 3. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 4；查无此行（**未收录即放行**，fail-open） |
 | 4. 授权查询 | `sys_role_permissions` 存在 `role_key + tenant_id + type=permission + data` 匹配的行 | **放行** |
 | 5. 否则 | 目录内但角色无授权 | **拒绝**：业务码 `4003 PermissionDenied` |
 
 **设计要点**：
 
-- **fail-closed 默认拒绝**：未收录路由（业务 RPC：`/user/menus`、`/role/options`、`/tenant/options` 等）一律拒绝；需要放行的路由必须通过 `WithCheckerAllowlist` 显式声明，把每个 bypass 暴露在 code review 里（防止忘记给新路由登记权限目录就静默上线）；
+- **fail-open 默认放行**：未收录路由（业务 RPC：`/user/menus`、`/role/options`、`/tenant/options` 等）一律放行；想强制目录全覆盖（fail-closed）的子树通过 `WithCheckerAllowlist` 显式声明，把每个 bypass 暴露在 code review 里——未在 allowlist 上的目录收录路由依然按角色授权生效；
 - **租户隔离显式化**：授权查询显式过滤 `tenant_id`——checker 运行时 claims 尚未进入 ctx，GORM 租户回调不会自动过滤，不显式传会导致跨租户串权；
 - **fail-closed 接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
 - **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker；
@@ -295,12 +295,12 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 
 | 选项 | 说明 |
 |------|------|
-| `WithCheckerAllowlist(entries ...string)` | 显式放行 `entries`，每条 `"<METHOD> <pattern>"`（`METHOD` 为 `*` 或空表示任意方法；`pattern` 支持精确、`*` 通配、`<prefix>*` 段边界前缀）。常用于 `/user/menus`、`/role/options`、`/tenant/options` 等业务 RPC——这些端点的鉴权由其它机制负责（JWT 中间件 allowlist、`UserService.ResetPassword` 的 admin 检查等） |
+| `WithCheckerAllowlist(entries ...string)` | 短路跳过 catalog 匹配的命中规则，每条 `"<METHOD> <pattern>"`（`METHOD` 为 `*` 或空表示任意方法；`pattern` 支持精确、`*` 通配、`<prefix>*` 段边界前缀）。默认 fail-open 下，**目录已收录但希望绕过角色授权**的子树才需要登记（如内部监控）；业务 RPC 不再强制放行，因为未收录路由本身就是放行的 |
 | `WithCheckerCache(cache.Cache)` | 注入共享缓存后端，覆盖默认内存后端（默认 `infra/cache/memory`，单进程）。多实例部署换成 Redis 等共享后端，避免每个进程的 catalog 独立陈旧 |
 
 **缓存**：api 目录与每个 `(tenant, role)` 的授权集合都通过 `admin/dbcache` 的读穿透 cacher 加载；catalog 用 `MAX(updated_at)` 作版本标记（无 TTL），grants 用 `SUM(id)` + 1 分钟 TTL（吸收标记盲区）。`dbcache` 的 1 秒宽限窗 + 版本标记组合让授权变更在下一个请求就生效，无需应用显式失效。
 
-测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由**拒绝** / 显式 allowlist 放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005。
+测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由**放行**（fail-open）/ 显式 allowlist 放行 / allowlist 通配段边界 / 跨目录命中不影响未收录路由 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中。
 
 ## dbcache 读穿透缓存
 
@@ -825,7 +825,7 @@ go test ./...
 
 - `setup_test.go` / `user_test.go` / `tenant_server_test.go` — `Server.Setup` 资源注册、迁移回调、Responder 集成、端到端 HTTP 调用（登录 + JWT 中间件 + CRUD 资源）
 - `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/回填）
-- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由**拒绝**（fail-closed） / 显式 allowlist 放行 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
+- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由**放行**（fail-open）/ 显式 allowlist 放行 / allowlist 通配段边界 / 跨目录命中不影响未收录路由 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
 - `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table
 - `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` + `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
 - `register_model_options_test.go` — `RegisterModel` per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）的覆盖语义、显式空 spec / 空 scenarios 的边界

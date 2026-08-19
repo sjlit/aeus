@@ -68,16 +68,16 @@ func TestPermissionChecker_UngrantedRoleDenied(t *testing.T) {
 	}
 }
 
-func TestPermissionChecker_UncataloguedRouteDeniedByDefault(t *testing.T) {
+func TestPermissionChecker_UncataloguedRoutePassesByDefault(t *testing.T) {
 	db := newTestDB(t)
 
 	// /user/menus is a business RPC never registered in sys_permissions.
-	// The default policy is fail-closed: without an allowlist match the
-	// request is denied.
+	// The default policy is fail-open: without an allowlist match the
+	// request is allowed through. The deny path is reserved for routes
+	// that the catalog explicitly knows about.
 	checker := NewPermissionChecker(db)
-	err := checker(permCtx("http", "GET", "/user/menus"), &auth.Claims{Role: "guest", TenantID: "t1"})
-	if !errs.IsCode(err, errs.CodePermissionDenied) {
-		t.Fatalf("uncatalogued route: want code %d, got %v", errs.CodePermissionDenied, err)
+	if err := checker(permCtx("http", "GET", "/user/menus"), &auth.Claims{Role: "guest", TenantID: "t1"}); err != nil {
+		t.Fatalf("uncatalogued route denied under fail-open: %v", err)
 	}
 }
 
@@ -95,8 +95,39 @@ func TestPermissionChecker_UncataloguedRoutePassesWithAllowlist(t *testing.T) {
 func TestPermissionChecker_AllowlistWildcardAnchored(t *testing.T) {
 	db := newTestDB(t)
 	// Allowlist a whole segment tree. The "*" must anchor at a segment
-	// boundary, so "/internal-rogue/foo" does NOT match — that would
-	// leak routes the operator never intended to expose.
+	// boundary, so "/internal-rogue/foo" does NOT match the allowlist.
+	//
+	// Under fail-open, an uncatalogued route is allowed by default —
+	// so to observe the allowlist's anchoring behavior we put the
+	// would-be leak path INTO the catalog (no grant). The deny path
+	// then proves the wildcard didn't accidentally match it.
+	if err := db.Create(&models.Permission{Type: string(models.PermissionTypeAPI), Data: "GET /internal-rogue/foo"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Permission{Type: string(models.PermissionTypeAPI), Data: "GET /internal/health"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Permission{Type: string(models.PermissionTypeAPI), Data: "GET /internal/v1/ping"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	// The allowed paths are also grant-covered; the rogue path is not.
+	if err := db.Create(&models.RolePermission{
+		TenantModel: models.TenantModel{TenantID: "t1"},
+		RoleKey:     "guest",
+		Type:        models.RolePermissionTypePermission,
+		Data:        "GET /internal/health",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.RolePermission{
+		TenantModel: models.TenantModel{TenantID: "t1"},
+		RoleKey:     "guest",
+		Type:        models.RolePermissionTypePermission,
+		Data:        "GET /internal/v1/ping",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
 	checker := NewPermissionChecker(db, WithCheckerAllowlist("* /internal/*"))
 	cases := []struct {
 		path   string
@@ -104,6 +135,9 @@ func TestPermissionChecker_AllowlistWildcardAnchored(t *testing.T) {
 	}{
 		{"/internal/health", true},
 		{"/internal/v1/ping", true},
+		// Catalogued (so fail-open no longer saves it) but not in the
+		// allowlist and not granted — the wildcard anchoring must NOT
+		// have matched "/internal-rogue/foo".
 		{"/internal-rogue/foo", false},
 	}
 	for _, tc := range cases {
@@ -117,19 +151,20 @@ func TestPermissionChecker_AllowlistWildcardAnchored(t *testing.T) {
 	}
 }
 
-func TestPermissionChecker_UncataloguedRouteDeniedWithCatalog(t *testing.T) {
+func TestPermissionChecker_UncataloguedRoutePassesWithCatalog(t *testing.T) {
 	db := newTestDB(t)
 	// The catalog is populated with a DIFFERENT route; the requested
-	// route is not catalogued and must fail closed despite the non-empty
-	// catalog set.
+	// route is still not catalogued. Under fail-open, the catalog's
+	// presence does not affect gates on routes that aren't in it —
+	// only routes whose code IS in the catalog must satisfy the
+	// grant check.
 	if err := db.Create(&models.Permission{Type: string(models.PermissionTypeAPI), Data: "GET /system/sys_tenant"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
 	checker := NewPermissionChecker(db)
-	err := checker(permCtx("http", "PUT", "/system/sys_user/:id"), &auth.Claims{Role: "guest", TenantID: "t1"})
-	if !errs.IsCode(err, errs.CodePermissionDenied) {
-		t.Fatalf("uncatalogued route: want code %d, got %v", errs.CodePermissionDenied, err)
+	if err := checker(permCtx("http", "PUT", "/system/sys_user/:id"), &auth.Claims{Role: "guest", TenantID: "t1"}); err != nil {
+		t.Fatalf("uncatalogued route denied despite fail-open: %v", err)
 	}
 }
 

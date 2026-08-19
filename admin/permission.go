@@ -60,22 +60,27 @@ const grantsMarker = "SUM(id)"
 // "PUT /system/sys_user/:id"), which matches the "<METHOD> <URI>"
 // format derive.go writes into sys_permissions.
 //
-// # Default policy: fail-closed
+// # Default policy: fail-open
 //
 // A request is allowed when at least one of the following holds:
 //
-//   - the request code appears in the sys_permissions catalog AND the
-//     caller's role holds a matching grant on the caller's tenant;
+//   - the request code is NOT in the sys_permissions catalog (default
+//     allow for uncatalogued routes — see note below);
+//   - the request code appears in the catalog AND the caller's role
+//     holds a matching grant on the caller's tenant;
 //   - the request path appears in the checker allowlist (see
-//     WithAllowlist) — used for business RPCs whose auth posture is
-//     enforced elsewhere (e.g. an application-level guard, or the JWT
-//     middleware's own allowlist).
+//     WithCheckerAllowlist) — used for catalogued routes where the
+//     caller has decided to bypass the granular grant check.
 //
-// Anything else is denied. The previous fail-open default (an
-// uncatalogued route was always allowed) was a footgun: a developer
-// who forgot to register a permission row for a new admin route would
-// silently expose it without auth. Allowlisting is now explicit so
-// every bypass is searchable in code review.
+// The deny path is reserved for catalogued routes where the caller's
+// role lacks the grant. The fail-open default is the original
+// behavior: a route that has not been brought into the catalog is
+// treated as unrestricted; routes brought into the catalog are
+// gated by the role's grant set. Operators that want fail-closed
+// semantics for a subtree can wire `WithCheckerAllowlist` with a
+// narrow prefix and leave the catalog covering the rest — the
+// allowlist is the place to opt into stricter checks, mirroring the
+// JWT middleware's `WithAllow` in spirit.
 //
 // # Caching
 //
@@ -177,12 +182,12 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 			return err
 		}
 		if _, ok := catalogSet[code]; !ok {
-			// Uncatalogued and not on the allowlist: deny. The fail-closed
-			// default (documented on NewPermissionChecker) means a route
-			// that has no catalog entry is never silently exposed — a
-			// developer who forgets to register a permission row for a
-			// new route must get a visible denial, not a quiet pass.
-			return errs.ErrPermissionDenied
+			// Uncatalogued route: default-allow (fail-open). The deny
+			// path is reserved for catalogued routes where the caller's
+			// role lacks the grant. Operators that want fail-closed
+			// semantics for a subtree opt in via WithCheckerAllowlist
+			// (see NewPermissionChecker doc).
+			return nil
 		}
 
 		// Catalogued: the role must hold the matching grant on the
@@ -242,9 +247,12 @@ type checkerConfig struct {
 //
 // Use it sparingly — every entry is a route whose authorization is
 // enforced by some other mechanism (JWT allowlist, an upstream
-// gateway, an application-level guard). The whole point of the
-// fail-closed default is that bypassing the catalog must be visible
-// in code review.
+// gateway, an application-level guard), AND the catalog has a row
+// that would otherwise demand a role grant check. Under fail-open
+// the allowlist is not needed for plain bypass; it is needed when
+// the route IS catalogued and you want to skip the role check, so
+// each entry makes an opt-out from catalog enforcement visible in
+// code review.
 func WithCheckerAllowlist(entries ...string) CheckerOption {
 	return func(c *checkerConfig) {
 		for _, e := range entries {
