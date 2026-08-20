@@ -45,7 +45,7 @@ _testmain.go
 
 *.exe
 
-profile
+/profile
 
 # vim stuff
 *.sw[op]
