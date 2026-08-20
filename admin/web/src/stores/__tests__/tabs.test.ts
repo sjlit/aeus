@@ -140,4 +140,15 @@ describe('tabs store', () => {
     } as never)
     expect(store.cachedViews).toEqual(['PlaceholderView'])
   })
+
+  it('cachedViews 跳过动态段路由:含 ":" 的 path 不缓存', () => {
+    const store = useTabsStore()
+    setTabsRouter({
+      getRoutes: () => [
+        { path: '/system/sys_user', meta: { componentName: 'SystemSysUsers' } },
+        { path: '/system/sys_role/perm/:roleKey', meta: { componentName: 'SystemSysRolesPermission' } },
+      ],
+    } as never)
+    expect(store.cachedViews).toEqual(['SystemSysUsers'])
+  })
 })

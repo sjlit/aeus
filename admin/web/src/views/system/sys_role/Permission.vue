@@ -71,12 +71,17 @@ async function loadAll() {
 }
 onMounted(loadAll)
 
-// 树数据加载好 + 实例挂载后,把已分配的 menus 回填到 el-tree 的勾选状态。
-// once: true 避免 savedMenus 后续更新时重复 setCheckedKeys(O(tree) 遍历)。
-watch([menuTreeRef, menuTree], ([ref, tree]) => {
-  if (!ref || tree.length === 0) return
-  ref.setCheckedKeys([...savedMenus.value], false)
-}, { once: true })
+// 树实例挂载后,把 savedMenus 回填到 el-tree 的勾选状态。
+// 不能用 once:true:[menuTreeRef, menuTree] 二源 watch——
+// 两者都"就绪"时 savedApis/savedMenus 还在网络往返中(perms 通常晚于
+// /menu/tree 几 ms),快照就空,perms 回来后 watcher 已停。改成「tree
+// 实例挂上后,任何 savedMenus 变化都重放」。repeat 不可避免:用户点了
+// save 推进 savedMenus → 重新 setCheckedKeys 渲染最新勾选,这是想要
+// 的效果(O(tree) 一次遍历,可接受)。
+watch([menuTreeRef, savedMenus], ([ref, menus]) => {
+  if (!ref || menus.size === 0) return
+  ref.setCheckedKeys([...menus], false)
+})
 
 async function saveMenus() {
   if (!roleKey.value) return

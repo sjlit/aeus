@@ -33,8 +33,12 @@ export const useTabsStore = defineStore('tabs', () => {
   const cachedViews = computed<string[]>(() => {
     const r = routerInstance
     if (!r) return []
-    return r.getRoutes()
-      .filter((route) => route.meta?.keepAlive !== false)
+    return r
+      .getRoutes()
+      // 动态段 URI(占位符 :roleKey 等)承载路由参数,缓存会让 a→b 切角色时
+      // 看到旧角色的已分配授权;按 path 含 ':' 直接排除。
+      // meta.keepAlive 缺省 true,显式 false 一并尊重。
+      .filter((route) => route.meta?.keepAlive !== false && !(route.path ?? '').includes(':'))
       .map((route) => route.meta?.componentName as string)
       .filter((n): n is string => Boolean(n))
   })
