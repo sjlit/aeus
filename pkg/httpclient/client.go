@@ -201,18 +201,36 @@ func (client *Client) execute(r *Request) (res *http.Response, err error) {
 	return r.rawResponse, err
 }
 
-// New creates a new Client with default settings.
-//
-// Note: The returned Client shares the underlying http.Client with DefaultClient.
-// If you need independent Transport/Timeout configuration, call SetClient with
-// a dedicated *http.Client instance.
+// New creates a new Client with an independent *http.Client built
+// from a deep copy of DefaultClient's Transport. Each returned
+// Client owns its own *http.Client, cookieJar, Transport and
+// Timeout — SetTransport / SetClient / SetCookieJar on one client
+// do not affect any other client or the package-level DefaultClient.
 func New() *Client {
-	client := &Client{
-		client:              DefaultClient,
+	httpClient := cloneDefaultClient()
+	jar, _ := cookiejar.New(nil)
+	httpClient.Jar = jar
+	return &Client{
+		client:              httpClient,
+		cookieJar:           jar,
 		interceptorRequest:  make([]BeforeRequest, 0, 10),
 		interceptorResponse: make([]AfterRequest, 0, 10),
 	}
-	client.cookieJar, _ = cookiejar.New(nil)
-	client.client.Jar = client.cookieJar
-	return client
+}
+
+// cloneDefaultClient returns a fresh *http.Client whose Transport is
+// a copy of DefaultClient.Transport so per-client tweaks (timeout,
+// dialer, TLS) do not leak into the package-level singleton. When
+// DefaultClient.Transport is *http.Transport (the common case) the
+// transport is deep-copied; otherwise the same transport pointer is
+// reused because callers using custom RoundTrippers are expected to
+// own and configure them.
+func cloneDefaultClient() *http.Client {
+	c := &http.Client{Timeout: DefaultClient.Timeout}
+	if t, ok := DefaultClient.Transport.(*http.Transport); ok {
+		c.Transport = t.Clone()
+	} else {
+		c.Transport = DefaultClient.Transport
+	}
+	return c
 }
