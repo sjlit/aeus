@@ -11,6 +11,12 @@ import (
 	"github.com/go-playground/form/v4"
 )
 
+// wireChunkSize is the per-frame payload cap. It's the max that fits in the
+// 16-bit data length field of a frame, minus one for a slack byte. Mirrored
+// by chunk_test.go so a future change here automatically shifts the test's
+// boundary cases.
+const wireChunkSize = math.MaxInt16 - 1
+
 type Context struct {
 	ID        int64
 	seq       uint16
@@ -138,10 +144,9 @@ func (ctx *Context) encode(data any) ([]byte, error) {
 // When len(buf) is an exact multiple of the chunk size, the last frame is
 // the final chunk itself (FlagComplete), NOT a trailing empty terminator.
 func (ctx *Context) writeChunked(t uint8, buf []byte) error {
-	chunkSize := math.MaxInt16 - 1
 	for start := 0; start < len(buf); {
-		end := min(start+chunkSize, len(buf))
-		flag := byte(FlagPortion)
+		end := min(start+wireChunkSize, len(buf))
+		var flag byte = FlagPortion
 		if end == len(buf) {
 			flag = FlagComplete
 		}

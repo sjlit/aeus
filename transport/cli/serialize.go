@@ -53,9 +53,14 @@ func serializeMap(val map[any]any) ([]byte, error) {
 	for k, v := range ms {
 		fmt.Fprintf(buffer, "%-"+strconv.Itoa(maxWidth+4)+"s %s\n", k, v)
 	}
-	// The pool keeps the buffer's backing array, so buffer.Bytes() would
-	// alias it and be overwritten by the next caller — clone before return.
-	return bytes.Clone(buffer.Bytes()), nil
+	return pooledBytes(buffer), nil
+}
+
+// pooledBytes returns a copy of b's contents that survives b being returned
+// to the bytepool — the pool retains the backing array, so buffer.Bytes()
+// would alias it and be overwritten by the next caller.
+func pooledBytes(b *bytes.Buffer) []byte {
+	return bytes.Clone(b.Bytes())
 }
 
 func printBorder(w *bytes.Buffer, ws []int) {
@@ -133,9 +138,7 @@ func printArray(vals [][]any) (buf []byte) {
 		}
 	}
 	printBorder(buffer, widths)
-	// The pool keeps the buffer's backing array, so buffer.Bytes() would
-	// alias it and be overwritten by the next caller — clone before return.
-	return bytes.Clone(buffer.Bytes())
+	return pooledBytes(buffer)
 }
 
 func serializeArray(val []any) (buf []byte, err error) {
