@@ -208,3 +208,47 @@ Payload:
 ```
 
 签名:`HMACSHA256(base64url(header) + "." + base64url(payload), secret)`。
+
+## 3.7 登录限流 (`RateLimit`)
+
+admin 包**不**内置登录限流 — 但 `middleware/auth.RateLimit` 是为此而生的通用中间件,`admin/cmd/mock` 默认已经在 `/auth/login` 前挂载,生产装配照搬即可。
+
+### 行为
+
+- 算法:**token bucket**;冷启动 `Capacity` 个突发,稳态每秒补 `Refill` 个。
+- 命中:返回 `4010 TooManyAttempts`(HTTP 429)+ `Retry-After: <秒>` header。
+- 短路语义:多个 key 任一耗尽即拒(逻辑 AND),例如同时配置 `ip:{ip}` + `user:{user}` 时,IP 桶空就拒绝,user 桶不会被消费。
+- 占位符:`{ip}` `{user}` `{tenant}` `{path}`;`{user}` 在 JWT 中间件之前是空串(匿名桶),按账号限流必须把 `RateLimit` 放在 `JWT` **之后**。
+- 挂载顺序:**`RateLimit → JWT → handler`** — 在密码校验之前拦截,防止 bcrypt 慢路径被滥用。
+- 失败关闭:Limiter 自身报错时直接返回 `500`(不放行)。
+
+### 默认配置(`admin/cmd/mock`)
+
+```go
+http.Use(mw.RateLimit(mw.RateLimitOpts{
+    Path:     "/auth/login",
+    Keys:     []string{"login:ip:{ip}", "login:user:{user}"},
+    Capacity: 5,           // 突发 5 次
+    Refill:   1.0 / 60,    // 60 秒补 1 个 = 稳态 1 次/分钟
+}))
+```
+
+### 覆盖范围
+
+| 攻击 | 防护 key |
+|---|---|
+| 同一 IP 撞库 | `login:ip:{ip}` |
+| 同一账号密码字典 | `login:user:{user}`(前提:RateLimit 放在 JWT 之后) |
+| 混合攻击 | 两个独立桶任一撞线即拒 |
+
+### 与"账号锁定"的关系
+
+token bucket 只看**速率**不看**结果** — 同一个 IP 用对 5 次密码后仍能继续。完整"失败 N 次锁账号"需要叠加 `User.LockedUntil` 字段 + `AuthService.Login` 状态检查(P2 任务,与本节独立)。
+
+### 跨实例部署
+
+默认 `NewMemoryLimiter` 是 per-process:N 个实例 = N× 实际限速。多实例部署应共享后端(Redis);`RateLimitOpts.Limiter` 字段是挂载点,Redis 适配器后续单独发布。
+
+### 测试覆盖
+
+`middleware/auth/rate_limit_test.go`(9 用例)+ `rate_limit_memory_test.go`(8 用例)覆盖:模板占位、短路、失败关闭、路径前缀不匹配、token bucket 冷启动/补桶/隔离/容量上限/GC/重试时长/并发安全、构造参数校验。

@@ -42,6 +42,7 @@ const (
 	CodeAccessDenied       Code = 4005 // access denied
 	CodeTokenInvalid       Code = 4006 // token invalid/forged
 	CodePreconditionFailed Code = 4007 // precondition failed (e.g. If-Match mismatch)
+	CodeTooManyAttempts    Code = 4010 // too many attempts (brute-force / abuse)
 
 	// 网络类
 	CodeNetworkUnreachable Code = 5001 // network unreachable
@@ -87,6 +88,7 @@ var (
 	ErrUnauthorized       = New(CodeUnauthorized, "unauthorized")
 	ErrTokenInvalid       = New(CodeTokenInvalid, "token invalid")
 	ErrPreconditionFailed = New(CodePreconditionFailed, "precondition failed")
+	ErrTooManyAttempts    = New(CodeTooManyAttempts, "too many attempts")
 
 	ErrNetworkUnreachable = New(CodeNetworkUnreachable, "network unreachable")
 	ErrConnectionRefused  = New(CodeConnectionRefused, "connection refused")

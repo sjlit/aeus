@@ -45,6 +45,7 @@
 | `4003` | `CodePermissionDenied` | 403 | 无权限(角色未授权该接口) | 跳登录页 / 显示无权限 |
 | `4004` | `CodeNotFound` | 404 | 资源不存在 | 业务提示 |
 | `4005` | `CodeAccessDenied` | 403 | 未登录 / 凭证无效 | 跳登录页 |
+| `4010` | `CodeTooManyAttempts` | 429 | 登录/操作过于频繁(见 [`auth.md` §3.7](./auth.md)) | 读取 `Retry-After` 退避后重试 |
 | `1003` | `CodeUnavailable` | 503 | 服务不可用(无 DB 等) | 业务提示 |
 
 > **变更提醒**:`pkg/errs/error.go` 的 `TokenExpired` 自 2026-08-10 起映射到 HTTP `401`(原先映射 500 是 bug)。

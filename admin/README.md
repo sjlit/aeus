@@ -250,7 +250,7 @@ log.Fatal(httpSrv.Start(context.Background()))
 
 **密码策略**（`models.CheckPasswordPolicy`）：8-32 位、仅字母数字、必须同时含字母和数字。所有写密码路径（REST 创建、改密、重置密码）经 `User` 的 `BeforeCreate` / `BeforeUpdate` 钩子单点收口，违规返回 `1001 Invalid`；`User.Password` 的 `rule` 标签（`^[A-Za-z0-9]{8,32}$`）负责 REST 层长度+字符集校验与前端表单渲染（RE2 无 lookahead，字母+数字组合由钩子兜底）；`ChangePassword` 另要求新密码与旧密码不同。已哈希值（`$2` 前缀）与空密码自动跳过策略，幂等语义与 `hashPassword` 一致。
 
-> **待办**：暴力破解防护（登录限流 / 账户锁定）尚未实现——`WithLoginLogger` 已预留失败尝试钩子，可供未来的限流决策消费。
+> **登录限流**：`admin/cmd/mock` 默认已在 `/auth/login` 前挂 `middleware/auth.RateLimit`（token bucket，IP+账号 双 key，5 次突发 / 60 秒补 1 个），命中返回 `4010 TooManyAttempts`（HTTP 429）+ `Retry-After` header。详见 [`docs/api/auth.md` §3.7](docs/api/auth.md)。**未实现**：`User.LockedUntil` 字段（失败 N 次锁账号）—— 与 token bucket 正交，需叠加在 `AuthService.Login` 状态检查之后。
 
 ### UserService
 

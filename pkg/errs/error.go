@@ -67,7 +67,7 @@ func (e *Error) HTTPStatus() int {
 		return http.StatusUnprocessableEntity
 	case CodePreconditionFailed:
 		return http.StatusPreconditionFailed
-	case CodeRateLimited, CodeQuotaExceeded:
+	case CodeRateLimited, CodeQuotaExceeded, CodeTooManyAttempts:
 		return http.StatusTooManyRequests
 	case CodeTimeout, CodeDeadlineExceeded:
 		return http.StatusGatewayTimeout
@@ -113,7 +113,7 @@ func (e *Error) GRPCStatus() int {
 		return grpcAborted
 	case CodePreconditionFailed:
 		return grpcFailedPrecondition
-	case CodeRateLimited, CodeQuotaExceeded:
+	case CodeRateLimited, CodeQuotaExceeded, CodeTooManyAttempts:
 		return grpcResourceExhausted
 	case CodeTimeout, CodeDeadlineExceeded:
 		return grpcDeadlineExceeded
