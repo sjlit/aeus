@@ -36,7 +36,7 @@ type Menu struct {
 	// Parent stores a Menu.Component reference, so its width must match
 	// Component's size:120 (SQLite masks length issues; MySQL strict mode
 	// rejects the mismatch).
-	Parent      string `json:"parent" yaml:"parent" xml:"parent" gorm:"index;size:120;column:parent" comment:"父级菜单" scenarios:"create;update;view;export" format:"menu" props:"readonly:update" live:"type:dropdown;url:/rest/model-tiers/system/sys_menus?parent=parent&label=name&value=component"`
+	Parent      string `json:"parent" yaml:"parent" xml:"parent" gorm:"index;size:120;column:parent" comment:"父级菜单" scenarios:"create;update;view;export" props:"readonly:update" live:"type:dropdown;url:/rest/model-tiers/system/sys_menus?parent=parent&label=name&value=component"`
 	Name        string `json:"name" yaml:"name" xml:"name" gorm:"index;size:60;column:name" comment:"菜单标题" props:"readonly:update" rule:"required"`
 	Component   string `json:"component" yaml:"component" xml:"component" gorm:"size:120;column:component" comment:"组件名称" rule:"required;unique"`
 	Uri         string `json:"uri" yaml:"uri" xml:"uri" gorm:"size:512;column:uri" comment:"路由" scenarios:"create;update;view;export" rule:"required"`
@@ -45,7 +45,7 @@ type Menu struct {
 	Hidden      bool   `json:"hidden" yaml:"hidden" xml:"hidden" gorm:"column:hidden" comment:"是否隐藏" scenarios:"create;update;view;export"`
 	Public      bool   `json:"public" yaml:"public" xml:"public" gorm:"column:public" comment:"是否公开" scenarios:"create;update;view;export"`
 	Sort        int64  `json:"sort" yaml:"sort" xml:"sort" gorm:"column:sort" comment:"排序" scenarios:"create;update"`
-	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"create;update;view;export" format:"textarea"`
+	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"create;update;view;export"`
 }
 
 // TableName returns the physical table name (gorm.Tabler).

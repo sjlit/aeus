@@ -114,7 +114,7 @@ type Role struct {
 	DataScope   string `json:"data_scope" yaml:"dataScope" xml:"dataScope" gorm:"size:20;default:all;column:data_scope" comment:"数据范围" scenarios:"create;update;view" enum:"all:全部;dept:本部门;self:仅本人;custom:自定义"`
 	Sort        int64  `json:"sort" yaml:"sort" xml:"sort" gorm:"default:0;column:sort" comment:"排序" scenarios:"create;update;list"`
 	CreatedBy   string `json:"created_by" yaml:"createdBy" xml:"createdBy" gorm:"size:20;column:created_by" comment:"创建人" scenarios:"view"`
-	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"list;create;update;export" format:"textarea"`
+	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"list;create;update;export"`
 }
 
 // TableName returns the physical table name (gorm.Tabler).

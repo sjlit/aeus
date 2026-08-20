@@ -6,9 +6,9 @@ type Department struct {
 	TenantModel
 	// ParentID indexes for subtree lookups ("give me all departments under X");
 	// without it the tree query falls back to a full table scan.
-	ParentID    uint   `json:"parent_id" yaml:"parentId" xml:"parentId" gorm:"index;column:parent_id" comment:"父级部门" format:"department" live:"type:dropdown;url:/rest/model-tiers/system/sys_departments?parent=parent_id&label=name&value=id&valueType=uint64"`
+	ParentID    uint   `json:"parent_id" yaml:"parentId" xml:"parentId" gorm:"index;column:parent_id" comment:"父级部门"  live:"type:dropdown;url:/rest/model-tiers/system/sys_departments?parent=parent_id&label=name&value=id&valueType=int64"`
 	Name        string `json:"name" yaml:"name" xml:"name" gorm:"size:120;column:name" comment:"部门" rule:"required"`
-	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"create;update;view;export;list" format:"textarea"`
+	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;column:description" comment:"备注" scenarios:"create;update;view;export;list"`
 }
 
 // TableName returns the physical table name (gorm.Tabler).
