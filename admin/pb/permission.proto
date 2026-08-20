@@ -18,6 +18,19 @@ service PermissionService {
       get: "/permission/catalog"
     };
   }
+
+  // Lists full permission rows (id/type/data/description) for the
+  // admin management UI.  ListCatalog returns only Permission.Data
+  // strings (consumed by the runtime PermissionChecker); this endpoint
+  // returns the same catalog with description metadata so the UI can
+  // render labels alongside codes.
+  // Wire format: GET /permission/list?type={api|button|data_scope}.
+  // Empty type returns every row regardless of type.
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse) {
+    option (google.api.http) = {
+      get: "/permission/list"
+    };
+  }
 }
 
 // PermissionType discriminates the permission catalog entries and the
@@ -42,4 +55,27 @@ message ListCatalogRequest {
 // (Permission.Data), one string per entry.
 message ListCatalogResponse {
   repeated string items = 1;
+}
+
+// ListPermissionItem is one full row from sys_permissions.  Field
+// numbers follow the proto wire format — do not reuse 1-4 for other
+// fields in this message; future revisions should append.
+message ListPermissionItem {
+  int64  id          = 1;
+  string type        = 2;
+  string data        = 3;
+  string description = 4;
+}
+
+// ListPermissionsRequest optionally filters by Permission.Type (the
+// models-layer string constant: "api", "button", "data_scope").  An
+// empty type returns every row.
+message ListPermissionsRequest {
+  string type = 1;
+}
+
+// ListPermissionsResponse carries the full catalog rows for the
+// management UI.
+message ListPermissionsResponse {
+  repeated ListPermissionItem items = 1;
 }

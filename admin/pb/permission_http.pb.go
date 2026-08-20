@@ -15,6 +15,14 @@ type PermissionServiceHttpServer interface {
 	// filtered by type.
 	// Wire format: GET /permission/catalog?type={0|1|2|3|4}.
 	ListCatalog(ctx context.Context, req *ListCatalogRequest) (res *ListCatalogResponse, err error)
+	// Lists full permission rows (id/type/data/description) for the
+	// admin management UI.  ListCatalog returns only Permission.Data
+	// strings (consumed by the runtime PermissionChecker); this endpoint
+	// returns the same catalog with description metadata so the UI can
+	// render labels alongside codes.
+	// Wire format: GET /permission/list?type={api|button|data_scope}.
+	// Empty type returns every row regardless of type.
+	ListPermissions(ctx context.Context, req *ListPermissionsRequest) (res *ListPermissionsResponse, err error)
 }
 
 // PermissionService server wrapper
@@ -39,9 +47,27 @@ func (s *PermissionServiceServerWrapper) wrapHttpPermissionServiceListCatalog(ct
 		return ctx.Success(res)
 	}
 }
+
+func (s *PermissionServiceServerWrapper) wrapHttpPermissionServiceListPermissions(ctx *http.Context) (err error) {
+	req := &ListPermissionsRequest{}
+	if err := ctx.Bind(req); err != nil {
+		return ctx.Error(int(errs.CodeInvalid), err.Error())
+	}
+	if res, err := s.server.ListPermissions(ctx.Context(), req); err != nil {
+		if er, ok := err.(*errs.Error); ok {
+			return ctx.Error(int(er.Code), er.Message)
+		} else {
+			return ctx.Error(int(errs.CodeUnavailable), err.Error())
+		}
+	} else {
+		return ctx.Success(res)
+	}
+}
 func RegisterPermissionServiceRouter(hs *http.Server, s PermissionServiceHttpServer, opts ...http.RouteOption) {
 	is := &PermissionServiceServerWrapper{http: hs, server: s}
 	is.opts = http.NewRouteOptions(opts...)
 	// register PermissionService.ListCatalog http handler
 	hs.GET("/permission/catalog", is.wrapHttpPermissionServiceListCatalog)
+	// register PermissionService.ListPermissions http handler
+	hs.GET("/permission/list", is.wrapHttpPermissionServiceListPermissions)
 }

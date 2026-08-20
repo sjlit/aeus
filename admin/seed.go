@@ -34,6 +34,31 @@ var sectionMenuSpecs = []models.MenuSpec{
 	{Component: "SystemSettings", Name: "系统设置", Icon: "Tools", Sort: 30},
 }
 
+// rolePermissionMenuSpec registers the dedicated role-permission
+// assignment page reachable from /system/sys_role/perm/:roleKey.
+// Parent references the auto-derived SystemSysRoles component
+// (pascalWords("system") + pascalWords("sys_roles")); that row is
+// inserted by Setup via ensureMenuRow when sys_role registers, so by
+// the time Seed runs the parent is guaranteed to exist.
+//
+// Component matches the Vue page's defineOptions({ name: ... })
+// (= "SystemSysRolesPermission") so <keep-alive :include> in
+// router/index.ts can match the resolved component name against
+// tabs.cachedViews.
+//
+// Uri carries the :roleKey placeholder verbatim — vue-router's hash
+// mode treats it as a dynamic segment and the per-row Index.vue
+// link (router-link :to=`/system/sys_role/perm/${key}`) is the only
+// way to land here.
+var rolePermissionMenuSpec = models.MenuSpec{
+	Component: "SystemSysRolesPermission",
+	Parent:    "SystemSysRoles",
+	Name:      "权限配置",
+	Uri:       "/system/sys_role/perm/:roleKey",
+	ViewPath:  "@/views/system/sys_role/Permission.vue",
+	Sort:      10,
+}
+
 // EnsureSectionMenus FirstOrCreates each sectionMenuSpecs entry into
 // sys_menus.  Idempotent — runs on every Seed call without duplicating
 // rows.  Existing rows are NEVER overwritten, so operator renames and
@@ -76,6 +101,43 @@ func EnsureSectionMenus(db *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+// EnsureRolePermissionMenu FirstOrCreates the role-permission
+// assignment page row (rolePermissionMenuSpec).  Idempotent on
+// Component; the operator's manual edits survive subsequent runs the
+// same way EnsureSectionMenus preserves section containers.
+//
+// Runs from Seed after Setup has populated the auto-derived
+// SystemSysRoles row (ensureMenuRow fires during sys_role's
+// registerModel call), so the Parent reference always resolves to a
+// real Component on a fresh database.  On legacy databases that
+// pre-date the auto-menu wiring, the parent might still be missing —
+// in that case the INSERT succeeds (no FK on Parent) and the row
+// simply renders as a top-level sidebar entry until the operator
+// re-parents it through /system/sys-menus.
+func EnsureRolePermissionMenu(db *gorm.DB) error {
+	spec := rolePermissionMenuSpec
+	if spec.Component == "" || spec.Name == "" {
+		return nil
+	}
+	var existing models.Menu
+	err := db.Unscoped().Where("component = ?", spec.Component).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("lookup role permission menu %q: %w", spec.Component, err)
+	}
+	row := models.Menu{
+		Component: spec.Component,
+		Parent:    spec.Parent,
+		Name:      spec.Name,
+		Uri:       spec.Uri,
+		ViewPath:  spec.ViewPath,
+		Sort:      spec.Sort,
+	}
+	return db.Create(&row).Error
 }
 
 // Seed converges a database to the bootstrap state the admin module
@@ -172,6 +234,15 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		// the only place Seed touches the menu catalog — Setup owns the
 		// model-derived menus, Seed owns the section scaffolding.
 		if err := EnsureSectionMenus(tx); err != nil {
+			return err
+		}
+
+		// Dedicated role-permission assignment page (/system/sys_role/perm/:roleKey).
+		// Parented at the auto-derived SystemSysRoles component which
+		// Setup inserted via ensureMenuRow when sys_role registered;
+		// FirstOrCreate so an operator who deleted the row via
+		// /system/sys-menus is not silently resurrected.
+		if err := EnsureRolePermissionMenu(tx); err != nil {
 			return err
 		}
 

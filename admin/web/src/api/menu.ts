@@ -28,6 +28,27 @@ export interface MenuOptionNode {
   children: MenuOptionNode[]
 }
 
+/** MenuService.MenuNode (admin/pb/menu.proto) —— 后端 /menu/tree
+ *  返回的嵌套树。
+ *  - name 字段承载 MenuTreeNode.Component(由 service/convert.go
+ *    menuNodeToPb 把 n.Component 写到 wire-level Name);
+ *  - component 字段同样承载 MenuTreeNode.Component(直接镜像 name);
+ *  - title 是 Menu.Name —— UI 显示的标题。
+ *  name 与 component 是同一字符串在 wire format 上的两个槽位,前端
+ *  任意用哪个都行,但不要把它当独立字段处理(改动一个会牵连另一个)。
+ *  与 /user/menus 的扁平行 MenuEntry(parent/view_path)结构不同,
+ *  不要混用。 */
+export interface MenuTreeNode {
+  name: string
+  title: string
+  component: string
+  uri: string
+  icon: string
+  hidden: boolean
+  public: boolean
+  children: MenuTreeNode[]
+}
+
 /** MenuService.ListAll 返回 `{ items: MenuItem[] }`(信已被 http 拦截器解包)。 */
 export interface MenuListAllResponse {
   items: MenuItem[]
@@ -41,6 +62,12 @@ export function fetchMenuAll(): Promise<MenuListAllResponse> {
 /** 父级选择器级联选项。 */
 export function fetchMenuOptions(): Promise<{ items: MenuOptionNode[] }> {
   return http.get<{ items: MenuOptionNode[] }>('/menu/options')
+}
+
+/** GET /menu/tree —— 全部菜单的嵌套树(含 hidden/public)。
+ *  与 user.ts 的 fetchMenuTree(当前用户可见)不同;分配页需要全量。 */
+export function fetchMenuTreeAll(): Promise<{ items: MenuTreeNode[] }> {
+  return http.get<{ items: MenuTreeNode[] }>('/menu/tree')
 }
 
 /** REST CRUD(`/system/sys_menus`)—— 创建/更新/删除走通用 rest/v3 端点,

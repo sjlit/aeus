@@ -173,6 +173,170 @@ func (x *ListCatalogResponse) GetItems() []string {
 	return nil
 }
 
+// ListPermissionItem is one full row from sys_permissions.  Field
+// numbers follow the proto wire format — do not reuse 1-4 for other
+// fields in this message; future revisions should append.
+type ListPermissionItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Data          string                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPermissionItem) Reset() {
+	*x = ListPermissionItem{}
+	mi := &file_permission_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPermissionItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPermissionItem) ProtoMessage() {}
+
+func (x *ListPermissionItem) ProtoReflect() protoreflect.Message {
+	mi := &file_permission_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPermissionItem.ProtoReflect.Descriptor instead.
+func (*ListPermissionItem) Descriptor() ([]byte, []int) {
+	return file_permission_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListPermissionItem) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ListPermissionItem) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ListPermissionItem) GetData() string {
+	if x != nil {
+		return x.Data
+	}
+	return ""
+}
+
+func (x *ListPermissionItem) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// ListPermissionsRequest optionally filters by Permission.Type (the
+// models-layer string constant: "api", "button", "data_scope").  An
+// empty type returns every row.
+type ListPermissionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPermissionsRequest) Reset() {
+	*x = ListPermissionsRequest{}
+	mi := &file_permission_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPermissionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPermissionsRequest) ProtoMessage() {}
+
+func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_permission_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPermissionsRequest.ProtoReflect.Descriptor instead.
+func (*ListPermissionsRequest) Descriptor() ([]byte, []int) {
+	return file_permission_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListPermissionsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+// ListPermissionsResponse carries the full catalog rows for the
+// management UI.
+type ListPermissionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*ListPermissionItem  `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPermissionsResponse) Reset() {
+	*x = ListPermissionsResponse{}
+	mi := &file_permission_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPermissionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPermissionsResponse) ProtoMessage() {}
+
+func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_permission_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPermissionsResponse.ProtoReflect.Descriptor instead.
+func (*ListPermissionsResponse) Descriptor() ([]byte, []int) {
+	return file_permission_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListPermissionsResponse) GetItems() []*ListPermissionItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
 var File_permission_proto protoreflect.FileDescriptor
 
 const file_permission_proto_rawDesc = "" +
@@ -181,15 +345,25 @@ const file_permission_proto_rawDesc = "" +
 	"\x12ListCatalogRequest\x12&\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x12.pb.PermissionTypeR\x04type\"+\n" +
 	"\x13ListCatalogResponse\x12\x14\n" +
-	"\x05items\x18\x01 \x03(\tR\x05items*\xa0\x01\n" +
+	"\x05items\x18\x01 \x03(\tR\x05items\"n\n" +
+	"\x12ListPermissionItem\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\tR\x04data\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\",\n" +
+	"\x16ListPermissionsRequest\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\"G\n" +
+	"\x17ListPermissionsResponse\x12,\n" +
+	"\x05items\x18\x01 \x03(\v2\x16.pb.ListPermissionItemR\x05items*\xa0\x01\n" +
 	"\x0ePermissionType\x12\x1f\n" +
 	"\x1bPERMISSION_TYPE_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14PERMISSION_TYPE_MENU\x10\x01\x12\x17\n" +
 	"\x13PERMISSION_TYPE_API\x10\x02\x12\x1a\n" +
 	"\x16PERMISSION_TYPE_BUTTON\x10\x03\x12\x1e\n" +
-	"\x1aPERMISSION_TYPE_DATA_SCOPE\x10\x042p\n" +
+	"\x1aPERMISSION_TYPE_DATA_SCOPE\x10\x042\xd6\x01\n" +
 	"\x11PermissionService\x12[\n" +
-	"\vListCatalog\x12\x16.pb.ListCatalogRequest\x1a\x17.pb.ListCatalogResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/permission/catalogB#Z!github.com/sjlit/aeus/admin/pb;pbb\x06proto3"
+	"\vListCatalog\x12\x16.pb.ListCatalogRequest\x1a\x17.pb.ListCatalogResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/permission/catalog\x12d\n" +
+	"\x0fListPermissions\x12\x1a.pb.ListPermissionsRequest\x1a\x1b.pb.ListPermissionsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/permission/listB#Z!github.com/sjlit/aeus/admin/pb;pbb\x06proto3"
 
 var (
 	file_permission_proto_rawDescOnce sync.Once
@@ -204,21 +378,27 @@ func file_permission_proto_rawDescGZIP() []byte {
 }
 
 var file_permission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_permission_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_permission_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_permission_proto_goTypes = []any{
-	(PermissionType)(0),         // 0: pb.PermissionType
-	(*ListCatalogRequest)(nil),  // 1: pb.ListCatalogRequest
-	(*ListCatalogResponse)(nil), // 2: pb.ListCatalogResponse
+	(PermissionType)(0),             // 0: pb.PermissionType
+	(*ListCatalogRequest)(nil),      // 1: pb.ListCatalogRequest
+	(*ListCatalogResponse)(nil),     // 2: pb.ListCatalogResponse
+	(*ListPermissionItem)(nil),      // 3: pb.ListPermissionItem
+	(*ListPermissionsRequest)(nil),  // 4: pb.ListPermissionsRequest
+	(*ListPermissionsResponse)(nil), // 5: pb.ListPermissionsResponse
 }
 var file_permission_proto_depIdxs = []int32{
 	0, // 0: pb.ListCatalogRequest.type:type_name -> pb.PermissionType
-	1, // 1: pb.PermissionService.ListCatalog:input_type -> pb.ListCatalogRequest
-	2, // 2: pb.PermissionService.ListCatalog:output_type -> pb.ListCatalogResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 1: pb.ListPermissionsResponse.items:type_name -> pb.ListPermissionItem
+	1, // 2: pb.PermissionService.ListCatalog:input_type -> pb.ListCatalogRequest
+	4, // 3: pb.PermissionService.ListPermissions:input_type -> pb.ListPermissionsRequest
+	2, // 4: pb.PermissionService.ListCatalog:output_type -> pb.ListCatalogResponse
+	5, // 5: pb.PermissionService.ListPermissions:output_type -> pb.ListPermissionsResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_permission_proto_init() }
@@ -232,7 +412,7 @@ func file_permission_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_permission_proto_rawDesc), len(file_permission_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -164,7 +164,15 @@ router.beforeEach(async (to) => {
     return first ? { path: first, replace: true } : true
   }
   // 路径不在菜单里 → 重定向到 '/'('/' 分支会再次处理)
-  if (!router.hasRoute(`menu:${to.path}`)) {
+  //
+  // 不能用 router.hasRoute(`menu:${to.path}`)——菜单 URI 可能是带占位符
+  // 的 pattern(如 /system/sys_role/perm/:roleKey),注册的是 pattern,
+  // 而 to.path 是真实值(admin 等);hasRoute 按 name 精确匹配,会永远
+  // false。改用 router.resolve:vue-router 内部用 path-to-regexp 匹配
+  // 动态段,matched 里出现任意以 'menu:' 开头的 name 就算命中。
+  if (!router.resolve(to.fullPath).matched.some(
+    (r) => typeof r.name === 'string' && r.name.startsWith('menu:'),
+  )) {
     return { path: '/', replace: true }
   }
 
@@ -178,11 +186,26 @@ router.afterEach((to) => {
   const menu = useMenuStore()
   const tabs = useTabsStore()
   const idx = menu.flatIndex
+  // 菜单 URI 可能是带占位符的 pattern(如 /system/sys_role/perm/:roleKey),
+  // to.path 是已解析的实参(/system/sys_role/perm/admin)。
+  // flatIndex 的图标映射按 pattern 键,这里要从已解析的路由记录里
+  // 找回 pattern 才能正确查表。
+  const matched = router.resolve(to.fullPath).matched
+  let patternUri = to.path
+  for (let i = matched.length - 1; i >= 0; i--) {
+    const r = matched[i]
+    if (r && typeof r.name === 'string' && r.name.startsWith('menu:')) {
+      patternUri = r.name.slice('menu:'.length)
+      break
+    }
+  }
   tabs.addTab({
     path: to.path,
-    name: to.name as string,
+    // to.name 是 RouteRecordName(string | symbol | null | undefined);
+    // tab 持久化需要 string key。symbol 路由名(目前没有)走 path 兜底。
+    name: typeof to.name === 'string' ? to.name : to.path,
     title,
-    icon: idx.iconsByUri.get(to.path),
+    icon: idx.iconsByUri.get(patternUri),
     closable: to.path !== idx.uris[0],
     query: to.query as Record<string, string>,
   })

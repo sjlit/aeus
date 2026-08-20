@@ -162,9 +162,10 @@ func TestSeed_GrantsFullCatalogToAdminRole(t *testing.T) {
 		t.Error("seeded role.IsSuper should be true")
 	}
 	menus, perms := seedGrantCount(t, db, "admin")
-	// 2 manually-inserted menus + 3 first-level section menus = 5 catalog rows.
-	if menus != 5 || perms != 2 {
-		t.Fatalf("grants = %d menus / %d perms, want 5/2", menus, perms)
+	// 2 manually-inserted menus + 3 first-level section menus
+	// + SystemSysRolesPermission (EnsureRolePermissionMenu seed) = 6.
+	if menus != 6 || perms != 2 {
+		t.Fatalf("grants = %d menus / %d perms, want 6/2", menus, perms)
 	}
 	// every junction row must carry the role's tenant and the catalog
 	// row's data, including the non-api catalog type.
@@ -189,9 +190,10 @@ func TestSeed_TopUp_GrantsNewCatalogRows(t *testing.T) {
 		t.Fatalf("first Seed: %v", err)
 	}
 	menus, perms := seedGrantCount(t, db, "admin")
-	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
-	if menus != 4 || perms != 0 {
-		t.Fatalf("after first Seed: %d menus / %d perms, want 4/0", menus, perms)
+	// 1 manually-inserted menu + 3 first-level section menus
+	// + SystemSysRolesPermission (EnsureRolePermissionMenu seed) = 5.
+	if menus != 5 || perms != 0 {
+		t.Fatalf("after first Seed: %d menus / %d perms, want 5/0", menus, perms)
 	}
 
 	// catalog grows: a new menu and a new permission appear (upgrade
@@ -207,9 +209,10 @@ func TestSeed_TopUp_GrantsNewCatalogRows(t *testing.T) {
 	}
 
 	menus, perms = seedGrantCount(t, db, "admin")
-	// 2 manually-inserted menus + 3 first-level section menus = 5 catalog rows.
-	if menus != 5 || perms != 1 {
-		t.Fatalf("after second Seed: %d menus / %d perms, want 5/1", menus, perms)
+	// 2 manually-inserted menus + 3 first-level section menus
+	// + SystemSysRolesPermission (EnsureRolePermissionMenu seed) = 6.
+	if menus != 6 || perms != 1 {
+		t.Fatalf("after second Seed: %d menus / %d perms, want 6/1", menus, perms)
 	}
 }
 
@@ -234,9 +237,10 @@ func TestSeed_TopUp_HealsRevokedGrants(t *testing.T) {
 		t.Fatalf("second Seed: %v", err)
 	}
 	menus, _ := seedGrantCount(t, db, "admin")
-	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
-	if menus != 4 {
-		t.Fatalf("after heal: %d menu grants, want 4", menus)
+	// 1 manually-inserted menu + 3 first-level section menus
+	// + SystemSysRolesPermission (EnsureRolePermissionMenu seed) = 5.
+	if menus != 5 {
+		t.Fatalf("after heal: %d menu grants, want 5", menus)
 	}
 }
 
@@ -265,9 +269,10 @@ func TestSeed_UpgradesExistingBuiltinRoleToSuper(t *testing.T) {
 		t.Error("existing builtin admin role should be upgraded to IsSuper")
 	}
 	menus, _ := seedGrantCount(t, db, "admin")
-	// 1 manually-inserted menu + 3 first-level section menus = 4 catalog rows.
-	if menus != 4 {
-		t.Fatalf("menu grants = %d, want 4 after upgrade", menus)
+	// 1 manually-inserted menu + 3 first-level section menus
+	// + SystemSysRolesPermission (EnsureRolePermissionMenu seed) = 5.
+	if menus != 5 {
+		t.Fatalf("menu grants = %d, want 5 after upgrade", menus)
 	}
 }
 

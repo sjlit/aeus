@@ -240,3 +240,353 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = ListCatalogResponseValidationError{}
+
+// Validate checks the field values on ListPermissionItem with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListPermissionItem) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListPermissionItem with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListPermissionItemMultiError, or nil if none found.
+func (m *ListPermissionItem) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListPermissionItem) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Id
+
+	// no validation rules for Type
+
+	// no validation rules for Data
+
+	// no validation rules for Description
+
+	if len(errors) > 0 {
+		return ListPermissionItemMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListPermissionItemMultiError is an error wrapping multiple validation errors
+// returned by ListPermissionItem.ValidateAll() if the designated constraints
+// aren't met.
+type ListPermissionItemMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListPermissionItemMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListPermissionItemMultiError) AllErrors() []error { return m }
+
+// ListPermissionItemValidationError is the validation error returned by
+// ListPermissionItem.Validate if the designated constraints aren't met.
+type ListPermissionItemValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListPermissionItemValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListPermissionItemValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListPermissionItemValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListPermissionItemValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListPermissionItemValidationError) ErrorName() string {
+	return "ListPermissionItemValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListPermissionItemValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListPermissionItem.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListPermissionItemValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListPermissionItemValidationError{}
+
+// Validate checks the field values on ListPermissionsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListPermissionsRequest) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListPermissionsRequest with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListPermissionsRequestMultiError, or nil if none found.
+func (m *ListPermissionsRequest) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListPermissionsRequest) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	// no validation rules for Type
+
+	if len(errors) > 0 {
+		return ListPermissionsRequestMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListPermissionsRequestMultiError is an error wrapping multiple validation
+// errors returned by ListPermissionsRequest.ValidateAll() if the designated
+// constraints aren't met.
+type ListPermissionsRequestMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListPermissionsRequestMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListPermissionsRequestMultiError) AllErrors() []error { return m }
+
+// ListPermissionsRequestValidationError is the validation error returned by
+// ListPermissionsRequest.Validate if the designated constraints aren't met.
+type ListPermissionsRequestValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListPermissionsRequestValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListPermissionsRequestValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListPermissionsRequestValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListPermissionsRequestValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListPermissionsRequestValidationError) ErrorName() string {
+	return "ListPermissionsRequestValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListPermissionsRequestValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListPermissionsRequest.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListPermissionsRequestValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListPermissionsRequestValidationError{}
+
+// Validate checks the field values on ListPermissionsResponse with the rules
+// defined in the proto definition for this message. If any rules are
+// violated, the first error encountered is returned, or nil if there are no violations.
+func (m *ListPermissionsResponse) Validate() error {
+	return m.validate(false)
+}
+
+// ValidateAll checks the field values on ListPermissionsResponse with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, the result is a list of violation errors wrapped in
+// ListPermissionsResponseMultiError, or nil if none found.
+func (m *ListPermissionsResponse) ValidateAll() error {
+	return m.validate(true)
+}
+
+func (m *ListPermissionsResponse) validate(all bool) error {
+	if m == nil {
+		return nil
+	}
+
+	var errors []error
+
+	for idx, item := range m.GetItems() {
+		_, _ = idx, item
+
+		if all {
+			switch v := interface{}(item).(type) {
+			case interface{ ValidateAll() error }:
+				if err := v.ValidateAll(); err != nil {
+					errors = append(errors, ListPermissionsResponseValidationError{
+						field:  fmt.Sprintf("Items[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			case interface{ Validate() error }:
+				if err := v.Validate(); err != nil {
+					errors = append(errors, ListPermissionsResponseValidationError{
+						field:  fmt.Sprintf("Items[%v]", idx),
+						reason: "embedded message failed validation",
+						cause:  err,
+					})
+				}
+			}
+		} else if v, ok := interface{}(item).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return ListPermissionsResponseValidationError{
+					field:  fmt.Sprintf("Items[%v]", idx),
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	}
+
+	if len(errors) > 0 {
+		return ListPermissionsResponseMultiError(errors)
+	}
+
+	return nil
+}
+
+// ListPermissionsResponseMultiError is an error wrapping multiple validation
+// errors returned by ListPermissionsResponse.ValidateAll() if the designated
+// constraints aren't met.
+type ListPermissionsResponseMultiError []error
+
+// Error returns a concatenation of all the error messages it wraps.
+func (m ListPermissionsResponseMultiError) Error() string {
+	msgs := make([]string, 0, len(m))
+	for _, err := range m {
+		msgs = append(msgs, err.Error())
+	}
+	return strings.Join(msgs, "; ")
+}
+
+// AllErrors returns a list of validation violation errors.
+func (m ListPermissionsResponseMultiError) AllErrors() []error { return m }
+
+// ListPermissionsResponseValidationError is the validation error returned by
+// ListPermissionsResponse.Validate if the designated constraints aren't met.
+type ListPermissionsResponseValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e ListPermissionsResponseValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e ListPermissionsResponseValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e ListPermissionsResponseValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e ListPermissionsResponseValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e ListPermissionsResponseValidationError) ErrorName() string {
+	return "ListPermissionsResponseValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e ListPermissionsResponseValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sListPermissionsResponse.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = ListPermissionsResponseValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = ListPermissionsResponseValidationError{}
