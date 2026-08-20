@@ -49,7 +49,12 @@ const props = withDefaults(
     disabled?: boolean
     width?: string | number
   }>(),
-  { placeholder: '请选择图标', clearable: true, disabled: false, width: '100%' },
+  {
+    placeholder: '请选择图标',
+    clearable: true,
+    disabled: false,
+    width: '210px',
+  },
 )
 
 const emit = defineEmits<{
@@ -138,24 +143,14 @@ function done(): void {
 </script>
 
 <template>
-  <el-popover
-    v-model:visible="visible"
-    placement="bottom-start"
-    :width="380"
-    :show-arrow="false"
-    trigger="click"
-    :disabled="disabled"
-    popper-class="ip-popover"
-  >
+  <el-popover v-model:visible="visible" placement="bottom-start" :width="380" :show-arrow="false" trigger="click"
+    :disabled="disabled" popper-class="ip-popover">
     <template #reference>
       <!-- 触发器:el-popover trigger="click" 会自己监听 reference 的 click,
            这里**不要**再挂 @click——会和 el-popover 内部的 listener 各翻
            一次 visible,净效果等于没翻,面板"闪一下就消失"。 -->
-      <div
-        class="ip-trigger el-select__wrapper"
-        :class="{ 'is-disabled': disabled, 'is-focused': visible }"
-        :style="{ width }"
-      >
+      <div class="ip-trigger el-select__wrapper" :class="{ 'is-disabled': disabled, 'is-focused': visible }"
+        :style="{ width }">
         <span class="ip-trigger__prefix">
           <el-icon v-if="selectedComponent" class="ip-icon">
             <component :is="selectedComponent" />
@@ -166,37 +161,24 @@ function done(): void {
           <span v-else class="ip-trigger__placeholder">{{ placeholder }}</span>
         </span>
         <span class="ip-trigger__suffix">
-          <button
-            v-if="clearable && resolved && !disabled"
-            type="button"
-            class="ip-trigger__clear el-select__caret is-clear"
-            aria-label="清除"
-            @click.stop="clear"
-          >
+          <button v-if="clearable && resolved && !disabled" type="button"
+            class="ip-trigger__clear el-select__caret is-clear" aria-label="清除" @click.stop="clear">
             <el-icon>
               <component :is="CloseIcon" />
             </el-icon>
           </button>
-          <span
-            v-if="!(clearable && resolved && !disabled)"
-            class="ip-trigger__caret el-select__caret"
-            :class="{ 'is-reverse': visible }"
-          >
-            <el-icon><component :is="ArrowIcon" /></el-icon>
+          <span v-if="!(clearable && resolved && !disabled)" class="ip-trigger__caret el-select__caret"
+            :class="{ 'is-reverse': visible }">
+            <el-icon>
+              <component :is="ArrowIcon" />
+            </el-icon>
           </span>
         </span>
       </div>
     </template>
 
     <div class="ip-panel">
-      <ElInput
-        ref="searchRef"
-        v-model="query"
-        size="default"
-        placeholder="搜索图标名称"
-        clearable
-        class="ip-panel__search"
-      >
+      <ElInput ref="searchRef" v-model="query" size="default" placeholder="搜索图标名称" clearable class="ip-panel__search">
         <template #prefix>
           <el-icon>
             <component :is="SearchIcon" />
@@ -206,15 +188,8 @@ function done(): void {
 
       <div v-if="filtered.length === 0" class="ip-panel__empty">无匹配图标</div>
       <div v-else class="ip-panel__grid">
-        <button
-          v-for="name in filtered"
-          :key="name"
-          type="button"
-          class="ip-cell"
-          :class="{ 'is-selected': name === resolved }"
-          :title="name"
-          @click="pick(name)"
-        >
+        <button v-for="name in filtered" :key="name" type="button" class="ip-cell"
+          :class="{ 'is-selected': name === resolved }" :title="name" @click="pick(name)">
           <el-icon class="ip-icon">
             <component :is="ICONS[name]" />
           </el-icon>
@@ -228,12 +203,7 @@ function done(): void {
           <template v-else>点击图标即可选择</template>
         </span>
         <span class="ip-panel__actions">
-          <ElButton
-            v-if="clearable && resolved"
-            size="small"
-            link
-            @click="clear"
-          >清除</ElButton>
+          <ElButton v-if="clearable && resolved" size="small" link @click="clear">清除</ElButton>
           <ElButton size="small" type="primary" @click="done">完成</ElButton>
         </span>
       </footer>
@@ -389,7 +359,8 @@ function done(): void {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
   gap: 2px;
-  max-height: 274px; /* 与 $select-dropdown max-height 一致 */
+  max-height: 274px;
+  /* 与 $select-dropdown max-height 一致 */
   overflow-y: auto;
   padding: 2px 0;
 }

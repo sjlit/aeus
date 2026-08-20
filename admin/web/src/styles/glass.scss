@@ -253,8 +253,8 @@
 }
 
 .el-table__row td.el-table__cell {
-  background: transparent !important;
-  border-bottom: 1px solid var(--glass-border) !important;
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .el-table__row:hover>td.el-table__cell {

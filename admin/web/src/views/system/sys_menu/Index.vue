@@ -268,15 +268,9 @@ async function onDelete(row: MenuRow) {
       </div>
     </header>
 
-    <el-table
-      v-loading="loading"
-      :data="tree"
-      row-key="id"
-      :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }"
-      :default-expand-all="true"
-      border
-      class="menu-table"
-    >
+    <el-table v-loading="loading" :data="tree" row-key="id"
+      :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }" :default-expand-all="true" border
+      class="menu-table">
       <el-table-column prop="name" label="菜单标题" min-width="180" />
       <el-table-column prop="component" label="组件" min-width="180" />
       <el-table-column prop="uri" label="路由" min-width="160" />
@@ -284,7 +278,9 @@ async function onDelete(row: MenuRow) {
       <el-table-column prop="icon" label="图标" min-width="120">
         <template #default="{ row }">
           <span v-if="resolveIcon(row.icon)" class="menu-row-icon">
-            <el-icon><component :is="resolveIcon(row.icon)" /></el-icon>
+            <el-icon>
+              <component :is="resolveIcon(row.icon)" />
+            </el-icon>
             <span class="menu-row-icon__name">{{ row.icon }}</span>
           </span>
           <span v-else class="dim">{{ row.icon || '—' }}</span>
@@ -313,29 +309,18 @@ async function onDelete(row: MenuRow) {
       </el-table-column>
     </el-table>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'create' ? '新增菜单' : '编辑菜单'"
-      width="640px"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="96px" label-position="right">
+    <el-dialog v-model="dialogVisible" draggable :title="dialogMode === 'create' ? '新增菜单' : '编辑菜单'" width="640px"
+      :close-on-click-modal="false" destroy-on-close>
+      <el-form ref="formRef" :model="form" :rules="formRules" class="schema-form" label-width="96px"
+        label-position="right">
         <el-form-item label="父级菜单" prop="parent">
-          <el-cascader
-            v-model="form.parent"
-            :options="parentOptions"
-            :props="{
-              value: 'value',
-              label: 'label',
-              children: 'children',
-              checkStrictly: true,
-              emitPath: false,
-            }"
-            clearable
-            placeholder="留空表示顶级菜单"
-            class="menu-form__parent"
-          />
+          <el-cascader v-model="form.parent" :options="parentOptions" :props="{
+            value: 'value',
+            label: 'label',
+            children: 'children',
+            checkStrictly: true,
+            emitPath: false,
+          }" clearable placeholder="留空表示顶级菜单" class="menu-form__parent" />
         </el-form-item>
         <el-form-item label="菜单标题" prop="name">
           <el-input v-model="form.name" placeholder="例如 用户管理" />

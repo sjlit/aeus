@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { login as apiLogin, logout as apiLogout, refresh as apiRefresh } from '../api/auth'
-import { fetchProfile as apiFetchProfile } from '../api/user'
+import {
+    fetchProfile as apiFetchProfile,
+    updateProfile as apiUpdateProfile,
+} from '../api/user'
 import { safeGetString, safeRemove, safeSetString } from '../utils/storage'
 import { useMenuStore } from './menu'
 import type { LoginResponse, UserProfile } from '../types'
@@ -54,6 +57,18 @@ export const useAuthStore = defineStore('auth', {
       const resp = await apiFetchProfile()
       this.userProfile = resp
       return resp
+    },
+    // 部分更新当前用户资料。回填 userProfile 让 header 头像/姓名同步刷新,
+    // 与 fetchProfile 行为一致;失败抛错由 http 拦截器 toast。
+    async updateProfile(payload: {
+        username?: string
+        email?: string
+        gender?: string
+        description?: string
+    }): Promise<UserProfile> {
+        const resp = await apiUpdateProfile(payload)
+        this.userProfile = resp
+        return resp
     },
     async logout() {
       try {

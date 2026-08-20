@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import DefaultLayout from '../layouts/default/Layout.vue'
 import LoginView from '../views/public/LoginView.vue'
 import NotFoundView from '../views/public/NotFoundView.vue'
+import ProfileView from '../views/system/profile/Index.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
 import { useTabsStore } from '../stores/tabs'
@@ -10,6 +11,9 @@ import type { MenuNode } from '../types'
 import { normalizeGlobPath, deriveComponentName } from './viewPath'
 
 export const LOGIN_PATH = '/login'
+/** 个人中心路由:固定写在前端,不依赖服务端菜单下发,所以也用 `menu:` 前缀,
+ *  让 router.beforeEach 里的 hasRoute 检查通过,不会被重定向回首页。 */
+export const PROFILE_PATH = '/profile'
 
 export function goToLogin(redirect?: string) {
   return {
@@ -22,7 +26,20 @@ const defaultRoute: RouteRecordRaw = {
   path: '/',
   name: 'default',
   component: DefaultLayout,
-  children: [],
+  children: [
+    {
+      // 个人中心:不走菜单分发,前端硬编码;名字用 menu: 前缀以便
+      // beforeEach 的 hasRoute 检查命中。挂在 default 下,
+      // 这样它会进入 DefaultLayout(顶栏/侧栏/tabs 全部保留)。
+      path: PROFILE_PATH,
+      name: `menu:${PROFILE_PATH}`,
+      component: ProfileView,
+      meta: {
+        title: '个人中心',
+        componentName: deriveComponentName('@/views/system/profile/Index.vue'),
+      },
+    },
+  ],
 }
 
 export const router = createRouter({
