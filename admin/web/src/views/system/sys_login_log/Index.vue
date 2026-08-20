@@ -3,16 +3,12 @@
 // 给 <keep-alive :include> 一个稳定可匹配的组件名,防止异步组件包装层丢失 name 导致视图不缓存。
 defineOptions({ name: 'SystemSysLoginLogs' })
 
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import { SchemaViewer } from '@sjlit/rest-ui'
-
-const route = useRoute()
+import { usePageTitle } from '@/composables/usePageTitle'
 
 // 页面标题跟随菜单(route meta.title 由路由注册时从菜单写入),
-// 避免 SchemaViewer 回落到英文表名
-const title = computed(() => (route.meta.title as string | undefined) || 'sys_login_logs')
-
+// 避免 SchemaViewer 回落到英文表名。
+const title = usePageTitle('sys_login_logs')
 </script>
 
 <!--

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, ArrowRight, Back, CircleClose, Close, FolderRemove, Refresh, Right } from '@element-plus/icons-vue'
 import { useTabsStore, type Tab } from '@/stores/tabs'
@@ -25,9 +25,6 @@ const contextMenuPosition = ref({ x: 0, y: 0 })
 const dragTab = ref<Tab | null>(null)
 const dragOverTab = ref<Tab | null>(null)
 
-const activeTab = computed(() => tabsStore.activeTab)
-const tabs = computed(() => tabsStore.tabs)
-
 function onTabsListKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null
     if (!target || !target.classList.contains('tab')) return
@@ -36,7 +33,7 @@ function onTabsListKeydown(e: KeyboardEvent) {
     const currentIdx = Number(idxStr)
     if (Number.isNaN(currentIdx) || currentIdx < 0) return
 
-    const list = tabs.value
+    const list = tabsStore.tabs
     let nextIdx: number | null = null
 
     switch (e.key) {
@@ -177,16 +174,16 @@ onMounted(() => {
 onBeforeUnmount(() => {
     window.removeEventListener('resize', checkScroll)
 })
-watch(() => tabs.value.length, () => nextTick(checkScroll))
+watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
 </script>
 
 <template>
     <div v-if="isMobile" class="tabs-mobile">
-        <el-select :model-value="activeTab" size="small" class="tab-select" @update:model-value="(val: string) => {
-            const tab = tabs.find(t => t.path === val)
+        <el-select :model-value="tabsStore.activeTab" size="small" class="tab-select" @update:model-value="(val: string) => {
+            const tab = tabsStore.tabs.find(t => t.path === val)
             if (tab) switchTab(tab)
         }">
-            <el-option v-for="tab in tabs" :key="tab.path" :label="tab.title" :value="tab.path">
+            <el-option v-for="tab in tabsStore.tabs" :key="tab.path" :label="tab.title" :value="tab.path">
                 <span class="option-label">
                     <el-icon v-if="tab.icon" class="option-icon">
                         <component :is="resolveIcon(tab.icon)" />
@@ -206,11 +203,11 @@ watch(() => tabs.value.length, () => nextTick(checkScroll))
         </button>
         <div ref="tabsContainer" class="tabs-list" role="tablist" aria-label="已打开的标签页" @scroll="checkScroll"
             @keydown="onTabsListKeydown">
-            <div v-for="(tab, idx) in tabs" :key="tab.path" class="tab" :class="{
-                active: tab.path === activeTab,
+            <div v-for="(tab, idx) in tabsStore.tabs" :key="tab.path" class="tab" :class="{
+                active: tab.path === tabsStore.activeTab,
                 'drag-over': dragOverTab?.path === tab.path,
-            }" :data-tab-idx="idx" :data-tab-path="tab.path" role="tab" :aria-selected="tab.path === activeTab"
-                :tabindex="tab.path === activeTab ? 0 : -1" :aria-label="tab.title" :draggable="true"
+            }" :data-tab-idx="idx" :data-tab-path="tab.path" role="tab" :aria-selected="tab.path === tabsStore.activeTab"
+                :tabindex="tab.path === tabsStore.activeTab ? 0 : -1" :aria-label="tab.title" :draggable="true"
                 @click="switchTab(tab)" @contextmenu="openContextMenu($event, tab)"
                 @dragstart="onDragStart($event, tab)" @dragover="onDragOver($event, tab)" @drop="onDrop($event, tab)"
                 @dragend="onDragEnd">

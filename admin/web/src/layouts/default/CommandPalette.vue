@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * CommandPalette · ⌘K / Ctrl+K 全局菜单搜索
- * 数据 = menu.sections 扁平化出的全部可路由节点(保持侧栏顺序);
+ * 数据来自 menu 的扁平索引(flatIndex) + 节归属(sectionsByUri),
+ * 与侧栏 / 路由注册共用一次遍历结果,此处不再 DFS;
  * 支持按名称 / 路径 / 分组过滤,上下键选择,Enter 直达路由。
  * 热键监听挂在 window:组件由 Layout 挂载一次,登录后的任何页面都可用。
  */
@@ -11,7 +12,6 @@ import { Search } from '@element-plus/icons-vue'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
 import { resolveIcon } from '@/utils/icons'
-import type { MenuNode } from '@/types'
 
 interface PaletteItem {
     section: string
@@ -30,21 +30,16 @@ const activeIdx = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 
-/** 节内深度优先收集所有带 uri 的节点(含 sub-menu 子项),与侧栏可见项一致。 */
+/** 全部可路由节点的扁平视图,从 menu 的预计算索引直接读,不重复 DFS。 */
 const items = computed<PaletteItem[]>(() => {
-    const out: PaletteItem[] = []
-    const seen = new Set<string>()
-    const walk = (nodes: MenuNode[], section: string) => {
-        for (const n of nodes) {
-            if (n.uri && !seen.has(n.uri)) {
-                seen.add(n.uri)
-                out.push({ section, name: n.name, uri: n.uri, icon: n.icon })
-            }
-            if (n.children?.length) walk(n.children, section)
-        }
-    }
-    for (const sec of menu.sections) walk(sec.items, sec.name)
-    return out
+    const f = menu.flatIndex
+    const secByUri = menu.sectionsByUri
+    return f.uris.map((uri) => ({
+        section: secByUri.get(uri) ?? '',
+        name: f.titlesByUri.get(uri) ?? '',
+        uri,
+        icon: f.iconsByUri.get(uri) ?? '',
+    }))
 })
 
 const results = computed<PaletteItem[]>(() => {

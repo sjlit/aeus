@@ -92,9 +92,7 @@ export const useTabsStore = defineStore('tabs', () => {
 
     tabs.value = tabs.value.filter((t, i) => i >= idx || !t.closable)
     // 如果当前激活标签被关闭,切换到目标标签
-    if (!tabs.value.find(t => t.path === activeTab.value)) {
-      activeTab.value = path
-    }
+    reassignActive(path)
   }
 
   function removeRightTabs(path: string) {
@@ -103,16 +101,20 @@ export const useTabsStore = defineStore('tabs', () => {
 
     tabs.value = tabs.value.filter((t, i) => i <= idx || !t.closable)
     // 如果当前激活标签被关闭,切换到目标标签
-    if (!tabs.value.find(t => t.path === activeTab.value)) {
-      activeTab.value = path
-    }
+    reassignActive(path)
   }
 
   function removeAllTabs() {
     tabs.value = tabs.value.filter(t => !t.closable)
     // 确保有激活标签
+    reassignActive(tabs.value[0]?.path ?? '')
+  }
+
+  /** 当前激活 tab 不在剩余列表里时,切到 fallback;否则保持不变。
+   *  集中处理"关闭后掉激活"的语义,left/right/all 三个分支共用。 */
+  function reassignActive(fallback: string) {
     if (!tabs.value.find(t => t.path === activeTab.value)) {
-      activeTab.value = tabs.value[0]?.path || ''
+      activeTab.value = fallback
     }
   }
 

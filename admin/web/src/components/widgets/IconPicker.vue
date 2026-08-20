@@ -38,6 +38,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { ElButton, ElInput, ElPopover } from 'element-plus'
 import * as ElIcons from '@element-plus/icons-vue'
+import { toPascal } from '../../utils/icons'
 
 defineOptions({ name: 'IconPicker' })
 
@@ -65,26 +66,20 @@ const emit = defineEmits<{
 
 // ALL: PascalCase 图标全集。kebab-case 文件名会规整为 PascalCase 后,
 // 运行时也是 PascalCase 注册。这里再做一遍"首字母大写"过滤,避开
-// icons-vue 在不同版本里偶尔混入的小写别名(没有也安全)。
+// icons-vue 在不同版本里偶尔混入的小写别名(没有也安全)。每条名
+// 字对应的 lowercased 版本预计算一次,过滤时只走 includes,省掉
+// 每次按键都重做 toLowerCase 的 O(N·k) 工作。
 const ICONS = ElIcons as unknown as Record<string, Component>
 const ALL_NAMES = Object.keys(ICONS)
   .filter((k) => /^[A-Z][A-Za-z0-9]*$/.test(k))
   .sort()
+const ALL_NAMES_LC: string[] = ALL_NAMES.map((n) => n.toLowerCase())
 
 // 关闭 / 搜索 / 箭头三个静态图标直接取自同一份 namespace,避免再多写一份具名 import;
 // 同时跟下面网格里的图标保持单一来源——换图标库时只改 import 即可。
 const CloseIcon = ICONS.Close
 const SearchIcon = ICONS.Search
 const ArrowIcon = ICONS.ArrowDown
-
-// 与 utils/icons.ts 同形:raw / kebab / snake 都能归一到 PascalCase。
-function toPascal(name: string): string {
-  return name
-    .split(/[-_\s]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join('')
-}
 
 /** 当前 v-model 命中的 PascalCase;若解析不到(用户手动敲了不存在的串)
  *  返回空串,触发器渲染"未匹配"占位,而不是直接抛错。 */
@@ -110,7 +105,11 @@ const searchRef = ref<InstanceType<typeof ElInput> | null>(null)
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return ALL_NAMES
-  return ALL_NAMES.filter((n) => n.toLowerCase().includes(q))
+  const out: string[] = []
+  for (let i = 0; i < ALL_NAMES.length; i++) {
+    if (ALL_NAMES_LC[i]!.includes(q)) out.push(ALL_NAMES[i]!)
+  }
+  return out
 })
 
 watch(visible, async (open) => {

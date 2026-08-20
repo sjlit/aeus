@@ -4,6 +4,7 @@ import {
   buildTree,
   flattenMenu,
   groupBySection,
+  sectionize,
   type MenuFlat,
   type Section,
 } from './menuGroups'
@@ -22,32 +23,20 @@ export const useMenuStore = defineStore('menu', {
     loadedAt: 0,
   }),
   getters: {
+    /** 节驱动的分组(配置定义见 menuSections.ts)。CommandPalette 按节分
+     *  组渲染时直接走 sectionsByUri,不再各自 DFS 一遍。 */
     sections(state): Section[] {
       return groupBySection(state.tree)
     },
-    // 一次遍历同时产出 uris 与 uri→标题;下面的 getter 都从这里取,避免重复 DFS
+    /** 一次遍历产出 uris 与 uri→标题/图标/view_path/component 等映射。
+     *  调用方都把整份 flatIndex 当成快照用,不再各自派生同名 getter。 */
     flatIndex(state): MenuFlat {
       return flattenMenu(state.tree)
     },
-    uris(): string[] {
-      return this.flatIndex.uris
-    },
-    titlesByUri(): Map<string, string> {
-      return this.flatIndex.titlesByUri
-    },
-    iconsByUri(): Map<string, string> {
-      return this.flatIndex.iconsByUri
-    },
-    viewsByUri(): Map<string, string> {
-      return this.flatIndex.viewsByUri
-    },
-    /**
-     * uri → 服务端下发的 stable component ID。registerMenuRoutes 把它写到
-     * meta.componentName,然后 <keep-alive :include>(= tabs.cachedViews)就能
-     * 精确匹配到对应 view 文件 defineOptions({ name })。
-     */
-    componentsByUri(): Map<string, string> {
-      return this.flatIndex.componentsByUri
+    /** uri → 所属节名;由 sectionize(sections) 按节 DFS 产出,与扁平
+     *  索引共享"seen / 出现顺序"的语义。 */
+    sectionsByUri(): Map<string, string> {
+      return sectionize(this.sections)
     },
   },
   actions: {

@@ -39,16 +39,22 @@ export function shouldRenderAsSubMenu(
  *  被升为根(后者会引发自引用循环,直接挂进去会让 children 数组
  *  持有自身,后续 walk 进入无限递归)。与后端 Menu.BuildTree 的
  *  孤儿处理一致。输入数组的顺序决定根/同级兄弟的展示顺序——sort
- *  在后端 MenuEntry.Sort 上完成,这里不再排序。 */
-export function buildTree(flat: MenuNode[]): MenuNode[] {
+ *  在后端 MenuEntry.Sort 上完成,这里不再排序。
+ *
+ *  泛型 + 约束让 /sys_menus 那张 CRUD 表复用同一份实现:它按 MenuItem
+ *  的 component/parent 字段走(同结构),不必再各自维护一份 O(N²) 实
+ *  现。返回值带 children 字段,call site 可以 narrow 到自己的节点类型。 */
+export function buildTree<T extends { component: string; parent: string }>(
+  flat: T[],
+): (T & { children: T[] })[] {
   if (flat.length === 0) return []
   // 先克隆一份,避免污染 store 缓存里的扁平数据;children 在下方填充。
-  const nodes = flat.map((n) => ({ ...n, children: [] as MenuNode[] }))
-  const byComponent = new Map<string, MenuNode>()
+  const nodes = flat.map((n) => ({ ...n, children: [] as T[] }))
+  const byComponent = new Map<string, T & { children: T[] }>()
   for (const n of nodes) {
     byComponent.set(n.component, n)
   }
-  const roots: MenuNode[] = []
+  const roots: (T & { children: T[] })[] = []
   for (const n of nodes) {
     if (!n.parent || n.parent === n.component || !byComponent.has(n.parent)) {
       // parent=="" / 自指 / 指向不存在的 component,都作为根。
@@ -126,9 +132,31 @@ export interface MenuFlat {
   componentsByUri: Map<string, string>
 }
 
+/** 把 groupBySection 的输出扫一遍,产出 uri → section 的映射。
+ *  用于 CommandPalette 这类"按节分组平铺"的视图共享一次遍历,
+ *  避免各自再写一份 walk + seen 去重。 */
+export function sectionize(
+  sections: Section[],
+  out: Map<string, string> = new Map(),
+): Map<string, string> {
+  const seen = new Set<string>()
+  const walk = (nodes: MenuNode[], section: string) => {
+    for (const n of nodes) {
+      if (n.uri && !seen.has(n.uri)) {
+        seen.add(n.uri)
+        out.set(n.uri, section)
+      }
+      if (n.children?.length) walk(n.children, section)
+    }
+  }
+  for (const sec of sections) walk(sec.items, sec.name)
+  return out
+}
+
 /** 单次深度优先遍历,同时产出 uri 列表、uri → 标题/图标/view_path/component 映射。
  *  标题来自 n.name(后端 MenuNode 用 name 作显示名);view_path 与 component 由
- *  服务端下发,客户端不推导。 */
+ *  服务端下发,客户端不推导。section 信息不在这里产出——交给 sectionize(sections)
+ *  走另一条按节 DFS 的路径,与原有 groupBySection 输出对齐。 */
 export function flattenMenu(nodes: MenuNode[]): MenuFlat {
   const uris: string[] = []
   const titlesByUri = new Map<string, string>()

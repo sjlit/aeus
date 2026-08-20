@@ -4,10 +4,11 @@
 defineOptions({ name: 'SystemSysMenuses' })
 
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import IconPicker from '@/components/widgets/IconPicker.vue'
 import { resolveIcon } from '../../../utils/icons'
+import { buildTree } from '../../../stores/menuGroups'
+import { usePageTitle } from '@/composables/usePageTitle'
 import {
   createMenu,
   deleteMenu,
@@ -18,11 +19,9 @@ import {
   type MenuOptionNode,
 } from '../../../api/menu'
 
-const route = useRoute()
-
 // 页面标题跟随菜单(route.meta.title 由路由注册时从菜单写入),
 // 避免 el-table 页面没有 schema 兜底。
-const title = computed(() => (route.meta.title as string | undefined) || 'sys_menus')
+const title = usePageTitle('sys_menus')
 
 // ----- 状态 ------------------------------------------------------------
 
@@ -33,24 +32,16 @@ interface MenuRow extends MenuItem {
 
 const loading = ref(false)
 const tree = ref<MenuRow[]>([])
-/** MenuOptionNode 是从 /menu/options 拿到的级联选项,作为"父级菜单"下拉。 */
-interface ParentOption {
-  value: string
-  label: string
-  parent: string
-  children?: ParentOption[]
-}
+/** /menu/options 返回的级联选项直接作为 ParentOption 用——shape 完全一致
+ *  (value/label/parent/children),不需要再 copy 一遍。 */
+type ParentOption = MenuOptionNode
 
 /** 把 buildTree 过程中产生的 MenuRow 提交时回退成扁平 MenuItem;
  *  children 是运行时构造,不需要。 */
 type FlatMenu = Omit<MenuRow, 'children'>
 
-const dialogVisible = ref(false)
-const dialogMode = ref<'create' | 'edit'>('create')
-const formRef = ref()
-const submitting = ref(false)
-
-const form = reactive<FlatMenu>({
+/** 空表单默认值集中在一处:openCreate/重置场景共用,新增字段时只改这里。 */
+const EMPTY_FORM: FlatMenu = {
   id: 0,
   parent: '',
   name: '',
@@ -64,7 +55,14 @@ const form = reactive<FlatMenu>({
   description: '',
   created_at: 0,
   updated_at: 0,
-})
+}
+
+const dialogVisible = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
+const formRef = ref()
+const submitting = ref(false)
+
+const form = reactive<FlatMenu>({ ...EMPTY_FORM })
 
 const formRules = {
   name: [{ required: true, message: '请输入菜单标题', trigger: 'blur' }],
@@ -72,46 +70,21 @@ const formRules = {
   uri: [{ required: true, message: '请输入路由', trigger: 'blur' }],
 }
 
-// ----- 数据加载 ---------------------------------------------------------
-
-/** MenuItem[] 经 parent 字段构嵌套 —— 与 stores/menuGroups.ts 里
- *  buildTree 同形,但 MenuRow 多了 created_at / updated_at / sort 等
- *  CRUD 字段;el-table 用 row-key="id" + tree-props={children:'children'}
- *  渲染可折叠树。
- *
- *  顺序保留后端 `parent ASC, id ASC`:一级菜单按 id 升序,同级子菜
- *  单也按 id 升序 —— 与 Store 里的 buildTree 行为一致。 */
-function buildTree(items: MenuItem[]): MenuRow[] {
-  if (items.length === 0) return []
-  const nodes = items.map((it) => ({ ...it, children: [] as MenuRow[] }))
-  const byId = new Map<number, MenuRow>()
-  for (const n of nodes) byId.set(n.id, n)
-  const roots: MenuRow[] = []
-  for (const n of nodes) {
-    // parent 存的是 Menu.Component(字符串),不是 PK,所以按 component 找父节点。
-    if (!n.parent || n.parent === n.component) {
-      roots.push(n)
-      continue
-    }
-    let parent: MenuRow | undefined
-    for (const m of nodes) {
-      if (m.component === n.parent) {
-        parent = m
-        break
-      }
-    }
-    if (parent) parent.children.push(n)
-    else roots.push(n)
-  }
-  return roots
+function resetForm(): void {
+  Object.assign(form, EMPTY_FORM)
 }
 
-/** 异步;onMounted 时一次性加载,失败 toast。 */
+// ----- 数据加载 ---------------------------------------------------------
+
+/** MenuItem[] 走 stores/menuGroups.buildTree 的同一份实现:同样的 component/
+ *  parent 约束、同样的孤儿处理、同样的 O(n) Map 查找。原来这里手写的 O(n²)
+ *  inner-loop 是多余,删掉。返回 (MenuItem & {children: MenuItem[]})[],
+ *  cast 后带 MenuRow 给 el-table 用,children 字段已经在泛型签名里。 */
 async function load(): Promise<void> {
   loading.value = true
   try {
     const data = await fetchMenuAll()
-    tree.value = buildTree(data.items ?? [])
+    tree.value = buildTree<MenuItem>(data.items ?? []) as unknown as MenuRow[]
   } catch {
     // http 拦截器已 toast;保留空树,用户可重新刷新。
     tree.value = []
@@ -126,36 +99,12 @@ onMounted(load)
 
 const parentOptions = ref<ParentOption[]>([])
 
-/** /menu/options 返回 MenuOptionNode:label=name, value=component,
- *  parent=父 component。 UI 透传为 el-cascader 用的 key/value/children,
- *  触发面板默认会把各层 label 用 / 拼成完整路径(根→叶)显示。 */
-function flattenOptions(nodes: MenuOptionNode[]): ParentOption[] {
-  if (nodes.length === 0) return []
-  const walk = (ns: MenuOptionNode[]): ParentOption[] =>
-    ns.map((n) => ({
-      value: n.value,
-      label: n.label,
-      parent: n.parent,
-      children: n.children?.length ? walk(n.children) : undefined,
-    }))
-  return walk(nodes)
-}
-
-/** 加载一次 MenuOptionNode(创建/编辑共用);若还在 HTTP 飞行中则复用单飞。 */
-let optionsInflight: Promise<ParentOption[]> | null = null
+/** 加载一次 MenuOptionNode(创建/编辑共用);命中本地缓存就跳过。 */
 async function loadOptions(): Promise<ParentOption[]> {
   if (parentOptions.value.length > 0) return parentOptions.value
-  optionsInflight ??= (async () => {
-    const data = await fetchMenuOptions()
-    const flat = flattenOptions(data.items ?? [])
-    parentOptions.value = flat
-    return flat
-  })()
-  try {
-    return await optionsInflight
-  } finally {
-    optionsInflight = null
-  }
+  const data = await fetchMenuOptions()
+  parentOptions.value = data.items ?? []
+  return parentOptions.value
 }
 
 // ----- 操作 ------------------------------------------------------------
@@ -165,42 +114,15 @@ async function loadOptions(): Promise<ParentOption[]> {
 async function openCreate(parentRow?: MenuRow) {
   dialogMode.value = 'create'
   await loadOptions()
-  Object.assign(form, {
-    id: 0,
-    parent: parentRow?.component ?? '',
-    name: '',
-    component: '',
-    uri: '/',
-    view_path: '',
-    icon: '',
-    hidden: false,
-    public: false,
-    sort: 0,
-    description: '',
-    created_at: 0,
-    updated_at: 0,
-  })
+  resetForm()
+  form.parent = parentRow?.component ?? ''
   dialogVisible.value = true
 }
 
 async function openEdit(row: MenuRow) {
   dialogMode.value = 'edit'
   await loadOptions()
-  Object.assign(form, {
-    id: row.id,
-    parent: row.parent,
-    name: row.name,
-    component: row.component,
-    uri: row.uri,
-    view_path: row.view_path,
-    icon: row.icon,
-    hidden: row.hidden,
-    public: row.public,
-    sort: row.sort,
-    description: row.description,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  })
+  Object.assign(form, row)
   dialogVisible.value = true
 }
 

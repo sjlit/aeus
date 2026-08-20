@@ -101,21 +101,22 @@ let readiness: Promise<void> | null = null
 function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
   if (menu.tree === registeredFor) return
   registeredFor = menu.tree
-  for (const uri of menu.uris) {
+  const idx = menu.flatIndex
+  for (const uri of idx.uris) {
     if (router.hasRoute(`menu:${uri}`)) continue
-    const viewPath = menu.viewsByUri.get(uri)
+    const viewPath = idx.viewsByUri.get(uri)
     // meta.componentName 是 <keep-alive :include>(= tabs.cachedViews) 命中的依据。
     // 优先用服务端 menu.component(稳定 ID,view 文件用 defineOptions({ name })
     // 对齐它);缺失时回退 deriveComponentName(viewPath),避免无 component 字段
     // 的菜单数据破坏多 tab 缓存。
     const componentName =
-      menu.componentsByUri.get(uri) ?? deriveComponentName(viewPath)
+      idx.componentsByUri.get(uri) ?? deriveComponentName(viewPath)
     router.addRoute('default', {
       path: uri,
       name: `menu:${uri}`,
       component: resolveView(viewPath),
       meta: {
-        title: menu.titlesByUri.get(uri),
+        title: idx.titlesByUri.get(uri),
         componentName,
       },
     })
@@ -159,7 +160,7 @@ router.beforeEach(async (to) => {
   const menu = useMenuStore()
 
   if (to.path === '/') {
-    const first = menu.uris[0]
+    const first = menu.flatIndex.uris[0]
     return first ? { path: first, replace: true } : true
   }
   // 路径不在菜单里 → 重定向到 '/'('/' 分支会再次处理)
@@ -176,12 +177,13 @@ router.afterEach((to) => {
   if (!title) return
   const menu = useMenuStore()
   const tabs = useTabsStore()
+  const idx = menu.flatIndex
   tabs.addTab({
     path: to.path,
     name: to.name as string,
     title,
-    icon: menu.iconsByUri.get(to.path),
-    closable: to.path !== menu.uris[0],
+    icon: idx.iconsByUri.get(to.path),
+    closable: to.path !== idx.uris[0],
     query: to.query as Record<string, string>,
   })
 })

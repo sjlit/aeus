@@ -9,7 +9,9 @@ import * as ElIcons from '@element-plus/icons-vue'
 
 const ICONS = ElIcons as Record<string, Component>
 
-function toPascal(name: string): string {
+/** raw / kebab / snake → PascalCase 归一。导出供其他需要相同规则的组件复用
+ *  (如 IconPicker),保证改一处全网同步。 */
+export function toPascal(name: string): string {
   return name
     .split(/[-_\s]+/)
     .filter(Boolean)

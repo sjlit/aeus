@@ -37,18 +37,17 @@ const profileRules: FormRules = {
     ],
 }
 
-function fillProfileForm(p: { username?: string; email?: string; gender?: string; description?: string }) {
+/** 用 store 当前缓存填表;空字段用空字符串兜底,后端保留原值。
+ *  loadProfile 之后也会再调一次,store 变化时(例如另开 tab 改了资料)同步。 */
+function syncFromStore(): void {
+    const p = auth.userProfile
+    if (!p) return
     Object.assign(profileForm, {
         username: p.username ?? '',
         email: p.email ?? '',
         gender: p.gender ?? '',
         description: p.description ?? '',
     })
-}
-
-// 初始填充用当前缓存;之后 store 变化时再同步一次(例如另开 tab 改了资料)。
-function syncFromStore() {
-    if (auth.userProfile) fillProfileForm(auth.userProfile)
 }
 onMounted(() => {
     if (!auth.userProfile) void loadProfile()
