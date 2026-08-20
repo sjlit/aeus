@@ -3,7 +3,7 @@
 // 给 <keep-alive :include> 一个稳定可匹配的组件名,防止异步组件包装层丢失 name 导致视图不缓存。
 defineOptions({ name: 'SystemSysRolesPermission' })
 
-import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import type { ElTree } from 'element-plus'
@@ -15,7 +15,11 @@ import {
 import { fetchPermissionList, type PermissionItem } from '@/api/permission'
 import { fetchMenuTreeAll, type MenuTreeNode } from '@/api/menu'
 import { setsEqual } from '@/utils/setEqual'
-import { groupPermissions, type PermissionGroup } from '@/utils/groupPermissions'
+import {
+  groupPermissionsAsTree,
+  isGroupKey,
+  type ApiTreeNode,
+} from '@/utils/groupPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -118,49 +122,38 @@ function resetMenus() {
 }
 
 // ── 权限 tab ───────────────────────────────────────────
-const openedGroups = ref<string[]>([])
+const apiTreeRef = ref<InstanceType<typeof ElTree>>()
 
-const apiGroups = computed<PermissionGroup[]>(() =>
-  groupPermissions(apiPermissions.value),
+/** 后端 sys_permissions 拍平到 el-tree:每个 group 一个父节点(虚拟
+ *  key = groupKey(title),不可写回后端),叶子是 permission.data。
+ *  按 group 标题 zh-Hans 升序排列,空 group 进「未分组」放末尾。 */
+const apiTree = computed<ApiTreeNode[]>(() =>
+  groupPermissionsAsTree(apiPermissions.value),
 )
 
-/** 每个分组当前勾选中的 permission data。初始化由下方 watchEffect 负责
- *  (数据到达 + 该组尚未被用户编辑时);后续由用户编辑 + saveApis 推进。 */
-const groupChecked = ref<Record<string, string[]>>({})
-
-// 数据 / savedApis 变化时初始化 groupChecked(只在该组尚未被用户编辑时)
-watchEffect(() => {
-  for (const g of apiGroups.value) {
-    if (groupChecked.value[g.key]?.length) continue
-    const initial: string[] = []
-    for (const p of g.items) {
-      if (savedApis.value.has(p.data)) initial.push(p.data)
-    }
-    groupChecked.value[g.key] = initial
-  }
-})
-
-/** 每个分组上一次「已保存」状态 —— 直接由 savedApis × apiGroups 派生,
- *  不需要手动维护快照:saveApis 推进 savedApis 之后此 computed 自动更新,
- *  dirty diff 与 resetApis 都读它。 */
-const savedGroupChecked = computed<Record<string, Set<string>>>(() => {
-  const out: Record<string, Set<string>> = {}
-  for (const g of apiGroups.value) {
-    const s = new Set<string>()
-    for (const p of g.items) {
-      if (savedApis.value.has(p.data)) s.add(p.data)
-    }
-    out[g.key] = s
+/** 把 el-tree 给出的「已勾选 + 半勾」key 过滤掉虚拟 group 节点,
+ *  只留真 permission.data。el-tree 默认会把父节点也带进 checked 集合,
+ *  父节点用合成 key 不会污染 savedApis。 */
+function realCheckedKeys(): Set<string> {
+  const tree = apiTreeRef.value
+  if (!tree) return new Set()
+  const out = new Set<string>()
+  for (const k of tree.getCheckedKeys() as string[]) {
+    if (!isGroupKey(k)) out.add(k)
   }
   return out
+}
+
+// 树实例 + savedApis 都到位后回填勾选。perms 经常晚于 tree/savedMenus
+// 几十 ms,等 savedApis 也准备好再 setCheckedKeys 才不会拿空快照。
+watch([apiTreeRef, savedApis], ([ref, apis]) => {
+  if (!ref || apis.size === 0) return
+  ref.setCheckedKeys([...apis], false)
 })
 
 async function saveApis() {
   if (!roleKey.value) return
-  const next: string[] = []
-  for (const g of apiGroups.value) {
-    next.push(...(groupChecked.value[g.key] ?? []))
-  }
+  const next = [...realCheckedKeys()]
   saving.value = 'apis'
   try {
     await replaceRolePermissions({
@@ -169,7 +162,6 @@ async function saveApis() {
       apis: next,
     })
     savedApis.value = new Set(next)
-    // savedGroupChecked 由 computed 自动反映新 savedApis,无需手动同步。
     ElMessage.success('权限已保存')
   } catch {
     // 错误由 http 拦截器 toast;本地状态保持,允许重试。
@@ -179,10 +171,7 @@ async function saveApis() {
 }
 
 function resetApis() {
-  for (const g of apiGroups.value) {
-    const snap = savedGroupChecked.value[g.key]
-    groupChecked.value[g.key] = snap ? [...snap] : []
-  }
+  apiTreeRef.value?.setCheckedKeys([...savedApis.value], false)
 }
 
 // ── dirty 检测 & 离开守卫 ─────────────────────────────
@@ -196,14 +185,7 @@ const menusDirty = computed(() => {
   return !setsEqual(checked, savedMenus.value)
 })
 
-const apisDirty = computed(() => {
-  for (const g of apiGroups.value) {
-    const snap = savedGroupChecked.value[g.key] ?? new Set<string>()
-    const cur = new Set(groupChecked.value[g.key] ?? [])
-    if (!setsEqual(snap, cur)) return true
-  }
-  return false
-})
+const apisDirty = computed(() => !setsEqual(realCheckedKeys(), savedApis.value))
 
 const isDirty = computed(() => menusDirty.value || apisDirty.value)
 
@@ -274,33 +256,22 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           </div>
         </el-tab-pane>
 
-        <!-- ── Tab 2:权限配置 ─────────────────────────── -->
+        <!-- ── Tab 2:权限配置(树) ───────────────────── -->
         <el-tab-pane name="apis">
           <template #label>
             <span class="tab-label">权限配置</span>
           </template>
 
-          <el-collapse v-model="openedGroups" v-if="apiGroups.length > 0">
-            <el-collapse-item
-              v-for="group in apiGroups"
-              :key="group.key"
-              :name="group.key"
-              :title="`${group.title} (${groupChecked[group.key]?.length ?? 0} / ${group.items.length})`"
-            >
-              <el-checkbox-group v-model="groupChecked[group.key]">
-                <el-checkbox
-                  v-for="p in group.items"
-                  :key="p.data"
-                  :value="p.data"
-                  class="api-checkbox"
-                >
-                  <span class="api-data">{{ p.data }}</span>
-                  <span class="api-desc">{{ p.description }}</span>
-                </el-checkbox>
-              </el-checkbox-group>
-            </el-collapse-item>
-          </el-collapse>
-          <el-empty v-else description="暂无可配置权限" />
+          <el-tree
+            v-if="apiTree.length > 0"
+            ref="apiTreeRef"
+            :data="apiTree"
+            show-checkbox
+            node-key="id"
+            :props="{ label: 'label', children: 'children' }"
+            empty-text="暂无可配置权限"
+            class="api-tree"
+          />
 
           <div class="tab-actions">
             <el-button @click="resetApis">重置</el-button>
@@ -374,28 +345,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   overflow: auto;
 }
 
+.api-tree {
+  padding: 8px 0;
+  max-height: 60vh;
+  overflow: auto;
+  font-size: 13px;
+}
+
 .tab-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
-}
-
-.api-checkbox {
-  display: flex;
-  width: 100%;
-  margin-right: 0;
-  margin-bottom: 4px;
-}
-
-.api-data {
-  font-family: var(--mono);
-  font-size: 12px;
-  margin-right: 8px;
-}
-
-.api-desc {
-  color: var(--ink-2);
-  font-size: 12px;
 }
 </style>
