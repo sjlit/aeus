@@ -174,14 +174,19 @@ func (x *ListCatalogResponse) GetItems() []string {
 }
 
 // ListPermissionItem is one full row from sys_permissions.  Field
-// numbers follow the proto wire format — do not reuse 1-4 for other
+// numbers follow the proto wire format — do not reuse 1-5 for other
 // fields in this message; future revisions should append.
 type ListPermissionItem struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Data          string                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type        string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Data        string                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	// Group is the UI clustering label (e.g. "审计", "用户").
+	// Auto-filled from MenuEntry().Name by derive.go on Setup; empty
+	// for legacy rows that pre-date the column (auto-back-filled on
+	// next Setup pass).  Operators can edit freely via /system/sys_perm.
+	Group         string `protobuf:"bytes,5,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -240,6 +245,13 @@ func (x *ListPermissionItem) GetData() string {
 func (x *ListPermissionItem) GetDescription() string {
 	if x != nil {
 		return x.Description
+	}
+	return ""
+}
+
+func (x *ListPermissionItem) GetGroup() string {
+	if x != nil {
+		return x.Group
 	}
 	return ""
 }
@@ -345,12 +357,13 @@ const file_permission_proto_rawDesc = "" +
 	"\x12ListCatalogRequest\x12&\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x12.pb.PermissionTypeR\x04type\"+\n" +
 	"\x13ListCatalogResponse\x12\x14\n" +
-	"\x05items\x18\x01 \x03(\tR\x05items\"n\n" +
+	"\x05items\x18\x01 \x03(\tR\x05items\"\x84\x01\n" +
 	"\x12ListPermissionItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\tR\x04data\x12 \n" +
-	"\vdescription\x18\x04 \x01(\tR\vdescription\",\n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x14\n" +
+	"\x05group\x18\x05 \x01(\tR\x05group\",\n" +
 	"\x16ListPermissionsRequest\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\"G\n" +
 	"\x17ListPermissionsResponse\x12,\n" +

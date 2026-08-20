@@ -20,6 +20,13 @@ type Permission struct {
 	Type        string `json:"type" yaml:"type" xml:"type" gorm:"index;size:20;not null;default:'';column:type" comment:"类型" rule:"required" enum:"api:接口;button:按钮;data_scope:数据范围"`
 	Data        string `json:"data" yaml:"data" xml:"data" gorm:"index;size:60;not null;default:'';column:data" comment:"权限标识" rule:"required"`
 	Description string `json:"description" yaml:"description" xml:"description" gorm:"size:1024;not null;default:'';column:description" comment:"权限说明"`
+	// Group is a free-form UI grouping label (e.g. "审计", "用户"). The
+	// admin UI uses it to cluster permissions under one el-collapse
+	// item per module/table. AutoMigrate seeds the field from
+	// MenuEntry().Name via derive.go; operators editing the catalog by
+	// hand can fill it freely. Indexed because the UI lists rows
+	// grouped by Group on every load.
+	Group string `json:"group" yaml:"group" xml:"group" gorm:"index;size:64;not null;default:'';column:group" comment:"分组"`
 }
 
 // TableName returns the physical table name (gorm.Tabler).

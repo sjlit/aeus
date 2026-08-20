@@ -299,23 +299,29 @@ func permissionResourceLabel(resource *rest.Resource) string {
 	return table
 }
 
-// permissionCode builds the Data and Description of one permission row.
-// Data looks like "POST /system/sys_user" (METHOD + single space +
-// URI); Description looks like "创建 用户管理".  Both are derived
-// entirely from model metadata with no external input — that is what
-// makes FirstOrCreate idempotent.
+// permissionCode builds the Data, Description and Group of one
+// permission row.  Data looks like "POST /system/sys_user" (METHOD +
+// single space + URI); Description looks like "创建 用户管理"; Group
+// looks like "用户管理" (the menu's Chinese name — the same label the
+// sidebar shows for the matching module/table).  Group is what the
+// admin UI uses to cluster permissions under one el-collapse item;
+// keeping it auto-derived from MenuEntry().Name means every model that
+// registers through Setup gets the right cluster without per-model
+// configuration.  Operators can override Group by editing the row
+// directly; ensurePermissionRows never overwrites a populated value on
+// a re-seed.
 //
 // Takes *rest.Resource so the same model source is used to read
 // ModuleName/TableName (via resource.ModelValue().GetNaming()) and to
 // detect MenuProvider/ScenarioProvider — three queries against one
 // canonical handle instead of three.
-func permissionCode(resource *rest.Resource, scenario string) (data, description string) {
+func permissionCode(resource *rest.Resource, scenario string) (data, description, group string) {
 	if resource == nil {
-		return "", ""
+		return "", "", ""
 	}
 	method, uri := resource.BuildUri(scenario)
 	if uri == "" {
-		return "", ""
+		return "", "", ""
 	}
 	// path.Join with an empty prefix returns "system/sys_user" without
 	// a leading slash.  Permission.Data wire format has always carried
@@ -325,7 +331,9 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 		uri = "/" + uri
 	}
 	label := permissionResourceLabel(resource)
-	return fmt.Sprintf("%s %s", method, uri), fmt.Sprintf("%s %s", scenarioCNLabel(scenario), label)
+	return fmt.Sprintf("%s %s", method, uri),
+		fmt.Sprintf("%s %s", scenarioCNLabel(scenario), label),
+		label
 }
 
 // ensurePermissionRows walks one model's scenario set and turns each
@@ -336,7 +344,11 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 // Unlike ensureMenuRow — one row per menu vs. many per permission —
 // this is a slice of rows, but the semantics carry over: existing rows
 // are left untouched, missing ones are inserted, and fields an operator
-// edited manually (Description / Type, etc.) are never overwritten.
+// edited manually (Description / Type / Group, etc.) are never
+// overwritten.  An existing row whose Group is empty is back-filled
+// on re-seed — this lets a database that pre-dates the Group column
+// pick up clustering labels in one Setup pass without the operator
+// having to touch every row.
 //
 // overrideScenarios lets per-call RegisterModel options pin the
 // scenario set explicitly.  Precedence:
@@ -371,13 +383,20 @@ func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource, over
 		scenarios = overrideScenarios
 	}
 	for _, sc := range scenarios {
-		data, description := permissionCode(resource, sc)
+		data, description, group := permissionCode(resource, sc)
 		if data == "" {
 			continue
 		}
 		var existing models.Permission
 		err := db.Unscoped().Where("data = ?", data).First(&existing).Error
 		if err == nil {
+			// Row exists.  Only back-fill Group when empty —
+			// never overwrite an operator-set value, even on re-seed.
+			if existing.Group == "" && group != "" {
+				if err := db.Model(&existing).Update("group", group).Error; err != nil {
+					return fmt.Errorf("back-fill group on %q: %w", data, err)
+				}
+			}
 			continue
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -387,6 +406,7 @@ func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource, over
 			Type:        string(models.PermissionTypeAPI),
 			Data:        data,
 			Description: description,
+			Group:       group,
 		}
 		if err := db.Create(&row).Error; err != nil {
 			return fmt.Errorf("auto-create permission %q: %w", data, err)

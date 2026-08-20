@@ -271,6 +271,8 @@ func (m *ListPermissionItem) validate(all bool) error {
 
 	// no validation rules for Description
 
+	// no validation rules for Group
+
 	if len(errors) > 0 {
 		return ListPermissionItemMultiError(errors)
 	}

@@ -48,14 +48,22 @@ func (s *PermissionService) ListCatalog(ctx context.Context, req *pb.ListCatalog
 }
 
 // ListPermissions returns the full catalog rows (id/type/data/
-// description) for the admin management UI.  An empty req.Type means
-// "all types"; otherwise filters by the models-layer PermissionType
-// string constant.
+// description/group) for the admin management UI.  An empty req.Type
+// means "all types"; otherwise filters by the models-layer
+// PermissionType string constant.
 //
 // Distinct from ListCatalog: ListCatalog returns only Permission.Data
 // strings (consumed by the runtime PermissionChecker); this endpoint
 // returns the same catalog with description metadata so the UI can
 // render labels alongside codes.
+//
+// Rows are ordered by id ASC — the catalog grows monotonically as
+// Setup registers new models, so id order is also "registration
+// order", which is what the UI's "audit, login log, ..." grouping
+// implicitly relies on.  If you change this, also re-check that the
+// front-end's el-collapse ordering (zh-Hans title sort) still feels
+// right with the new server order — the UI does NOT trust the wire
+// order, so this is purely a debug-time invariant.
 func (s *PermissionService) ListPermissions(ctx context.Context, req *pb.ListPermissionsRequest) (*pb.ListPermissionsResponse, error) {
 	var rows []models.Permission
 	q := s.opts.DB.WithContext(ctx).Order("id ASC")
@@ -72,6 +80,7 @@ func (s *PermissionService) ListPermissions(ctx context.Context, req *pb.ListPer
 			Type:        rows[i].Type,
 			Data:        rows[i].Data,
 			Description: rows[i].Description,
+			Group:       rows[i].Group,
 		})
 	}
 	return &pb.ListPermissionsResponse{Items: items}, nil

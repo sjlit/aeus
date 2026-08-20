@@ -15,7 +15,7 @@ import {
 import { fetchPermissionList, type PermissionItem } from '@/api/permission'
 import { fetchMenuTreeAll, type MenuTreeNode } from '@/api/menu'
 import { setsEqual } from '@/utils/setEqual'
-import { groupPermissionsByMenu, type PermissionGroup } from '@/utils/groupPermissions'
+import { groupPermissions, type PermissionGroup } from '@/utils/groupPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -120,22 +120,8 @@ function resetMenus() {
 // ── 权限 tab ───────────────────────────────────────────
 const openedGroups = ref<string[]>([])
 
-/** 把 menuTree 拍平成 {uri,name} 引用;只读 uri+name 两个字段,
- *  减少 watcher 对无关字段的依赖。 */
-const menuRefs = computed<{ uri: string; name: string }[]>(() => {
-  const out: { uri: string; name: string }[] = []
-  const walk = (nodes: MenuTreeNode[]) => {
-    for (const n of nodes) {
-      if (n.uri) out.push({ uri: n.uri, name: n.title })
-      if (n.children?.length) walk(n.children)
-    }
-  }
-  walk(menuTree.value)
-  return out
-})
-
 const apiGroups = computed<PermissionGroup[]>(() =>
-  groupPermissionsByMenu(apiPermissions.value, menuRefs.value),
+  groupPermissions(apiPermissions.value),
 )
 
 /** 每个分组当前勾选中的 permission data。初始化由下方 watchEffect 负责

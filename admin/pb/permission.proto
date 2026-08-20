@@ -58,13 +58,18 @@ message ListCatalogResponse {
 }
 
 // ListPermissionItem is one full row from sys_permissions.  Field
-// numbers follow the proto wire format — do not reuse 1-4 for other
+// numbers follow the proto wire format — do not reuse 1-5 for other
 // fields in this message; future revisions should append.
 message ListPermissionItem {
   int64  id          = 1;
   string type        = 2;
   string data        = 3;
   string description = 4;
+  // Group is the UI clustering label (e.g. "审计", "用户").
+  // Auto-filled from MenuEntry().Name by derive.go on Setup; empty
+  // for legacy rows that pre-date the column (auto-back-filled on
+  // next Setup pass).  Operators can edit freely via /system/sys_perm.
+  string group       = 5;
 }
 
 // ListPermissionsRequest optionally filters by Permission.Type (the
