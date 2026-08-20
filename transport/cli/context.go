@@ -135,14 +135,20 @@ func (ctx *Context) encode(data any) ([]byte, error) {
 
 // writeChunked writes buf to the underlying writer as one or more frames,
 // using FlagPortion for all but the final frame which is marked FlagComplete.
+// When len(buf) is an exact multiple of the chunk size, the last frame is
+// the final chunk itself (FlagComplete), NOT a trailing empty terminator.
 func (ctx *Context) writeChunked(t uint8, buf []byte) error {
 	chunkSize := math.MaxInt16 - 1
-	offset := 0
-	for i := 0; i < len(buf)/chunkSize; i++ {
-		if err := writeFrame(ctx.wc, newFrame(t, FlagPortion, ctx.seq, 0, buf[offset:chunkSize+offset])); err != nil {
+	for start := 0; start < len(buf); {
+		end := min(start+chunkSize, len(buf))
+		flag := byte(FlagPortion)
+		if end == len(buf) {
+			flag = FlagComplete
+		}
+		if err := writeFrame(ctx.wc, newFrame(t, flag, ctx.seq, 0, buf[start:end])); err != nil {
 			return err
 		}
-		offset += chunkSize
+		start = end
 	}
-	return writeFrame(ctx.wc, newFrame(t, FlagComplete, ctx.seq, 0, buf[offset:]))
+	return nil
 }
