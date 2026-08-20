@@ -12,9 +12,10 @@ import {
   replaceRolePermissions,
   type RolePermissions,
 } from '@/api/role'
-import { fetchPermissionList, parseApiUri, type PermissionItem } from '@/api/permission'
+import { fetchPermissionList, type PermissionItem } from '@/api/permission'
 import { fetchMenuTreeAll, type MenuTreeNode } from '@/api/menu'
 import { setsEqual } from '@/utils/setEqual'
+import { groupPermissionsByMenu, type PermissionGroup } from '@/utils/groupPermissions'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,25 +120,23 @@ function resetMenus() {
 // ── 权限 tab ───────────────────────────────────────────
 const openedGroups = ref<string[]>([])
 
-interface ApiGroup {
-  uri: string
-  items: PermissionItem[]
-}
-
-const apiGroups = computed<ApiGroup[]>(() => {
-  const map = new Map<string, ApiGroup>()
-  for (const p of apiPermissions.value) {
-    const uri = parseApiUri(p.data)
-    if (!uri) continue
-    let g = map.get(uri)
-    if (!g) {
-      g = { uri, items: [] }
-      map.set(uri, g)
+/** 把 menuTree 拍平成 {uri,name} 引用;只读 uri+name 两个字段,
+ *  减少 watcher 对无关字段的依赖。 */
+const menuRefs = computed<{ uri: string; name: string }[]>(() => {
+  const out: { uri: string; name: string }[] = []
+  const walk = (nodes: MenuTreeNode[]) => {
+    for (const n of nodes) {
+      if (n.uri) out.push({ uri: n.uri, name: n.title })
+      if (n.children?.length) walk(n.children)
     }
-    g.items.push(p)
   }
-  return [...map.values()].sort((a, b) => a.uri.localeCompare(b.uri))
+  walk(menuTree.value)
+  return out
 })
+
+const apiGroups = computed<PermissionGroup[]>(() =>
+  groupPermissionsByMenu(apiPermissions.value, menuRefs.value),
+)
 
 /** 每个分组当前勾选中的 permission data。初始化由下方 watchEffect 负责
  *  (数据到达 + 该组尚未被用户编辑时);后续由用户编辑 + saveApis 推进。 */
@@ -146,12 +145,12 @@ const groupChecked = ref<Record<string, string[]>>({})
 // 数据 / savedApis 变化时初始化 groupChecked(只在该组尚未被用户编辑时)
 watchEffect(() => {
   for (const g of apiGroups.value) {
-    if (groupChecked.value[g.uri]?.length) continue
+    if (groupChecked.value[g.key]?.length) continue
     const initial: string[] = []
     for (const p of g.items) {
       if (savedApis.value.has(p.data)) initial.push(p.data)
     }
-    groupChecked.value[g.uri] = initial
+    groupChecked.value[g.key] = initial
   }
 })
 
@@ -165,7 +164,7 @@ const savedGroupChecked = computed<Record<string, Set<string>>>(() => {
     for (const p of g.items) {
       if (savedApis.value.has(p.data)) s.add(p.data)
     }
-    out[g.uri] = s
+    out[g.key] = s
   }
   return out
 })
@@ -174,7 +173,7 @@ async function saveApis() {
   if (!roleKey.value) return
   const next: string[] = []
   for (const g of apiGroups.value) {
-    next.push(...(groupChecked.value[g.uri] ?? []))
+    next.push(...(groupChecked.value[g.key] ?? []))
   }
   saving.value = 'apis'
   try {
@@ -195,8 +194,8 @@ async function saveApis() {
 
 function resetApis() {
   for (const g of apiGroups.value) {
-    const snap = savedGroupChecked.value[g.uri]
-    groupChecked.value[g.uri] = snap ? [...snap] : []
+    const snap = savedGroupChecked.value[g.key]
+    groupChecked.value[g.key] = snap ? [...snap] : []
   }
 }
 
@@ -213,8 +212,8 @@ const menusDirty = computed(() => {
 
 const apisDirty = computed(() => {
   for (const g of apiGroups.value) {
-    const snap = savedGroupChecked.value[g.uri] ?? new Set<string>()
-    const cur = new Set(groupChecked.value[g.uri] ?? [])
+    const snap = savedGroupChecked.value[g.key] ?? new Set<string>()
+    const cur = new Set(groupChecked.value[g.key] ?? [])
     if (!setsEqual(snap, cur)) return true
   }
   return false
@@ -298,11 +297,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
           <el-collapse v-model="openedGroups" v-if="apiGroups.length > 0">
             <el-collapse-item
               v-for="group in apiGroups"
-              :key="group.uri"
-              :name="group.uri"
-              :title="`${group.uri} (${groupChecked[group.uri]?.length ?? 0} / ${group.items.length})`"
+              :key="group.key"
+              :name="group.key"
+              :title="`${group.title} (${groupChecked[group.key]?.length ?? 0} / ${group.items.length})`"
             >
-              <el-checkbox-group v-model="groupChecked[group.uri]">
+              <el-checkbox-group v-model="groupChecked[group.key]">
                 <el-checkbox
                   v-for="p in group.items"
                   :key="p.data"

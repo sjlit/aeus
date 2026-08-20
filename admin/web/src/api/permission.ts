@@ -1,4 +1,5 @@
 import { http } from './http'
+import { extractApiUri as parseApiUri } from '@/utils/groupPermissions'
 
 /** PermissionService.ListPermissionItem (admin/pb/permission.proto) —
  *  管理 UI 用的完整 catalog 行,带 id / type / data / description。 */
@@ -14,11 +15,10 @@ export interface PermissionItem {
 }
 
 /** 拆 'POST /system/sys_user' 为 uri 部分。derive.go permissionCode 保证
- *  输出永远 'METHOD<空格>URI' 格式;无空格的 row 是损坏数据,UI 跳过。 */
-export function parseApiUri(data: string): string {
-  const idx = data.indexOf(' ')
-  return idx < 0 ? '' : data.slice(idx + 1)
-}
+ *  输出永远 'METHOD<空格>URI' 格式;无空格的 row 是损坏数据,UI 跳过。
+ *  真实实现在 utils/groupPermissions(被 groupPermissionsByMenu 复用),
+ *  这里 re-export 保留历史 import 路径。 */
+export { parseApiUri }
 
 /** GET /permission/list?type=api —— 拉取指定类型的完整权限(用于权限配置 UI)。
  *  type 传 '' 时返回全量;默认 'api' 匹配分配页当前需求。 */
