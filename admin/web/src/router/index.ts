@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from 'vue-router'
 import DefaultLayout from '../layouts/default/Layout.vue'
 import LoginView from '../views/public/LoginView.vue'
 import NotFoundView from '../views/public/NotFoundView.vue'
-import ProfileView from '../views/system/profile/Index.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
 import { useTabsStore, notifyRoutesChanged } from '../stores/tabs'
@@ -33,7 +32,9 @@ const defaultRoute: RouteRecordRaw = {
       // 这样它会进入 DefaultLayout(顶栏/侧栏/tabs 全部保留)。
       path: PROFILE_PATH,
       name: `menu:${PROFILE_PATH}`,
-      component: ProfileView,
+      // 懒加载:与业务页一致走独立 chunk,不背进入口
+      // (组件名由 defineOptions 固化,keep-alive 匹配不受异步包装影响)
+      component: () => import('../views/system/profile/Index.vue'),
       meta: {
         title: '个人中心',
         componentName: deriveComponentName('@/views/system/profile/Index.vue'),
