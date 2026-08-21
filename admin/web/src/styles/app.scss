@@ -1,13 +1,10 @@
 @use './style';
-// Element Plus 玻璃化覆盖(迁移自参考项目),完整 EP token + 组件样式
+// Element Plus 玻璃化覆盖(迁移自参考项目),完整 EP token + 组件样式;
+// 文件末尾附带 @nobla/rest-ui(schema 驱动页)的主题对齐
 @use './glass';
-// @nobla/rest-ui(schema 驱动页)的主题对齐,必须排在 ep-glass 之后
-@use './rest-ui';
 // ---- 视觉工具:角落光晕 + 动效编排 + 纹理 ----
 // 排在 chrome 规则之后,工具类优先级与组件样式持平(各自有专属类名,不打架)
-@use './aura';
-@use './motion';
-@use './texture';
+@use './visual';
 
 // L3 模板的 body 有 padding:28px,管理台不需要
 body {
