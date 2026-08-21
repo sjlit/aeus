@@ -12,6 +12,14 @@ export function setTabsRouter(router: Router): void {
   routerInstance = router
 }
 
+/** 路由表版本号。routerInstance 是非响应式引用,动态注册菜单路由
+ *  (registerMenuRoutes)不会触发任何依赖收集;bump 此值让
+ *  cachedViews 重新求值,新注册页面的 componentName 才能进 keep-alive。 */
+const routesVersion = ref(0)
+export function notifyRoutesChanged(): void {
+  routesVersion.value++
+}
+
 export interface Tab {
   path: string
   name: string
@@ -29,8 +37,10 @@ export const useTabsStore = defineStore('tabs', () => {
   const refreshTokens = ref<Record<string, number>>({})
 
   // 给 KeepAlive :include 用:从路由表按 meta.keepAlive 派生(缺省 true)
-  // setTabsRouter() 在启动阶段注入,getRoutes() 反映最新注册的菜单路由
+  // setTabsRouter() 在启动阶段注入;动态注册路由后由 notifyRoutesChanged()
+  // bump routesVersion 触发重算
   const cachedViews = computed<string[]>(() => {
+    void routesVersion.value
     const r = routerInstance
     if (!r) return []
     return r

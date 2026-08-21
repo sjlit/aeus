@@ -175,7 +175,10 @@ function resetApis() {
 }
 
 // ── dirty 检测 & 离开守卫 ─────────────────────────────
-const menusDirty = computed(() => {
+// el-tree 的勾选状态是非响应式内部状态,computed 会把首次求值结果永久缓存,
+// 用户勾选/取消不会触发重算 → isDirty 失真、守卫误放行。这里改为普通函数,
+// 在决策时刻(离开守卫 / beforeunload)直接读取树的实时状态。
+function calcMenusDirty(): boolean {
   const tree = menuTreeRef.value
   if (!tree) return false
   const checked = new Set<string>([
@@ -183,16 +186,20 @@ const menusDirty = computed(() => {
     ...(tree.getHalfCheckedKeys() as string[]),
   ])
   return !setsEqual(checked, savedMenus.value)
-})
+}
 
-const apisDirty = computed(() => !setsEqual(realCheckedKeys(), savedApis.value))
+function calcApisDirty(): boolean {
+  return !setsEqual(realCheckedKeys(), savedApis.value)
+}
 
-const isDirty = computed(() => menusDirty.value || apisDirty.value)
+function isDirty(): boolean {
+  return calcMenusDirty() || calcApisDirty()
+}
 
 /** 离开确认:无改动直接放行,有改动弹确认。vue-router 4 的
  *  onBeforeRouteLeave 支持返回 Promise<boolean>,无需旁路状态。 */
 async function confirmLeave(): Promise<boolean> {
-  if (!isDirty.value) return true
+  if (!isDirty()) return true
   try {
     await ElMessageBox.confirm('有未保存的改动,确定离开?', '提示', {
       type: 'warning',
@@ -209,7 +216,7 @@ onBeforeRouteLeave(async () => confirmLeave())
 
 // 兜底:浏览器关闭 / 刷新时也弹确认
 function beforeUnload(e: BeforeUnloadEvent) {
-  if (isDirty.value) {
+  if (isDirty()) {
     e.preventDefault()
     e.returnValue = ''
   }

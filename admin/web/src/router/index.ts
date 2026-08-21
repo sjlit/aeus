@@ -6,7 +6,7 @@ import NotFoundView from '../views/public/NotFoundView.vue'
 import ProfileView from '../views/system/profile/Index.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
-import { useTabsStore } from '../stores/tabs'
+import { useTabsStore, notifyRoutesChanged } from '../stores/tabs'
 import type { MenuNode } from '../types'
 import { normalizeGlobPath, deriveComponentName } from './viewPath'
 
@@ -102,6 +102,7 @@ function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
   if (menu.tree === registeredFor) return
   registeredFor = menu.tree
   const idx = menu.flatIndex
+  let added = 0
   for (const uri of idx.uris) {
     if (router.hasRoute(`menu:${uri}`)) continue
     const viewPath = idx.viewsByUri.get(uri)
@@ -120,7 +121,11 @@ function registerMenuRoutes(menu: ReturnType<typeof useMenuStore>): void {
         componentName,
       },
     })
+    added++
   }
+  // cachedViews 只依赖非响应式 router 引用,注册新路由后必须显式通知重算,
+  // 否则动态菜单页永远进不了 keep-alive。
+  if (added > 0) notifyRoutesChanged()
 }
 
 /**

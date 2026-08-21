@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { setTabsRouter, useTabsStore, type Tab } from '../tabs'
+import { setTabsRouter, notifyRoutesChanged, useTabsStore, type Tab } from '../tabs'
 
 function tab(overrides: Partial<Tab> = {}): Tab {
   return {
@@ -149,6 +149,19 @@ describe('tabs store', () => {
         { path: '/system/sys_role/perm/:roleKey', meta: { componentName: 'SystemSysRolesPermission' } },
       ],
     } as never)
+    expect(store.cachedViews).toEqual(['SystemSysUsers'])
+  })
+
+  it('动态注册路由后 notifyRoutesChanged 触发 cachedViews 重算', async () => {
+    // 模拟非响应式 router:路由表是可变数组,getRoutes 每次返回最新快照
+    const routes: { path: string; meta: Record<string, unknown> }[] = []
+    setTabsRouter({ getRoutes: () => routes } as never)
+    const store = useTabsStore()
+    expect(store.cachedViews).toEqual([])
+    // registerMenuRoutes 注册新路由后必须 bump,否则 computed 永不重算
+    routes.push({ path: '/system/sys_user', meta: { componentName: 'SystemSysUsers' } })
+    notifyRoutesChanged()
+    await nextTick()
     expect(store.cachedViews).toEqual(['SystemSysUsers'])
   })
 })
