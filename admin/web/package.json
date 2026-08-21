@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/inter-tight": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

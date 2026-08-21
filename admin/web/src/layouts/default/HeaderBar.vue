@@ -90,8 +90,8 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 16px;
-    height: 52px;
-    padding: 0 14px;
+    height: 60px;
+    padding: 0 16px;
 }
 
 .cluster {
@@ -111,8 +111,8 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 
 /* ── icon-btn(折叠) ── */
 .icon-btn {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     flex-shrink: 0;
     border: none;
     background: var(--glass-soft);
@@ -121,7 +121,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     place-items: center;
     cursor: pointer;
     color: var(--ink-2);
-    font-size: 15px;
+    font-size: 16px;
     padding: 0;
     font-family: inherit;
     transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -147,7 +147,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     overflow: hidden;
     white-space: nowrap;
     /* 面包屑是中文标题,mono 无 CJK 字形会回落系统字体,统一走正文家族 */
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.02em;
 }
 
@@ -180,7 +180,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 10px 7px 14px;
+    padding: 8px 12px 8px 16px;
     background: var(--glass-soft);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-pill);
@@ -190,7 +190,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     justify-self: center;
     color: var(--ink-2);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13.5px;
     letter-spacing: 0.02em;
     text-align: left;
     cursor: pointer;
@@ -217,7 +217,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 }
 
 .s-icon {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--ink-3);
     flex-shrink: 0;
 }
@@ -233,7 +233,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 
 .s-kbd {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--ink-3);
     background: var(--glass);
     border: 1px solid var(--glass-border);

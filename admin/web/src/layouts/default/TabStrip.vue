@@ -281,7 +281,7 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
 .tabs-row {
     display: flex;
     align-items: center;
-    height: 42px;
+    height: 48px;
     padding: 0 8px 0 12px;
     gap: 6px;
 }
@@ -306,11 +306,11 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 6px 10px;
+    padding: 7px 12px;
     border-radius: 8px;
     cursor: pointer;
     color: var(--ink-2);
-    font-size: 12.5px;
+    font-size: 13.5px;
     font-weight: 400;
     letter-spacing: 0.01em;
     white-space: nowrap;
@@ -390,14 +390,14 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
 .tab-close {
     display: grid;
     place-items: center;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border: none;
     background: transparent;
     border-radius: 4px;
     cursor: pointer;
     color: var(--ink-3);
-    font-size: 11px;
+    font-size: 12px;
     flex-shrink: 0;
     padding: 0;
     font-family: inherit;
@@ -459,8 +459,8 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
     position: fixed;
     z-index: 9999;
     background: var(--glass-strong);
-    backdrop-filter: blur(30px) saturate(160%);
-    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-md);
     box-shadow: 0 12px 40px rgba(60, 40, 90, 0.18);
@@ -514,6 +514,10 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
 
 .tab-select {
     width: 100%;
+
+    /* 移动端下拉:与放大后的顶栏(60px)匹配,EP 默认 32px 太矮 */
+    --el-select-input-height: 40px;
+    --el-select-input-font-size: 14px;
 }
 
 .option-label {

@@ -75,25 +75,25 @@ function onCommand(cmd: string) {
 }
 
 .um-avatar {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
     display: grid;
     place-items: center;
     color: white;
     font-weight: 600;
-    font-size: 10px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
 .um-name {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 .um-arrow {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--ink-3);
 }
 </style>

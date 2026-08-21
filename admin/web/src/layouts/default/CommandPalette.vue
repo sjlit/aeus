@@ -190,8 +190,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 .palette {
     width: min(600px, 100%);
     background: var(--glass-strong);
-    backdrop-filter: blur(30px) saturate(160%);
-    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-lg);
     box-shadow: 0 24px 64px rgba(30, 60, 60, 0.28);

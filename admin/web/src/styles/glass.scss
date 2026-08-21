@@ -62,14 +62,23 @@
    注意:el-button / el-tag / el-pagination button / el-alert 这类
    "不透明半透明填充即可"的小元素去掉了 backdrop-filter —— 它们通常
    被多个叠放在背景上,逐个模糊等于把整片区域反复重画,GPU/CPU 双杀。
+   el-input/el-select wrapper 同理:一页动辄十几个,逐个 blur(20px)
+   是表单页合成开销的大头,只保留半透明底(下方单独规则)。
    只在真正的浮层 / overlay / chrome 容器上保留毛玻璃(dialog / drawer /
    message / notification / popper / sidebar / topbar / 命令面板)。 */
-.el-card,
-.el-input__wrapper,
-.el-select__wrapper {
+.el-card {
   background: var(--glass) !important;
   backdrop-filter: blur(20px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+}
+
+/* 输入框/选择器 wrapper:半透明玻璃底,不加 backdrop-filter
+   (数量多,逐个模糊成本远超收益;视觉上与卡片玻璃底几乎无差) */
+.el-input__wrapper,
+.el-select__wrapper {
+  background: var(--glass) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow: 0 4px 16px var(--shadow-soft) !important;
 }
