@@ -9,7 +9,7 @@
   /* 背景全部透明 / 半透明,让毛玻璃透出渐变底色 */
   --el-bg-color: transparent;
   --el-bg-color-page: transparent;
-  --el-bg-color-overlay: rgba(255, 255, 255, 0.85);
+  --el-bg-color-overlay: #ffffff;
 
   --el-fill-color-blank: rgba(255, 255, 255, 0.72);
   --el-fill-color-light: rgba(255, 255, 255, 0.5);
@@ -45,13 +45,13 @@
   --el-font-family: var(--body);
 }
 
-// 浮层玻璃底:背景/毛玻璃/边框/圆角/阴影一次定义,各浮层组件按差异传参,
-// 避免 7 处重复同一段 5 行声明。
-@mixin glass-surface($blur: 28px, $radius: var(--r-lg), $shadow: 0 24px 64px rgba(30, 60, 60, 0.28)) {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur($blur) saturate(160%) !important;
-  -webkit-backdrop-filter: blur($blur) saturate(160%) !important;
-  border: 1px solid var(--glass-border) !important;
+// 浮层统一实色面:白底 + teal 描边,不再用毛玻璃——backdrop-filter 在
+// 弹窗开启动画和身后页面滚动时反复重绘,是浮层渲染成本的大头;
+// 玻璃质感保留给页面骨架(卡片/输入框/侧栏/顶栏)。
+// 白色 --glass-border 在实色底上不可见,描边一律用 teal 系。
+@mixin glass-surface($radius: var(--r-lg), $shadow: 0 24px 64px rgba(30, 60, 60, 0.28)) {
+  background: #fff !important;
+  border: 1px solid var(--el-border-color-light) !important;
   border-radius: $radius !important;
   box-shadow: $shadow !important;
 }
@@ -145,10 +145,21 @@
   transform: translateY(-1px);
 }
 
+/* primary 实色深薄荷:白字对比度 4.9:1 过 AA;
+   双色相渐变只保留给装饰元素(text-gradient / tab 激活条) */
 .el-button--primary:not(.is-link) {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
   border: none !important;
   color: white !important;
+}
+
+.el-button--primary:not(.is-link):hover,
+.el-button--primary:not(.is-link):active {
+  background: var(--acc-mint-deeper) !important;
+}
+
+.el-button--primary.is-disabled:not(.is-link) {
+  background: var(--el-color-primary-light-5) !important;
 }
 
 .el-button--primary.is-link {
@@ -168,8 +179,6 @@
 /* —— 弹窗 / 抽屉(overlay 浮层,teleport 到 body,需全局覆盖) ————————— */
 .el-overlay {
   background: rgba(30, 60, 60, 0.28) !important;
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
 }
 
 .el-dialog {
@@ -179,7 +188,7 @@
 .el-dialog__header {
   margin-right: 0 !important;
   padding-bottom: 12px !important;
-  border-bottom: 1px solid var(--glass-border) !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
 }
 
 .el-dialog__title {
@@ -192,10 +201,8 @@
 }
 
 .el-drawer {
-  background: var(--glass-strong) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
-  border-left: 1px solid var(--glass-border) !important;
+  background: #fff !important;
+  border-left: 1px solid var(--el-border-color-light) !important;
 }
 
 .el-drawer__header {
@@ -203,7 +210,7 @@
   font-weight: 600 !important;
   margin-bottom: 0 !important;
   padding-bottom: 12px !important;
-  border-bottom: 1px solid var(--glass-border) !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
 }
 
 .el-drawer__body {
@@ -227,10 +234,8 @@
   color: var(--el-color-warning) !important;
 }
 
-.el-popper.is-light .el-popper__arrow::before {
-  background: var(--glass-strong) !important;
-  border-color: var(--glass-border) !important;
-}
+/* 浅色 popper 箭头不覆盖:--el-bg-color-overlay 已实色,
+   EP 默认的箭头底色/描边自然对齐,且保留它对内侧两边的透明化处理 */
 
 .el-dropdown-menu__item {
   color: var(--ink-2) !important;
@@ -239,7 +244,7 @@
 
 .el-dropdown-menu__item:hover,
 .el-dropdown-menu__item:focus {
-  background: var(--glass-soft) !important;
+  background: rgba(108, 197, 168, 0.12) !important;
   color: var(--ink) !important;
 }
 
@@ -336,7 +341,7 @@
 }
 
 .el-switch.is-checked .el-switch__core {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
   border-color: transparent !important;
 }
 
@@ -354,14 +359,17 @@
 .el-popper.is-dark,
 .el-tooltip__popper,
 .el-popconfirm {
-  @include glass-surface($blur: 24px, $radius: var(--r-sm), $shadow: 0 8px 28px rgba(60, 40, 90, 0.18));
+  @include glass-surface($radius: var(--r-sm), $shadow: 0 8px 28px rgba(60, 40, 90, 0.18));
   color: var(--ink) !important;
 }
 
+/* 箭头覆盖不能加 !important:EP 用 !important 把旋转方块内侧两边描边
+   置透明来只留外侧三角,全量 border-color !important 会把内侧也染色,
+   方块四边全可见 = 看起来两个三角形 */
 .el-popper.is-dark .el-popper__arrow::before,
 .el-tooltip__popper .el-popper__arrow::before {
-  background: var(--glass-strong) !important;
-  border-color: var(--glass-border) !important;
+  background: #fff;
+  border-color: var(--el-border-color-light);
 }
 
 .el-popconfirm__main {
@@ -374,7 +382,7 @@
 
 /* —— Message(ElMessage toast,固定浮层) ————————— */
 .el-message {
-  @include glass-surface($blur: 24px, $radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
+  @include glass-surface($radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
 }
 
 .el-message .el-message__content {
@@ -435,7 +443,7 @@
 }
 
 .el-date-table td.in-range>div {
-  background: var(--glass-soft) !important;
+  background: rgba(108, 197, 168, 0.12) !important;
 }
 
 .el-date-table td.available:hover,
@@ -444,7 +452,7 @@
 }
 
 .el-date-table td.current:not(.disabled) span {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
   color: white !important;
 }
 
@@ -464,7 +472,13 @@
 }
 
 .el-radio__input.is-checked .el-radio__inner {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
+  border-color: transparent !important;
+}
+
+.el-checkbox__input.is-checked .el-checkbox__inner,
+.el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background: var(--acc-mint-deep) !important;
   border-color: transparent !important;
 }
 
@@ -482,7 +496,7 @@
 }
 
 .el-progress-bar__inner {
-  background: linear-gradient(90deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint) !important;
 }
 
 /* —— Alert ————————— */
@@ -517,7 +531,7 @@
 /* —— Badge ————————— */
 .el-badge__content {
   border: none !important;
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
   color: white !important;
 }
 
@@ -591,7 +605,7 @@
 
 .el-step__head.is-process .el-step__icon,
 .el-step__head.is-finish .el-step__icon {
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac)) !important;
+  background: var(--acc-mint-deep) !important;
   border-color: transparent !important;
   color: white !important;
 }
