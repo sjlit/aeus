@@ -11,6 +11,13 @@ import { useAuthStore } from './stores/auth'
 import { setTabsRouter } from './stores/tabs'
 import { SchemaUIPlugin, SchemaUIConfig } from '@sjlit/rest-ui'
 import '@sjlit/rest-ui/dist/style.css'
+// EP CSS 全量引入。原因:按需 importStyle: 'css' 不会自动加载命令式 service
+// (ElMessage / ElMessageBox / ElNotification) 与共享 base.css(--el-* 变量、
+// fade/zoom 动画),需要逐个手动补 base.css + 三个 service CSS 兜底,等于
+// 半全量。按需 JS 仍由 vite.config.ts 里的 ElementPlusResolver 自动解析
+// 模板里的 <el-*>,这里只把 CSS 一次性补齐。体积差异在可接受范围(主 chunk
+// +32 KB raw / +32 KB gzip),换来所有弹层/动画/toast/loading 不再缺样式。
+import 'element-plus/dist/index.css'
 import './styles/app.scss'
 
 const app = createApp(App)

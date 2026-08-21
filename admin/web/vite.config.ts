@@ -7,17 +7,17 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 export default defineConfig({
   plugins: [
     vue(),
-    // EP 按需引入:模板里用到 el-* 组件 / v-loading 指令时,自动 import
-    // 对应模块与 CSS;避免 main.ts 一次性 app.use(ElementPlus) 引爆全量。
-    // importStyle: 'css' 让组件 CSS 走 Vite 自动拆分;noStylesComponents
-    // 让 ElMessage / ElMessageBox / ElNotification 这类不挂载到 DOM 的服务
-    // 跳过 CSS(它们的样式已合并在 EP 通用弹层样式里)。
+    // EP 组件 JS 按需引入:CSS 走全量(见 main.ts 的 `element-plus/dist/index.css`),
+    // 这里只让 resolver 解析模板里的 <el-*>,自动 import 对应 JS 模块;指令
+    // (v-loading 等) 也由 directives: true 自动 import。
+    //
+    // importStyle: false —— 全量 CSS 已经在 main.ts 引入了,这里不再让
+    // resolver 给每个组件再 import 一份 CSS,避免重复。
     Components({
       resolvers: [
         ElementPlusResolver({
-          importStyle: 'css',
+          importStyle: false,
           directives: true,
-          noStylesComponents: ['ElMessage', 'ElMessageBox', 'ElNotification'],
         }),
       ],
       // dts 让 IDE 能识别自动导入的组件类型(无需手写 import)。
