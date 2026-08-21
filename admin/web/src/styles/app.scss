@@ -3,6 +3,11 @@
 @use './glass';
 // @nobla/rest-ui(schema 驱动页)的主题对齐,必须排在 ep-glass 之后
 @use './rest-ui';
+// ---- 视觉工具:角落光晕 + 动效编排 + 纹理 ----
+// 排在 chrome 规则之后,工具类优先级与组件样式持平(各自有专属类名,不打架)
+@use './aura';
+@use './motion';
+@use './texture';
 
 // L3 模板的 body 有 padding:28px,管理台不需要
 body {
@@ -74,11 +79,24 @@ body {
     flex-shrink: 0;
 
     &::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      background: var(--acc-mint);
-      border-radius: 2px;
+      // 系统标:暖色渐变方块 + 小写 italic 'a'(倾斜 -6°)。
+      // 与绿色菜单行形成冷暖对位,是侧栏唯一带暖色的元素 → 强品牌点。
+      content: 'a';
+      width: 22px;
+      height: 22px;
+      background: var(--grad-warm);
+      color: white;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1;
+      letter-spacing: 0;
+      transform: rotate(-6deg);
+      box-shadow: 0 3px 10px rgba(244, 164, 132, 0.35);
       flex-shrink: 0;
     }
   }
@@ -334,9 +352,36 @@ body {
     margin-bottom: 6px;
 
     em {
+      // 暖色渐变强调词:hero 里 <em>自动承接,无需 .text-gradient--warm 类名
       font-style: italic;
+      background: var(--grad-warm);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
     }
   }
+}
+
+// ---- 系统标 .mark-a ----
+// 全系统可复用的字符级品牌符号:favicon、loading 转圈、空状态插画中央字符、邮件角标都套这个。
+// 用法:<span class="mark-a">a</span>(默认显示 a;也可以包在 svg / 空态图中央)
+.mark-a {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--grad-warm);
+  color: white;
+  border-radius: 5px;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0;
+  transform: rotate(-6deg);
+  box-shadow: 0 2px 6px rgba(244, 164, 132, 0.3);
+  flex-shrink: 0;
 }
 
 // ---- 通用内容页容器(不走 SchemaViewer 的手写视图用) ----

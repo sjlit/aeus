@@ -57,9 +57,13 @@ watch(isMobile, (now) => {
 
             <el-main>
                 <router-view v-slot="{ Component, route: r }">
-                    <keep-alive :include="tabs.cachedViews">
-                        <component :is="Component" :key="`${r.path}::${tabs.getRefreshToken(r.path)}`" />
-                    </keep-alive>
+                    <!-- Transition 包 keep-alive,模式 out-in 让离场先于入场;
+                         page-* 过渡四件套在 motion.scss 定义 -->
+                    <Transition name="page" mode="out-in">
+                        <keep-alive :include="tabs.cachedViews">
+                            <component :is="Component" :key="`${r.path}::${tabs.getRefreshToken(r.path)}`" />
+                        </keep-alive>
+                    </Transition>
                 </router-view>
             </el-main>
         </el-container>

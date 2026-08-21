@@ -1,0 +1,70 @@
+// =========================================================
+// aura · 角落光晕工具(从登录页抽离,通用化)
+// 挂在 .aura 元素上,叠加一对 ::before / ::after 极光球;
+// 通过 --aura-c1/c2 改颜色, --aura-o1/o2 改强度;
+// .aura--cool / --warm / --mono / --muted / --strong 是预设变体,直接套。
+// 父级需要 position: relative + isolation: isolate(.aura 已自带),
+// 否则 z-index: -1 会落到 body 之下看不见。
+// =========================================================
+
+.aura {
+  position: relative;
+  isolation: isolate;
+}
+
+.aura::before,
+.aura::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+// 默认:右上蜜桃 + 左下紫蓝(与登录页同款,但 c2 已替换为新的 violet)
+.aura::before {
+  top: -80px;
+  right: -80px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, var(--aura-c1, var(--acc-peach)), transparent 70%);
+  opacity: var(--aura-o1, 0.5);
+}
+
+.aura::after {
+  bottom: -60px;
+  left: -60px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--aura-c2, var(--acc-violet-1)), transparent 70%);
+  opacity: var(--aura-o2, 0.4);
+}
+
+// ---- 配色变体 ----
+// 放在 base 之后,让 variant 的 var 覆盖默认值
+.aura--cool {
+  --aura-c1: var(--acc-mint);
+  --aura-c2: var(--acc-violet-1);
+}
+
+.aura--warm {
+  --aura-c1: var(--acc-peach);
+  --aura-c2: var(--acc-amber-1);
+}
+
+.aura--mono {
+  --aura-c1: var(--acc-mint);
+  --aura-c2: var(--acc-mint-deep);
+}
+
+// ---- 强度变体(叠加在配色之上) ----
+.aura--muted {
+  --aura-o1: 0.18;
+  --aura-o2: 0.18;
+}
+
+.aura--strong {
+  --aura-o1: 0.65;
+  --aura-o2: 0.55;
+}

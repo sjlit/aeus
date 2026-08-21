@@ -1,0 +1,151 @@
+// =========================================================
+// motion · 入场编排 + 数据呼吸 + 加载/空状态叙事
+// 速度表统一在这里声明(--ease-* / --dur-*),
+// 后续 transition / animation 全部引用,避免散落的 0.16 / 0.18。
+// =========================================================
+
+:root {
+  --ease-out:    cubic-bezier(.2, .7, .2, 1);    /* 入场首选 */
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);     /* hover / 颜色过渡 */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);/* 弹簧,徽章弹出 */
+  --dur-instant: 0.10s;
+  --dur-fast:    0.16s;
+  --dur-base:    0.24s;
+  --dur-slow:    0.40s;
+}
+
+// ---- 入场:rise + staggered 编排 ----
+// 用法:<div class="rise-in" :data-i="Math.min(i, 9)">
+// data-i 封顶 9,避免 >9 项时 delay 累积过长
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rise-in {
+  animation: rise 0.36s var(--ease-out) both;
+}
+
+.rise-in[data-i="0"] { animation-delay: 0ms; }
+.rise-in[data-i="1"] { animation-delay: 30ms; }
+.rise-in[data-i="2"] { animation-delay: 60ms; }
+.rise-in[data-i="3"] { animation-delay: 90ms; }
+.rise-in[data-i="4"] { animation-delay: 120ms; }
+.rise-in[data-i="5"] { animation-delay: 150ms; }
+.rise-in[data-i="6"] { animation-delay: 180ms; }
+.rise-in[data-i="7"] { animation-delay: 210ms; }
+.rise-in[data-i="8"] { animation-delay: 240ms; }
+.rise-in[data-i="9"] { animation-delay: 270ms; }
+
+// ---- 骨架:薄荷→丁香扫光 ----
+@keyframes skeleton-sweep {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--glass-soft) 0%,
+    rgba(155, 133, 196, 0.12) 50%,
+    var(--glass-soft) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+  border-radius: 8px;
+  min-height: 14px;
+}
+
+// ---- 漂浮:空状态插画 ----
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+.empty-illust {
+  animation: float 3s ease-in-out infinite;
+}
+
+// ---- 触觉按下反馈 ----
+// 给任意"可点"元素加 .pressable,按下回沉 + 微缩,给用户"摁到了"的确认
+.pressable {
+  transition:
+    background var(--dur-fast) var(--ease-in-out),
+    color var(--dur-fast) var(--ease-in-out),
+    border-color var(--dur-fast) var(--ease-in-out),
+    box-shadow var(--dur-fast) var(--ease-in-out),
+    transform var(--dur-instant) var(--ease-out);
+}
+
+.pressable:active {
+  transform: translateY(1px) scale(0.985);
+  box-shadow: 0 1px 2px var(--shadow-soft);
+}
+
+// ---- 脉冲圆点 ----
+// 复用登录页 .live 的脉冲效果;暖色 amber-1,与主色错开表示"待办/未读"
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(1.4); }
+}
+
+.dot-attention {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--acc-amber-1);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(212, 160, 74, 0.18);
+  animation: pulse 1.6s ease-in-out infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+// 三态变体:覆盖背景色 + 同色光晕。放在 base 之后才生效。
+.dot-attention--ok {
+  background: var(--acc-mint);
+  box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.18);
+}
+
+.dot-attention--danger {
+  background: var(--acc-peach-3);
+  box-shadow: 0 0 0 3px rgba(196, 120, 89, 0.18);
+}
+
+// ---- 路由过渡:page-* ----
+// 用法:&lt;Transition name=&quot;page&quot; mode=&quot;out-in&quot;&gt; 包裹 router-view 内层。
+// leave 比 enter 略快(--dur-fast vs --dur-base),
+// 让用户感觉"老页面利落退场、新页面从容登场"。
+.page-enter-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.page-leave-active {
+  transition:
+    opacity var(--dur-fast) var(--ease-in-out),
+    transform var(--dur-fast) var(--ease-in-out);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+// ---- 减少动效偏好 ----
+// 系统级 / 用户级 prefers-reduced-motion: reduce 时,关掉本页所有编排动画
+@media (prefers-reduced-motion: reduce) {
+
+  .rise-in,
+  .skeleton,
+  .empty-illust,
+  .dot-attention,
+  .pressable {
+    animation: none !important;
+    transition: none !important;
+  }
+}
