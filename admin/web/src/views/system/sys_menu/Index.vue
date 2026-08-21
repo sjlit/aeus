@@ -224,9 +224,12 @@ async function onDelete(row: MenuRow) {
       <el-table-column prop="description" label="备注" min-width="160" show-overflow-tooltip />
       <el-table-column label="操作" width="220" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="openCreate(row)">新增子菜单</el-button>
-          <el-button size="small" type="primary" link @click="openEdit(row)">编辑</el-button>
-          <el-button size="small" type="danger" link @click="onDelete(row)">删除</el-button>
+          <!-- el-table slot 的 row 推为 DefaultRow(=Record<string, any>);
+               实际数据是 MenuRow[](:data="tree"),这里 inline 收敛到 MenuRow,
+               避免把函数签名放宽到 Record<string, any>。 -->
+          <el-button size="small" type="primary" link @click="openCreate(row as MenuRow)">新增子菜单</el-button>
+          <el-button size="small" type="primary" link @click="openEdit(row as MenuRow)">编辑</el-button>
+          <el-button size="small" type="danger" link @click="onDelete(row as MenuRow)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
