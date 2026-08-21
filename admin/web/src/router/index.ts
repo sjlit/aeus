@@ -182,6 +182,14 @@ router.beforeEach(async (to) => {
     return { path: '/', replace: true }
   }
 
+  // 本次导航的 to.matched 可能早在 addRoute 之前就被解析成 not-found(catch-all)
+  // ——典型场景:登录后 redirect 到深链。此时 resolve 已能命中新注册的路由,
+  // 但 return true 放行的是过期的 matched,会渲染 404。返回新 location 强制
+  // 重放一轮导航(下一轮 to.name 已是菜单路由,直接走 return true,不会死循环)。
+  if (to.name === 'not-found') {
+    return { path: to.path, query: to.query, hash: to.hash, replace: true }
+  }
+
   return true
 })
 
