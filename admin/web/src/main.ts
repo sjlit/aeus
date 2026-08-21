@@ -45,30 +45,29 @@ bindHttpContext({
   },
 })
 
-// 先挂路由 + mount,再后台 bootstrap:
-// - 无 token:无操作,用户立即看到 LoginView。
-// - 有 stale token:用户先看到 LoginView / Layout 框架,
-//   路由守卫在首次导航前再调一次 ensureMenuRoutes() 等菜单数据回来。
-//   失败由 http 拦截器统一处理(认证失败 → logout + pushLogin;网络失败 → toast)。
+// bootstrap 完成后再挂路由。
+// 必须 await:vue-router 4 的 pushWithRedirect 在首航时就把 targetLocation.matched
+// 锁死,守卫里 router.addRoute() 后续注册的菜单路由不会回填,会落到 catch-all
+// 渲染成 404(P0-4 改成 queueMicrotask 后台跑就引入了这个回归)。
 async function bootstrap(): Promise<void> {
   if (!auth.accessToken) return
   try {
     await Promise.all([
-      auth.fetchProfile().catch(() => {
-        // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
+      auth.fetchProfile().catch((err) => {
+        // http 拦截器已分别处理:401 → refreshAndRetry(失败则 logout + pushLogin),
+        // 网络/业务错误 → ElMessage.error。这里只吞 promise,dev 下留痕便于排查
+        // 「菜单有了但 profile 没回来」之类的中间态。
+        if (import.meta.env.DEV) console.warn('[bootstrap] fetchProfile failed:', err)
       }),
-      ensureMenuRoutes(),
+      ensureMenuRoutes(), // 内部 try/catch 已吞网络错误,菜单失败不阻断挂载
     ])
-  } catch {
-    // 已在每个分支内部处理;这里吞掉异常,避免 unhandledrejection
+  } catch (err) {
+    // ensureMenuRoutes 内部已吞错,理论上不会进这里;留兜底避免 unhandledrejection。
+    if (import.meta.env.DEV) console.error('[bootstrap] unexpected error:', err)
   }
 }
 
-// 立即挂载,不等待 bootstrap。路由守卫负责按需拉取菜单 / profile;
-// 路由被 vue-router 设计为「守卫异步后再放行」,所以首屏跳转也不会
-// 落到 catch-all(404)。
-app.use(router)
-app.mount('#app')
-
-// 后台 bootstrap:不阻塞首屏 paint;若 token 仍在,守卫触发前完成即可。
-queueMicrotask(() => void bootstrap())
+bootstrap().finally(() => {
+  app.use(router)
+  app.mount('#app')
+})
