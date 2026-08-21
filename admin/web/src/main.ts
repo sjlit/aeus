@@ -1,12 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-// 自托管可变字体(替代 Google Fonts CDN,国内网络不可达)。
+// 自托管可变字体:仅 latin + latin-ext 子集(见 src/styles/fonts.scss),
+// 替代 fontsource 默认 index.css 一次性打包全部子集。
 // 必须在 app.scss 之前引入,保证 @font-face 先于使用处加载。
-import '@fontsource-variable/bricolage-grotesque/opsz.css'
-import '@fontsource-variable/inter-tight'
-import '@fontsource-variable/jetbrains-mono'
+import './styles/fonts.scss'
 import App from './App.vue'
 import { router, ensureMenuRoutes, goToLogin } from './router'
 import { bindHttpContext, http } from './api/http'
@@ -19,11 +16,9 @@ import './styles/app.scss'
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
-app.use(ElementPlus)
-// 注意:router **不在这里** use——vue-router 4 在 app.use(router) 后会立刻触发
-// 初始导航(microtask),那时 bootstrap 还没拿到菜单。下面 bootstrap 完成后
-// 再 use(router),保证首次导航时路由表已经备好。
-
+// 注意:ElementPlus 走 unplugin-vue-components 自动按需引入(vite.config.ts),
+// 不再 app.use(ElementPlus)。v-loading 等指令由 resolver 的 directives: true
+// 自动 import;ElMessage / ElMessageBox 等服务在用到的地方显式 import。
 app.use(SchemaUIPlugin, <SchemaUIConfig>{
   httpClient: http,
   apiPrefix: '',
@@ -43,22 +38,30 @@ bindHttpContext({
   },
 })
 
-// 启动时 bootstrap:有 token 时拉取 profile + 菜单并预注册路由,
-// 避免刷新后出现 user-pill 为空、菜单页 404 的问题。
-// 失败由 http 拦截器统一处理(认证失败 → logout + pushLogin;网络失败 → toast)。
+// 先挂路由 + mount,再后台 bootstrap:
+// - 无 token:无操作,用户立即看到 LoginView。
+// - 有 stale token:用户先看到 LoginView / Layout 框架,
+//   路由守卫在首次导航前再调一次 ensureMenuRoutes() 等菜单数据回来。
+//   失败由 http 拦截器统一处理(认证失败 → logout + pushLogin;网络失败 → toast)。
 async function bootstrap(): Promise<void> {
   if (!auth.accessToken) return
-  await Promise.all([
-    auth.fetchProfile().catch(() => {
-      // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
-    }),
-    ensureMenuRoutes(),
-  ])
+  try {
+    await Promise.all([
+      auth.fetchProfile().catch(() => {
+        // 跳转到登录页;router 守卫看到 accessToken=null 会放过。
+      }),
+      ensureMenuRoutes(),
+    ])
+  } catch {
+    // 已在每个分支内部处理;这里吞掉异常,避免 unhandledrejection
+  }
 }
 
-bootstrap().finally(() => {
-  // bootstrap 完成后再装路由——此时菜单已就位、路由已注册,
-  // 首次导航能直接匹配上,不会落到 catch-all(404)。
-  app.use(router)
-  app.mount('#app')
-})
+// 立即挂载,不等待 bootstrap。路由守卫负责按需拉取菜单 / profile;
+// 路由被 vue-router 设计为「守卫异步后再放行」,所以首屏跳转也不会
+// 落到 catch-all(404)。
+app.use(router)
+app.mount('#app')
+
+// 后台 bootstrap:不阻塞首屏 paint;若 token 仍在,守卫触发前完成即可。
+queueMicrotask(() => void bootstrap())

@@ -56,16 +56,26 @@
   box-shadow: $shadow !important;
 }
 
-/* —— 卡片 / 菜单 / 输入框统一毛玻璃 ————————— */
+/* —— 卡片 / 菜单 / 输入框统一毛玻璃 —————————
+   注意:el-button / el-tag / el-pagination button / el-alert 这类
+   "不透明半透明填充即可"的小元素去掉了 backdrop-filter —— 它们通常
+   被多个叠放在背景上,逐个模糊等于把整片区域反复重画,GPU/CPU 双杀。
+   只在真正的浮层 / overlay / chrome 容器上保留毛玻璃(dialog / drawer /
+   message / notification / popper / sidebar / topbar / 命令面板)。 */
 .el-card,
 .el-menu,
 .el-input__wrapper,
-.el-select__wrapper,
-.el-button,
-.el-tag {
+.el-select__wrapper {
   background: var(--glass) !important;
   backdrop-filter: blur(20px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+}
+
+.el-button,
+.el-tag {
+  background: var(--glass) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow: 0 4px 16px var(--shadow-soft) !important;
 }
@@ -308,8 +318,7 @@
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--r-sm) !important;
   color: var(--ink-2) !important;
-  backdrop-filter: blur(12px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
+  /* 分页按钮密集排布,逐个毛玻璃成本高于收益,改用半透明背景即可 */
 }
 
 .el-pagination button:hover,
@@ -478,8 +487,7 @@
   border: 1px solid var(--glass-border) !important;
   border-radius: var(--r-md) !important;
   color: var(--ink) !important;
-  backdrop-filter: blur(16px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  /* alert 通常一次只显示一个,毛玻璃收益低;改用半透明背景即可 */
 }
 
 .el-alert__title {

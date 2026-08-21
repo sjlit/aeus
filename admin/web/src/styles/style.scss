@@ -52,24 +52,38 @@
   padding: 0;
 }
 
+// body 只放底色与基础排版;极光渐变与点阵装饰放到独立的 ::before 层,
+// 用 absolute 定位 + z-index:-1,避免 background-attachment: fixed 与
+// 固定定位 ::before 在滚动时强制重绘整个视口。
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(at 20% 10%, var(--bg-1) 0%, transparent 50%),
-    radial-gradient(at 80% 0%, var(--bg-3) 0%, transparent 55%),
-    radial-gradient(at 50% 100%, var(--bg-2) 0%, transparent 60%),
-    var(--bg-base);
-  background-attachment: fixed;
+  background: var(--bg-base);
   color: var(--ink);
   font-family: var(--body);
   font-size: 14px;
   position: relative;
+  isolation: isolate;          // 独立堆叠上下文,装饰层被推到 body 内容之下
 }
 
+// 极光渐变背景层:absolute 跟随 body 尺寸,不再 fixed。
 body::before {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(at 20% 10%, var(--bg-1) 0%, transparent 50%),
+    radial-gradient(at 80% 0%, var(--bg-3) 0%, transparent 55%),
+    radial-gradient(at 50% 100%, var(--bg-2) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+// 点阵装饰层:同样 absolute + z-index:-2,避免覆盖在渐变之上。
+body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
   background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;

@@ -1,3 +1,6 @@
 node_modules/
 dist/
 *.local
+# unplugin-vue-components 自动生成的组件类型,每次构建都会重写,
+# 不应进版本控制。开发者本地 IDE 依赖它做类型补全。
+src/components.d.ts
