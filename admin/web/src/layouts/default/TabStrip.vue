@@ -375,10 +375,8 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
 }
 
 .tab.active .tab-icon {
-    background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    /* el-icon 是 SVG,background-clip:text 对其无效;直接用菜单激活色 */
+    color: var(--menu-active-1);
     filter: drop-shadow(0 0 3px rgba(108, 197, 168, 0.3));
 }
 

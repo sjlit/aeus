@@ -26,10 +26,19 @@
   /* 深一档的 mint:链接/悬浮态用,替代散落的 #2f7d63 / #245f4c */
   --acc-mint-deep: #2f7d63;
   --acc-mint-deeper: #245f4c;
-  /* 菜单激活态渐变:参考项目深一档的 mint/lilac(替代散落的硬编码 hex) */
+  /* 暖色渐变:品牌方块(.brand::before)/ hero em / .mark-a 共用 */
+  --grad-warm: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
+  /* 扩展色板:aura 光晕变体与 .dot-attention 状态点用,
+     取值与 motion.scss 里同色系的 rgba 光晕对齐 */
+  --acc-violet-1: #8b7ec8;
+  --acc-amber-1: #d4a04a;
+  --acc-peach-3: #c47859;
+  /* 菜单激活色:静默高亮方案 —— mint 淡染底 + 深松绿文字,
+     不再用渐变色块(与 primary 按钮同族渐变互相抢戏,白字对比度也不足)。
+     --menu-active-1 保留给小点缀:二级圆点 / tab 与命令面板的激活图标。 */
   --menu-active-1: #3f9b7e;
-  --menu-active-2: #6f4fa6;
-  --menu-active-glow: rgba(63, 155, 126, 0.4);
+  --menu-active-tint: rgba(108, 197, 168, 0.14);
+  --menu-active-tint-soft: rgba(108, 197, 168, 0.08);
   /* 聚焦/悬浮光环:acc-mint 的 15%/20% 透明版本 */
   --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.15);
   --ring: 0 0 0 3px rgba(108, 197, 168, 0.2);

@@ -191,7 +191,7 @@ async function onDelete(row: MenuRow) {
     </header>
 
     <el-table v-loading="loading" :data="tree" row-key="id"
-      :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }" :default-expand-all="true" border
+      :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }" :default-expand-all="true"
       class="menu-table">
       <el-table-column prop="name" label="菜单标题" min-width="180" />
       <el-table-column prop="component" label="组件" min-width="180" />
@@ -234,7 +234,8 @@ async function onDelete(row: MenuRow) {
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" draggable :title="dialogMode === 'create' ? '新增菜单' : '编辑菜单'" width="640px"
+    <el-dialog v-model="dialogVisible" draggable :title="dialogMode === 'create' ? '新增菜单' : '编辑菜单'"
+      width="min(640px, 92vw)"
       :close-on-click-modal="false" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" class="schema-form" label-width="96px"
         label-position="right">

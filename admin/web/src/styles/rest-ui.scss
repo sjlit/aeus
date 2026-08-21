@@ -22,8 +22,8 @@
   --su-shadow-hover: 0 8px 28px var(--shadow);
 }
 
-/* 页面外层 padding 归零:内容列与 topbar / el-main 的 36px 对齐
-   (rest-ui 默认再垫 12px,会偏离顶栏玻璃卡的竖列) */
+/* 页面外层 padding 归零:内容列与 topbar / el-main 的 --el-main-padding
+   (20px)对齐(rest-ui 默认再垫 12px,会偏离顶栏玻璃卡的竖列) */
 .schema-page {
   padding: 0;
 }

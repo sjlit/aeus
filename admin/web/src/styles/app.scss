@@ -28,6 +28,7 @@ body {
 .sidebar {
   background: var(--glass-strong);
   backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
   border-right: 1px solid var(--glass-border);
   padding: 28px 18px;
   display: flex;
@@ -177,20 +178,16 @@ body {
       }
     }
 
-    // 叶子项 active:渐变色块 + 发光 + 左侧竖条(渐变/辉光来自 --menu-active-* token)
+    // 叶子项 active:静默高亮 —— mint 淡染底 + 深松绿文字 + 左侧竖条。
+    // 文字/图标走 currentColor,淡染上的 #245f4c 对比度 ~7:1(AA)。
     .el-menu-item.is-active {
-      background: linear-gradient(135deg, var(--menu-active-1), var(--menu-active-2)) !important;
-      color: white !important;
+      background: var(--menu-active-tint) !important;
+      color: var(--acc-mint-deeper) !important;
       font-weight: 600;
-      box-shadow: 0 4px 12px var(--menu-active-glow);
 
       &::before {
         transform: translateY(-50%) scaleY(1);
         background: var(--acc-mint);
-      }
-
-      .el-icon {
-        opacity: 0.85;
       }
     }
 
@@ -217,15 +214,16 @@ body {
         }
       }
 
-      // 二级菜单 active:不再用渐变(避免和顶层打架),改用玻璃 + 左侧 mint 圆点
+      // 二级菜单 active:与一级同族但更浅(mint 8% 淡染),靠底色深浅分层;
+      // 圆点沿用 --menu-active-1
       .el-menu-item.is-active {
-        background: var(--glass-soft) !important;
-        color: var(--ink) !important;
+        background: var(--menu-active-tint-soft) !important;
+        color: var(--acc-mint-deeper) !important;
         font-weight: 600;
         box-shadow: none;
 
         // 二级用圆点不用竖条,避免左边两条并行视觉混乱
-        // 尺寸对齐参考项目(4px),颜色用 --menu-active-1
+        // 尺寸对齐参考项目(4px)
         &::before {
           width: 4px;
           height: 4px;
@@ -308,7 +306,7 @@ body {
   border-radius: var(--r-sm, 12px);
   box-shadow: 0 8px 28px var(--shadow-soft);
   padding: 0;
-  // 左右留 36px 与 el-main 的内容区(padding: 28px 36px)对齐,
+  // 左右留 --el-main-padding 与 el-main 的内容区对齐,
   // 玻璃卡片不再横贯整个内容区
   margin: 0 var(--el-main-padding) 0;
   // 高度由内容决定:工具栏 52px + 分隔线 + 多标签栏 42px
@@ -439,14 +437,9 @@ body {
 }
 
 .sidebar-pop .el-menu .el-menu-item.is-active {
-  background: linear-gradient(135deg, var(--menu-active-1), var(--menu-active-2)) !important;
-  color: white !important;
+  background: var(--menu-active-tint) !important;
+  color: var(--acc-mint-deeper) !important;
   font-weight: 600;
-  box-shadow: 0 4px 12px var(--menu-active-glow) !important;
-}
-
-.sidebar-pop .el-menu .el-menu-item.is-active .el-icon {
-  opacity: 0.8;
 }
 
 // ---- 移动端(<=768px)整体收口 ----

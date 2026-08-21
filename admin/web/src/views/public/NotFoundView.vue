@@ -12,7 +12,7 @@ const pageTitle = usePageTitle()
 </script>
 
 <template>
-  <section class="glass panel notfound">
+  <section class="glass notfound">
     <h1 class="text-gradient--peach">404</h1>
     <p><b>{{ pageTitle }}</b> 不存在。</p>
     <el-button type="primary" @click="router.push('/')">返回首页</el-button>

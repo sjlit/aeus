@@ -147,8 +147,10 @@ function done(): void {
     <template #reference>
       <!-- 触发器:el-popover trigger="click" 会自己监听 reference 的 click,
            这里**不要**再挂 @click——会和 el-popover 内部的 listener 各翻
-           一次 visible,净效果等于没翻,面板"闪一下就消失"。 -->
-      <div class="ip-trigger el-select__wrapper" :class="{ 'is-disabled': disabled, 'is-focused': visible }"
+           一次 visible,净效果等于没翻,面板"闪一下就消失"。
+           不要借用 el-select__wrapper 类名:glass.scss 对它有 !important
+           玻璃覆盖,会压掉下面自绘的 hover/focus/disabled 描边。 -->
+      <div class="ip-trigger" :class="{ 'is-disabled': disabled, 'is-focused': visible }"
         :style="{ width }">
         <span class="ip-trigger__prefix">
           <el-icon v-if="selectedComponent" class="ip-icon">

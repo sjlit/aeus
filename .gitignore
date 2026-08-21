@@ -1,5 +1,6 @@
 bin/
 .claude/
+.mimocode
 tests/
 .svn/
 .godeps

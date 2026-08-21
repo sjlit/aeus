@@ -320,7 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   font-size: 12px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--surface-2);
+  background: var(--glass-soft);
   color: var(--ink);
 }
 

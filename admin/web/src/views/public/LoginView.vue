@@ -69,7 +69,8 @@ async function submit() {
         </el-form-item>
 
         <div class="form-actions">
-          <a href="#">忘记密码？</a>
+          <!-- 占位入口:后端暂无找回流程,拦截跳转避免滚回页顶/污染 URL -->
+          <a href="#" @click.prevent>忘记密码？</a>
         </div>
 
         <el-button type="primary" size="large" native-type="submit" :loading="loading">
@@ -175,6 +176,12 @@ h1 {
 /* label-position="top" 的标签。参考项目是 10px 大写拉丁小标签,
    但这里标签是中文(用户名/密码):mono 无 CJK 字形、10px 过小、
    uppercase 无意义,改为 12px 正文家族。 */
+/* 表单抬到装饰光斑之上:卡片 ::before/::after 是定位元素,
+   未定位的 in-flow 内容会被其罩色(登录按钮发灰),补一层定位。 */
+.el-form {
+  position: relative;
+}
+
 :deep(.el-form-item) {
   margin-bottom: 16px;
 }

@@ -56,14 +56,15 @@
   box-shadow: $shadow !important;
 }
 
-/* —— 卡片 / 菜单 / 输入框统一毛玻璃 —————————
+/* —— 卡片 / 输入框统一毛玻璃 —————————
+   注意:.el-menu 不在此列——下方有专属规则接管(透明底、无边框),
+   放进来会被完全覆盖成死代码。
    注意:el-button / el-tag / el-pagination button / el-alert 这类
    "不透明半透明填充即可"的小元素去掉了 backdrop-filter —— 它们通常
    被多个叠放在背景上,逐个模糊等于把整片区域反复重画,GPU/CPU 双杀。
    只在真正的浮层 / overlay / chrome 容器上保留毛玻璃(dialog / drawer /
    message / notification / popper / sidebar / topbar / 命令面板)。 */
 .el-card,
-.el-menu,
 .el-input__wrapper,
 .el-select__wrapper {
   background: var(--glass) !important;
@@ -91,11 +92,14 @@
   box-shadow: none !important;
 }
 
+/* 菜单行的兜底尺寸:不加 !important——侧栏(app.scss .nav-menu 的
+   36px/34px 分级)与折叠弹层(.sidebar-pop)各自按需覆盖,
+   之前写死 38px !important 会把侧栏的层级高度静默抹平。 */
 .el-menu-item {
-  border-radius: 10px !important;
-  margin: 2px 0 !important;
-  height: 38px !important;
-  line-height: 38px !important;
+  border-radius: 10px;
+  margin: 2px 0;
+  height: 38px;
+  line-height: 38px;
 }
 
 .el-menu-item.is-active {
