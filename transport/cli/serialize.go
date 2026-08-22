@@ -259,8 +259,10 @@ func serialize(val any) (buf []byte, err error) {
 	)
 	refVal = reflect.Indirect(reflect.ValueOf(val))
 	switch refVal.Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		buf = []byte(strconv.FormatInt(refVal.Int(), 10))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		buf = []byte(strconv.FormatUint(refVal.Uint(), 10))
 	case reflect.Float32, reflect.Float64:
 		buf = []byte(strconv.FormatFloat(refVal.Float(), 'f', -1, 64))
 	case reflect.String:

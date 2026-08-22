@@ -51,9 +51,9 @@ func TestWriteChunked(t *testing.T) {
 		{0},
 		{1},
 		{wireChunkSize - 1},
-		{wireChunkSize},      // exact multiple
+		{wireChunkSize}, // exact multiple
 		{wireChunkSize + 1},
-		{wireChunkSize * 2},  // exact multiple
+		{wireChunkSize * 2}, // exact multiple
 		{wireChunkSize*2 + 1},
 		{100},
 		{wireChunkSize*2 + 17},

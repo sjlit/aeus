@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound         = errors.New("not found")
+	ErrHandleRegistered = errors.New("handle already registered")
 )
 
 type Router struct {
@@ -68,7 +69,7 @@ func (r *Router) Usage() string {
 	return sb.String()
 }
 
-func (r *Router) Handle(path string, command Command) {
+func (r *Router) Handle(path string, command Command) (err error) {
 	var (
 		pos  int
 		name string
@@ -81,7 +82,7 @@ func (r *Router) Handle(path string, command Command) {
 	}
 	if path == "" {
 		r.command = command
-		return
+		return nil
 	}
 	if path[0] == ':' {
 		ss := strings.Split(path, "/")
@@ -89,7 +90,7 @@ func (r *Router) Handle(path string, command Command) {
 			r.params = append(r.params, strings.TrimPrefix(s, ":"))
 		}
 		r.command = command
-		return
+		return nil
 	}
 	if pos = strings.IndexByte(path, '/'); pos > -1 {
 		name = path[:pos]
@@ -113,9 +114,9 @@ func (r *Router) Handle(path string, command Command) {
 		r.children = append(r.children, children)
 	}
 	if children.command.Handle != nil {
-		panic("a handle is already registered for path /" + strings.Join(children.path, "/"))
+		return fmt.Errorf("%w: /%s", ErrHandleRegistered, strings.Join(children.path, "/"))
 	}
-	children.Handle(path, command)
+	return children.Handle(path, command)
 }
 
 func (r *Router) Lookup(tokens []string) (router *Router, args []string, err error) {

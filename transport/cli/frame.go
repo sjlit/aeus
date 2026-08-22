@@ -34,7 +34,6 @@ type (
 
 func readFrame(r io.Reader) (frame *Frame, err error) {
 	var (
-		n           int
 		dataLength  uint16
 		errorLength uint16
 		errBuf      []byte
@@ -70,21 +69,16 @@ func readFrame(r io.Reader) (frame *Frame, err error) {
 	}
 	if dataLength > 0 {
 		frame.Data = make([]byte, dataLength)
-		if n, err = io.ReadFull(r, frame.Data); err == nil {
-			if n < int(dataLength) {
-				err = io.ErrShortBuffer
-			}
+		if _, err = io.ReadFull(r, frame.Data); err != nil {
+			return
 		}
 	}
 	if errorLength > 0 {
 		errBuf = make([]byte, errorLength)
-		if n, err = io.ReadFull(r, errBuf); err == nil {
-			if n < int(dataLength) {
-				err = io.ErrShortBuffer
-			} else {
-				frame.Error = string(errBuf)
-			}
+		if _, err = io.ReadFull(r, errBuf); err != nil {
+			return
 		}
+		frame.Error = string(errBuf)
 	}
 	return
 }

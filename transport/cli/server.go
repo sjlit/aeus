@@ -51,8 +51,8 @@ func (svr *Server) SetMetrics(r telemetry.MetricsRecorder) {
 	svr.metrics = r
 }
 
-func (svr *Server) Handle(pathname string, desc string, cb HandleFunc) {
-	svr.router.Handle(pathname, svr.wrapCommand(pathname, desc, cb))
+func (svr *Server) Handle(pathname string, desc string, cb HandleFunc) (err error) {
+	return svr.router.Handle(pathname, svr.wrapCommand(pathname, desc, cb))
 }
 
 func (svr *Server) wrapCommand(pathname, desc string, cb HandleFunc) Command {
@@ -266,9 +266,6 @@ func (svr *Server) Start(ctx context.Context) (err error) {
 		return
 	}
 	svr.Logger.Infof(ctx, "cli server listen on: %s", svr.uri.Host)
-	svr.Handle("/help", "Display help information", func(ctx *Context) (err error) {
-		return ctx.Success(svr.router.String())
-	})
 	err = svr.serve()
 	return
 }
@@ -307,6 +304,13 @@ func New(cbs ...Option) *Server {
 		uri:    &url.URL{Scheme: "cli"},
 		router: newRouter(""),
 	}
+	// Registered here rather than in Start so a server restart (a second
+	// Start call) cannot hit the duplicate-registration error. The discard
+	// is safe: the router is freshly created above, so this registration
+	// cannot collide.
+	_ = srv.Handle("/help", "Display help information", func(ctx *Context) (err error) {
+		return ctx.Success(srv.router.String())
+	})
 	portStr := os.Getenv("CLI_PORT")
 	port, err := strconv.Atoi(portStr)
 	if err != nil && portStr != "" {
