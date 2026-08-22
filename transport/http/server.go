@@ -74,9 +74,6 @@ func (s *Server) Endpoint(ctx context.Context) (string, error) {
 
 // Mcp returns the mcp server if enabled, otherwise returns nil.
 func (s *Server) Mcp() *mcp.Server {
-	if !s.opts.mcp.Enable {
-		return nil
-	}
 	return s.mcpServer
 }
 
@@ -365,18 +362,42 @@ func (s *Server) createListener() (err error) {
 	return
 }
 
-func (s *Server) getMcpServer(r *http.Request) *mcp.Server {
-	return s.mcpServer
-}
-
-func (s *Server) verifyMcpToken(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-	if token != s.opts.mcp.Authorization {
-		return nil, errs.ErrPermissionDenied
+// mountMcp wires the streamable HTTP handler for the MCP server onto the
+// gin engine. Called from Start, after all user routes are known.
+func (s *Server) mountMcp() {
+	cfg := s.opts.mcp
+	streamableOpts := &mcp.StreamableHTTPOptions{
+		Stateless:      true,
+		SessionTimeout: cfg.SessionTimeout,
 	}
-	return &auth.TokenInfo{
-		Scopes:     []string{"access"},
-		Expiration: time.Now().Add(time.Hour * 2),
-	}, nil
+	if cfg.Streamable != nil {
+		cfg.Streamable(streamableOpts)
+	}
+
+	var handler http.Handler = mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return s.mcpServer },
+		streamableOpts,
+	)
+	verifier := s.opts.mcpVerifier
+	if verifier == nil && cfg.Authorization != "" {
+		verifier = defaultMCPTokenVerifier(cfg.Authorization)
+	}
+	if verifier != nil {
+		handler = auth.RequireBearerToken(auth.TokenVerifier(verifier), &auth.RequireBearerTokenOptions{
+			Scopes: []string{"access"},
+		})(handler)
+	}
+
+	path := cfg.Path
+	if path == "" {
+		path = "/mcp"
+	}
+	s.engine.GET(path, gin.WrapH(handler))
+	s.engine.POST(path, gin.WrapH(handler))
+	s.engine.PUT(path, gin.WrapH(handler))
+	// DELETE terminates a session per the Streamable HTTP transport spec;
+	// a stateless server simply acknowledges it.
+	s.engine.DELETE(path, gin.WrapH(handler))
 }
 
 func (s *Server) Start(ctx context.Context) (err error) {
@@ -402,25 +423,8 @@ func (s *Server) Start(ctx context.Context) (err error) {
 			return
 		}
 	}
-	if s.opts.mcp.Enable {
-		var mcpHttpHandler http.Handler
-		streamableHTTPOpts := &mcp.StreamableHTTPOptions{
-			Stateless:      true,
-			JSONResponse:   true,
-			SessionTimeout: s.opts.mcp.SessionTimeout,
-		}
-		mcpStreamableHTTPHandler := mcp.NewStreamableHTTPHandler(s.getMcpServer, streamableHTTPOpts)
-		if s.opts.mcp.Authorization != "" {
-			mcpAuthMiddleware := auth.RequireBearerToken(s.verifyMcpToken, &auth.RequireBearerTokenOptions{
-				Scopes: []string{"access"},
-			})
-			mcpHttpHandler = mcpAuthMiddleware(mcpStreamableHTTPHandler)
-		} else {
-			mcpHttpHandler = mcpStreamableHTTPHandler
-		}
-		s.engine.GET(s.opts.mcp.Path, gin.WrapH(mcpHttpHandler))
-		s.engine.POST(s.opts.mcp.Path, gin.WrapH(mcpHttpHandler))
-		s.engine.PUT(s.opts.mcp.Path, gin.WrapH(mcpHttpHandler))
+	if s.mcpServer != nil {
+		s.mountMcp()
 	}
 	if s.opts.enableHealth {
 		s.engine.GET("/health", func(c *gin.Context) {
@@ -525,12 +529,12 @@ func New(cbs ...Option) *Server {
 	if svr.opts.enableCORS {
 		svr.engine.Use(svr.CORSInterceptor())
 	}
-	if svr.opts.mcp.Enable {
-		mcpServerOpts := &mcp.ServerOptions{}
-		svr.mcpServer = mcp.NewServer(&mcp.Implementation{
-			Name:    svr.opts.mcp.Name,
-			Version: svr.opts.mcp.Version,
-		}, mcpServerOpts)
+	if svr.opts.mcpEnabled {
+		if svr.opts.mcpServer != nil {
+			svr.mcpServer = svr.opts.mcpServer
+		} else {
+			svr.mcpServer = newMCPServer(svr.opts.mcp)
+		}
 	}
 	svr.engine.Use(svr.requestInterceptor())
 	return svr

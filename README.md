@@ -191,7 +191,7 @@ aeus/
 | `pkg/proto/` | protoc descriptor 扩展，配合 `protoc-gen-go-aeus` 插件 |
 | `registry/` | `Registrar` 接口 + `Service / Watcher` 数据结构 + 全部 options |
 | `registry/etcd/` | etcd v3 实现，支持 TTL 续约 + `HealthChecker.Status()` |
-| `transport/http/` | Gin 引擎；可选 MCP server（`WithMCP`/`WithMcpPath`...）、TLS、CORS、健康检查、metrics、pprof |
+| `transport/http/` | Gin 引擎；可选 MCP server（`WithMCP`/`WithMCPServer`...）、TLS、CORS、健康检查、metrics、pprof |
 | `transport/grpc/` | `Server` + `Dial(ctx, target, opts...)`（带 registry resolver）+ resolver 子包 |
 | `transport/cli/` | 自研 CLI 协议（`Feature = []byte("CLI")`），提供 `Client` 与 `Handle(path, desc, fn)` |
 | `admin/` | 独立子模块：完整 RBAC 后台，演示 JWT + 限流 + 自动建表 + REST 资源注册 |
@@ -257,8 +257,9 @@ svc.Run()
 | `WithContext(ctx)` | 注入 context |
 | `WithDebug(bool)` | 开启调试模式（需配合 `WithDebugAddr` 才暴露 pprof） |
 | `WithDebugAddr("127.0.0.1:6060")` | pprof 监听地址；**仅 loopback**，非 loopback 启动会被拒绝 |
-| `WithMCP(name, version, uri, description)` | 启用 MCP server（uri 缺省 `/mcp`） |
-| `WithMcpPath/Name/Version/Description/SessionTimeout/Authorization` | 细粒度调整 MCP |
+| `WithMCP(http.MCPConfig)` | 启用 MCP server（`Path` 缺省 `/mcp`，`Instructions` 映射到 ServerOptions；`Streamable` 回调可微调 `StreamableHTTPOptions`） |
+| `WithMCPServer(*mcp.Server)` | 注入预构建的 MCP server（自行注册 Tool/Prompt/Resource） |
+| `WithMCPTokenVerifier(v)` | 自定义 bearer token 校验；缺省为对 `MCPConfig.Authorization` 的常量时间比较 |
 | `WithEnableHealth(bool)` | 暴露 `/health` + `/ready` |
 | `WithEnableMetrics(bool)` | 暴露 `/metrics`（使用 `prometheus.DefaultRegisterer`） |
 

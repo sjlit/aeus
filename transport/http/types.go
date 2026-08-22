@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sjlit/aeus/infra/logger"
 )
 
@@ -22,18 +24,29 @@ const (
 type (
 	Option func(*options)
 
-	mcpOption struct {
-		Enable         bool
-		Name           string
-		Path           string
-		Version        string
-		Description    string
-		SessionTimeout time.Duration
-		Authorization  string
+	// MCPConfig enables and configures the embedded MCP server. The zero
+	// value passed to WithMCP means "enabled with defaults".
+	MCPConfig struct {
+		Name         string // default "aeus"
+		Version      string // default "0.0.0"
+		Path         string // mount path, default "/mcp"
+		Instructions string // mapped to mcp.ServerOptions.Instructions
+
+		SessionTimeout time.Duration // idle session timeout, 0 = never close
+		Authorization  string        // static bearer token; pairs with the default TokenVerifier
+
+		// Streamable, when set, is called after the defaults are applied,
+		// allowing fine-tuning of the underlying StreamableHTTPOptions
+		// (Stateless, JSONResponse, EventStore, ...). Defaults:
+		// Stateless=true, JSONResponse=false.
+		Streamable func(*mcp.StreamableHTTPOptions)
 	}
 
+	// TokenVerifier validates a bearer token presented to the MCP endpoint.
+	TokenVerifier func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error)
+
 	RouteOptions struct {
-		McpResponseMarshal McpResponseMarshal
+		MCPResponseMarshal MCPResponseMarshal
 	}
 
 	RouteOption func(o *RouteOptions)
@@ -49,7 +62,10 @@ type (
 		logger        logger.Logger
 		context       context.Context
 		ginOptions    []gin.OptionFunc
-		mcp           mcpOption
+		mcp           MCPConfig
+		mcpEnabled    bool
+		mcpServer     *mcp.Server
+		mcpVerifier   TokenVerifier
 		enableCORS    bool
 		enableHealth  bool
 		enableMetrics bool
@@ -218,57 +234,32 @@ func WithGinOptions(opts ...gin.OptionFunc) Option {
 	}
 }
 
-func WithMCP(name, version, uri, description string) Option {
-	if name == "" || version == "" {
-		return func(o *options) {}
-	}
-	if uri == "" {
-		uri = "/mcp"
-	}
+// WithMCP enables the embedded MCP server with the given config. Fields left
+// empty fall back to defaults (see MCPConfig). It is order-independent:
+// WithMCPServer and WithMCPTokenVerifier may appear before or after it.
+func WithMCP(cfg MCPConfig) Option {
 	return func(o *options) {
-		o.mcp = mcpOption{
-			Enable:      true,
-			Name:        name,
-			Path:        uri,
-			Version:     version,
-			Description: description,
-		}
+		o.mcp = cfg
+		o.mcpEnabled = true
 	}
 }
 
-func WithMcpName(name string) Option {
+// WithMCPServer injects a pre-built MCP server, bypassing the config-based
+// one. It implies WithMCP; tool/prompt/resource registration on s belongs
+// to the caller.
+func WithMCPServer(s *mcp.Server) Option {
 	return func(o *options) {
-		o.mcp.Name = name
+		o.mcpServer = s
+		o.mcpEnabled = true
 	}
 }
 
-func WithMcpPath(path string) Option {
+// WithMCPTokenVerifier replaces the default bearer-token check for the MCP
+// endpoint. When unset, verification falls back to a constant-time compare
+// against MCPConfig.Authorization (no auth if that is also empty).
+func WithMCPTokenVerifier(v TokenVerifier) Option {
 	return func(o *options) {
-		o.mcp.Path = path
-	}
-}
-
-func WithMcpVersion(version string) Option {
-	return func(o *options) {
-		o.mcp.Version = version
-	}
-}
-
-func WithMcpDescription(description string) Option {
-	return func(o *options) {
-		o.mcp.Description = description
-	}
-}
-
-func WithMcpSessionTimeout(timeout time.Duration) Option {
-	return func(o *options) {
-		o.mcp.SessionTimeout = timeout
-	}
-}
-
-func WithMcpAuthorization(auth string) Option {
-	return func(o *options) {
-		o.mcp.Authorization = auth
+		o.mcpVerifier = v
 	}
 }
 
@@ -298,15 +289,15 @@ func WithEnableMetrics(enable bool) Option {
 	}
 }
 
-func WithRouteMcpResponseMarshal(marshal McpResponseMarshal) RouteOption {
+func WithRouteMCPResponseMarshal(marshal MCPResponseMarshal) RouteOption {
 	return func(o *RouteOptions) {
-		o.McpResponseMarshal = marshal
+		o.MCPResponseMarshal = marshal
 	}
 }
 
 func NewRouteOptions(opts ...RouteOption) *RouteOptions {
 	s := &RouteOptions{
-		McpResponseMarshal: DefaultMcpResponseMarshal,
+		MCPResponseMarshal: DefaultMCPResponseMarshal,
 	}
 	for _, opt := range opts {
 		opt(s)
