@@ -107,7 +107,10 @@ func (fs *filesystem) Open(name string) (http.File, error) {
 		needRetry = true
 	}
 	if fs.prefix != "" {
-		if !strings.HasPrefix(name, fs.prefix) {
+		// Exact-boundary check: "/staticfoo" must NOT be treated as
+		// prefixed by "/static", otherwise files outside the webroot
+		// become reachable (sandbox escape).
+		if name != fs.prefix && !strings.HasPrefix(name, fs.prefix+"/") {
 			name = path.Join(fs.prefix, name)
 		}
 	}

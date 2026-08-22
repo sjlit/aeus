@@ -132,53 +132,69 @@ func (s *Server) Webroot(prefix string, autoCompress bool, fs http.FileSystem) {
 	s.fs.SetIndexFile("/index.html")
 }
 
+func acceptsGzip(req *http.Request) bool {
+	return strings.Contains(req.Header.Get(headerAcceptEncoding), "gzip")
+}
+
 func (s *Server) shouldCompress(req *http.Request) bool {
 	if !s.autoCompress {
 		return false
 	}
-	if !strings.Contains(req.Header.Get(headerAcceptEncoding), "gzip") ||
+	if !acceptsGzip(req) ||
 		strings.Contains(req.Header.Get("Connection"), "Upgrade") {
 		return false
 	}
 
-	// Check if the request path is excluded from compression
-	extension := filepath.Ext(req.URL.Path)
-	if slices.Contains(assetsExtensions, extension) {
-		return true
-	}
-	return false
+	// Only compress known text-like asset extensions; anything else is
+	// served as-is even when autoCompress is on.
+	return slices.Contains(assetsExtensions, filepath.Ext(req.URL.Path))
 }
 
-func (s *Server) staticHandle(ctx *gin.Context, fp http.File) bool {
+// staticHandle serves fp to the client. preCompressed marks an on-disk
+// ".gz" variant: it must be announced via Content-Encoding instead of
+// being compressed again.
+func (s *Server) staticHandle(ctx *gin.Context, fp http.File, preCompressed bool) bool {
 	uri := path.Clean(ctx.Request.URL.Path)
 	fi, err := fp.Stat()
 	if err != nil {
 		return false
 	}
 	if !fi.IsDir() {
-		//https://github.com/gin-contrib/gzip
-		if s.shouldCompress(ctx.Request) && fi.Size() > 8192 {
+		useGzip := false
+		switch {
+		case preCompressed && acceptsGzip(ctx.Request):
+			ctx.Header(headerContentEncoding, "gzip")
+			useGzip = true
+		case !preCompressed && s.shouldCompress(ctx.Request) && fi.Size() > 8192:
 			gzWriter := newGzipWriter()
 			gzWriter.Reset(ctx.Writer)
 			ctx.Header(headerContentEncoding, "gzip")
-			ctx.Writer.Header().Add(headerVary, headerAcceptEncoding)
-			originalEtag := ctx.GetHeader("ETag")
-			if originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
-				ctx.Header("ETag", "W/"+originalEtag)
-			}
 			ctx.Writer = &gzipWriter{ctx.Writer, gzWriter}
 			defer func() {
+				// Nothing reached the underlying writer: discard the
+				// empty gzip stream so Close() does not flush a header-
+				// only gzip payload to the client.
 				if ctx.Writer.Size() < 0 {
 					gzWriter.Reset(io.Discard)
 				}
 				if closeErr := gzWriter.Close(); closeErr != nil {
 					s.Logger.Warnf(ctx, "gzip close error: %v", closeErr)
 				}
-				if ctx.Writer.Size() > -1 {
-					ctx.Header("Content-Length", strconv.Itoa(ctx.Writer.Size()))
-				}
 				putGzipWriter(gzWriter)
 			}()
+			useGzip = true
+		}
+		if useGzip {
+			// Range applies to the selected representation; slicing the
+			// uncompressed content through a gzip encoder yields a body
+			// that matches neither the Content-Range nor any decoder
+			// expectations. Drop Range so ServeContent returns a full,
+			// self-consistent 200 response.
+			ctx.Request.Header.Del("Range")
+			ctx.Writer.Header().Add(headerVary, headerAcceptEncoding)
+			if originalEtag := ctx.GetHeader("ETag"); originalEtag != "" && !strings.HasPrefix(originalEtag, "W/") {
+				ctx.Header("ETag", "W/"+originalEtag)
+			}
 		}
 	}
 	http.ServeContent(ctx.Writer, ctx.Request, path.Base(uri), s.fs.modtime, fp)
@@ -191,14 +207,16 @@ func (s *Server) notFoundHandle(ctx *gin.Context) {
 		uri := path.Clean(ctx.Request.URL.Path)
 		if fp, err := s.fs.Open(uri); err == nil {
 			defer fp.Close()
-			if s.staticHandle(ctx, fp) {
+			if s.staticHandle(ctx, fp, false) {
 				return
 			}
-		} else {
-			//if found compress file
+		} else if acceptsGzip(ctx.Request) {
+			// Pre-compressed variant: only usable when the client sent
+			// Accept-Encoding: gzip, otherwise raw deflate bytes would be
+			// delivered without a matching Content-Encoding header.
 			if fp, err := s.fs.Open(uri + ".gz"); err == nil {
 				defer fp.Close()
-				if s.staticHandle(ctx, fp) {
+				if s.staticHandle(ctx, fp, true) {
 					return
 				}
 			}
@@ -213,8 +231,9 @@ func (s *Server) CORSInterceptor() gin.HandlerFunc {
 			c.Writer.Header().Add("Vary", "Origin")
 			c.Writer.Header().Add("Vary", "Access-Control-Request-Method")
 			c.Writer.Header().Add("Vary", "Access-Control-Request-Headers")
+			// Wildcard origin is mutually exclusive with credentials per
+			// the Fetch spec: browsers reject responses carrying both.
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE")
 			h := c.Request.Header.Get("Access-Control-Request-Headers")
 			if h != "" {
@@ -225,7 +244,6 @@ func (s *Server) CORSInterceptor() gin.HandlerFunc {
 		} else {
 			c.Writer.Header().Add("Vary", "Origin")
 			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			h := c.Request.Header.Get("Access-Control-Request-Headers")
 			if h != "" {
 				c.Writer.Header().Set("Access-Control-Allow-Headers", h)
@@ -286,22 +304,36 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 		if err != nil {
 			if middleware.IsAbort(err) {
 				status = "abort"
-				var ae *errs.Error
-				if errors.As(err, &ae) {
-					ginCtx.AbortWithStatusJSON(ae.HTTPStatus(), newResponse(int(ae.Code), ae.Message, nil))
-				} else {
-					ginCtx.AbortWithStatusJSON(http.StatusOK, newResponse(int(errs.CodeOK), "", nil))
-				}
 			} else {
 				status = "error"
 				if span != nil {
 					span.SetError(err)
 				}
-				if se, ok := err.(*errs.Error); ok {
-					ginCtx.AbortWithStatusJSON(se.HTTPStatus(), newResponse(int(se.Code), se.Message, nil))
-				} else {
-					ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, newResponse(int(errs.CodeUnavailable), err.Error(), nil))
+			}
+			// If the handler already wrote a response (e.g. Success() then
+			// returned an error), writing an error envelope would append a
+			// second JSON document to the body. Log and keep the written one.
+			if !ginCtx.Writer.Written() {
+				switch {
+				case middleware.IsAbort(err):
+					var ae *errs.Error
+					if errors.As(err, &ae) {
+						ginCtx.AbortWithStatusJSON(ae.HTTPStatus(), newResponse(int(ae.Code), ae.Message, nil))
+					} else {
+						ginCtx.AbortWithStatusJSON(http.StatusOK, newResponse(int(errs.CodeOK), "", nil))
+					}
+				default:
+					var se *errs.Error
+					// errors.As unwraps wrapped errors (fmt.Errorf("%w", ...)),
+					// preserving the business code instead of degrading to 500.
+					if errors.As(err, &se) {
+						ginCtx.AbortWithStatusJSON(se.HTTPStatus(), newResponse(int(se.Code), se.Message, nil))
+					} else {
+						ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, newResponse(int(errs.CodeUnavailable), err.Error(), nil))
+					}
 				}
+			} else {
+				s.Logger.Errorf(ctx, "response already written before error response: %v", err)
 			}
 		}
 
