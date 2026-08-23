@@ -42,11 +42,13 @@ export interface LoginResponse {
   tenant_name: string
 }
 
-/** POST /auth/refresh-token 响应:只回填 uid/expires/access_token。 */
+/** POST /auth/refresh-token 响应:回填 uid/expires/access_token,
+    refresh_token 为轮换后的新值(旧值已被服务端吊销)。 */
 export interface RefreshTokenResponse {
   uid?: string
   expires: number
   access_token: string
+  refresh_token?: string
 }
 
 /** GET /user/profile 响应(user.proto UserProfile)。

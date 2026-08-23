@@ -76,11 +76,13 @@ func main() {
 		admin.WithRouter(httpSrv),
 	)
 
-	// 2. JWT 校验中间件:/auth/* 放行,其余接口校验 token 与角色权限
+	// 2. JWT 校验中间件:/auth/* 放行,其余接口校验 token、吊销状态与角色权限
 	const secret = "change-me"
+	tokenStore := service.NewMemoryTokenStore() // 多实例部署换共享实现
 	httpSrv.Use(mwauth.JWT(
 		func(*jwt.Token) (any, error) { return []byte(secret), nil },
 		mwauth.WithClaims(auth.Claims{}), // 解析进 *auth.Claims(uid / role / tenant_id)
+		mwauth.WithValidate(service.NewRevocationValidator(tokenStore, secret)), // 吊销 + token_type 门禁
 		// 对 sys_permissions 已收录的 HTTP 路由执行角色权限校验
 		mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 		mwauth.WithAllow("/auth/login", "/auth/refresh-token"),
@@ -225,13 +227,14 @@ log.Fatal(httpSrv.Start(context.Background()))
 | `WithAuthServiceDB(db)` | GORM 句柄（必填） |
 | `WithAuthSecret(secret)` | JWT 签名密钥（必填，登录/刷新/登出依赖） |
 | `WithTokenExpireSeconds(n)` | access token 有效期，默认 **2h**（非正数按默认处理） |
-| `WithTokenStore(store)` | 吊销存储（`Put`/`Del`）；nil 表示无状态模式，logout 不吊销 |
+| `WithTokenStore(store)` | 吊销黑名单（`Revoke(jti, until)` / `Revoked(jti)` / `RevokeIfNotRevoked(...)`，按 JWT `jti` 键）；nil 默认内存实现。**必须**配合 `mwauth.WithValidate(service.NewRevocationValidator(store, secret))` 接入 JWT 中间件才生效（见下文[吊销链路](#吊销链路tokenstore--revocationvalidator)） |
 | `WithBeforeLogin(fn)` | 登录前置钩子：校验通过后、凭据校验前执行，返回 error 则短路登录 |
 | `WithAfterLogin(fn)` | 登录成功钩子：仅作通知，返回值忽略 |
 | `WithLoginLogger(fn)` | 登录审计：成功与失败都回调（IP/UA/Username + 成功时的 access token），**同步**执行；panic 透传到 Login 调用方，建议 recorder 自己 `defer recover()` |
 
-- refresh token 固定 **48h**，由 `RefreshToken` 换取新的 access token；
-- `Login` 在凭据校验前不依赖 JWT claims，天然跨租户查找用户。
+- refresh token 固定 **48h**，`RefreshToken` 每次刷新**轮换**：返回全新 refresh token（新 `jti`），旧 jti 进黑名单——重放旧 refresh token 会被拒绝（`4005 AccessDenied`）；
+- 刷新时 access token 从 **DB 最新行**签发（uid / role_key / tenant_id），角色变更后旧 refresh token 换不出旧权限；
+- `Login` 在凭据校验前不依赖 JWT claims，天然跨租户查找用户；登录路径不写 TokenStore（黑名单只记显式吊销的 jti）。
 - 失败路径上的 `Uid`/`TenantID` 留空以避免泄漏用户存在性；同 username 错密码时仍会带上 `Uid` 用于审计聚合。
 
 ### 登录安全
@@ -249,6 +252,33 @@ log.Fatal(httpSrv.Start(context.Background()))
 - 已签发的 access token 到期前仍有效（JWT 无状态）；禁用账户的 48h refresh 续期窗口随 `RefreshToken` 复查而关闭。
 
 **密码策略**（`models.CheckPasswordPolicy`）：8-32 位、仅字母数字、必须同时含字母和数字。所有写密码路径（REST 创建、改密、重置密码）经 `User` 的 `BeforeCreate` / `BeforeUpdate` 钩子单点收口，违规返回 `1001 Invalid`；`User.Password` 的 `rule` 标签（`^[A-Za-z0-9]{8,32}$`）负责 REST 层长度+字符集校验与前端表单渲染（RE2 无 lookahead，字母+数字组合由钩子兜底）；`ChangePassword` 另要求新密码与旧密码不同。已哈希值（`$2` 前缀）与空密码自动跳过策略，幂等语义与 `hashPassword` 一致。
+
+### 吊销链路（TokenStore + RevocationValidator）
+
+TokenStore 是按 JWT `jti` 键的**黑名单**：只有显式登出 / 轮换才写入条目，登录零写入。要让它真正生效，必须把 `service.RevocationValidator` 接到 JWT 中间件的 `WithValidate` 钩子上——它做两件事：
+
+| 检查 | 结果 |
+|------|------|
+| `token_type == "refresh"` | 拒绝（`4005 AccessDenied`）——refresh token 只能走 `/auth/refresh-token`，不能当 access token 调 API |
+| jti 已被吊销（logout / refresh 轮换） | 拒绝（`4005 AccessDenied`）；store 故障时同样拒绝（fail-closed） |
+
+```go
+store := service.NewMemoryTokenStore() // 多实例部署换共享实现(Redis 等)
+pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
+    service.WithAuthServiceDB(db),
+    service.WithAuthSecret(secret),
+    service.WithTokenStore(store),
+))
+httpSrv.Use(mwauth.JWT(keyfunc,
+    mwauth.WithClaims(auth.Claims{}),
+    mwauth.WithValidate(service.NewRevocationValidator(store, secret)), // 吊销 + token_type 门禁
+    mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
+    mwauth.WithAllow("/auth/login", "/auth/refresh-token"),
+))
+```
+
+- 无法解析的 token（坏签名 / 过期）在 validator 处**放行透传**，由中间件自己的 parse 给出精确错误码；旧 token（无 jti / token_type claim）跳过检查保持兼容；
+- 默认内存黑名单容量 65536 条、到期惰性清理；多实例部署务必注入共享 store。
 
 > **登录限流**：`admin/cmd/mock` 默认已在 `/auth/login` 前挂 `middleware/auth.RateLimit`（token bucket，IP+账号 双 key，5 次突发 / 60 秒补 1 个），命中返回 `4010 TooManyAttempts`（HTTP 429）+ `Retry-After` header。详见 [`docs/api/auth.md` §3.7](docs/api/auth.md)。**未实现**：`User.LockedUntil` 字段（失败 N 次锁账号）—— 与 token bucket 正交，需叠加在 `AuthService.Login` 状态检查之后。
 
@@ -642,8 +672,8 @@ Authorization: Bearer <token>
 | 方法 | 路径 | 请求体 | 说明 |
 |------|------|--------|------|
 | `POST` | `/auth/login` | `{username, password}` | 登录，返回 `{uid, username, expires, access_token, refresh_token}` |
-| `POST` | `/auth/refresh-token` | `{refresh_token}` | 用 refresh token 换取新 access token |
-| `POST` | `/auth/logout` | `{access_token}` | 登出（配置 TokenStore 时同步吊销） |
+| `POST` | `/auth/refresh-token` | `{refresh_token}` | 换取新 access token + **轮换后的新 refresh token**（旧值立即失效） |
+| `POST` | `/auth/logout` | `{access_token?, refresh_token?}`（至少一项） | 登出：按 jti 吊销所给 token，防止被盗 token 在登出后继续可用 |
 
 ### UserService
 

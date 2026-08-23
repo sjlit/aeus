@@ -492,6 +492,8 @@ func (m *LogoutRequest) validate(all bool) error {
 
 	// no validation rules for AccessToken
 
+	// no validation rules for RefreshToken
+
 	if len(errors) > 0 {
 		return LogoutRequestMultiError(errors)
 	}

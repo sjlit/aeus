@@ -22,7 +22,7 @@ pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
 | `WithAuthServiceDB(db)` | GORM 句柄(必填,缺则构造时 panic) |
 | `WithAuthSecret(secret)` | JWT 签名密钥(必填,空值 panic;从 env / KMS 取) |
 | `WithTokenExpireSeconds(n)` | access token TTL,默认 `7200`(2h);≤0 按默认 |
-| `WithTokenStore(store)` | 吊销存储;nil 默认 `NewMemoryTokenStore()`,不持久化 |
+| `WithTokenStore(store)` | 吊销黑名单(按 jti 键);nil 默认 `NewMemoryTokenStore()`,不持久化 |
 | `WithBeforeLogin(fn)` | 登录前置钩子(凭据校验前);返回 error 短路 Login |
 | `WithAfterLogin(fn)` | 登录成功钩子,通知用,返回值忽略 |
 | `WithLoginLogger(fn)` | 登录审计回调(成功+失败);IP/UA/Username + 成功时的 access token;**同步**执行,panic 透传到 Login 调用方 |
@@ -31,12 +31,21 @@ pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
 
 ```go
 type TokenStore interface {
-    Put(ctx context.Context, token string, ttl int64) error
-    Del(ctx context.Context, token string) error
+    Revoke(ctx context.Context, jti string, until time.Time) error
+    Revoked(ctx context.Context, jti string) (bool, error)
+    // 原子 CAS:首个调用者赢得登记,已吊销(未过期)的 jti 返回 false。
+    // RefreshToken 轮换用它做重放栅栏——并发刷新同一 token 只有一个成功。
+    RevokeIfNotRevoked(ctx context.Context, jti string, until time.Time) (bool, error)
 }
 ```
 
-默认实现 `service.NewMemoryTokenStore()`(进程内 map)。生产建议自实现 Redis 版。
+按 JWT `jti` 键的**黑名单**:只有显式登出 / refresh 轮换写入条目,登录零写入。默认实现 `service.NewMemoryTokenStore()`(进程内 map,容量 65536、到期惰性清理)。多实例部署自实现 Redis 版。
+
+**中间件接线(必需)**:黑名单由 `service.NewRevocationValidator(store, secret)` 消费——挂到 `mwauth.WithValidate(...)`,它拒绝 refresh token 调 API(`4005`)与已吊销 jti(含 store 故障,fail-closed)。未接线时 logout 只是删一条无人读取的记录。
+
+### RefreshToken 轮换
+
+每次刷新返回**全新** refresh token(新 jti),旧 jti 进黑名单直至自然过期——旧 token 重放即被拒(`4005 AccessDenied`)。前端必须持久化响应中的新 `refresh_token`(`admin/web` 已同步)。access token 从 DB 最新行签发,角色变更后旧 refresh token 换不出旧权限。
 
 ### LoginLogFunc 回调载荷
 
@@ -124,20 +133,21 @@ type LoginLogFunc func(ctx context.Context, info LoginLogInfo)
 }
 ```
 
-> refresh token **不轮换**——响应中的 `refresh_token` 等于请求中的值。前端继续保留原值。
+> refresh token **轮换**——响应中的 `refresh_token` 是全新签发的(新 `jti`),旧值已被吊销进黑名单。前端必须持久化新值。
 
 **校验**:
 
 - token 必须能解析,签名 HS256 合法。
 - `token_type` 必须等于 `"refresh"`,否则 `4005`(防止 access token 被冒充 refresh)。
+- 旧 refresh token 的 jti 已被登出/轮换吊销 → `4005`。
 - 重新查 `User.UID + TenantID` → 用户被禁则 `4003`;角色被禁则 `4003`;用户/角色不存在则 `4005`。
 
 ### POST /auth/logout
 
-**请求**:
+**请求**(至少一项):
 
 ```json
-{ "access_token": "eyJ..." }
+{ "access_token": "eyJ...", "refresh_token": "eyJ..." }
 ```
 
 **响应 200**:
@@ -148,11 +158,11 @@ type LoginLogFunc func(ctx context.Context, info LoginLogInfo)
 
 **行为**:
 
-- token 必须能解析且签名合法。
-- 配置了 `TokenStore` 时调用 `Del(token)` 真正吊销(进程内或 Redis)。
-- 未配置 `TokenStore` 时无副作用(无状态模式,logout 仅协议层通知,token 凭自然过期失效)。
+- 解析每个所给 token,把其 `jti` 加入黑名单直至该 token 自然过期;无法解析 / 已过期 / 无 jti 的 token 静默跳过(logout 幂等)。
+- 只带 `access_token` 时也会连带吊销配对的 refresh token 吗?——不会,请把两个 token 都传上来(`admin/web` 已同步);只传一个只吊销那一个。
+- 两项都缺 → `1001 Invalid`。
 
-**失败码**:签名错误 / token 类型不符 → `4005`。
+**失败码**:两项均空 → `1001`;store 故障 → 包装错误上抛。
 
 ## 3.3 登录前后钩子
 

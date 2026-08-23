@@ -356,5 +356,13 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	if _, err = RegisterModelTiersEndpoint(s); err != nil {
 		return fmt.Errorf("register model-tiers endpoint: %w", err)
 	}
+	// Catalog the metadata endpoints so the PermissionChecker enforces
+	// RBAC on them (they are not tied to any registered model, so the
+	// ensurePermissionRows loop above cannot see them).  Seed's
+	// grantFullCatalog diff grants the new rows to super roles on the
+	// next boot.
+	if err = s.ensureEndpointPermissions(s.opts.DB); err != nil {
+		return fmt.Errorf("register endpoint permissions: %w", err)
+	}
 	return nil
 }

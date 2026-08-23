@@ -121,8 +121,8 @@ func TestRefreshToken_IssuesFreshAccessToken(t *testing.T) {
 	if res.Uid != "u0001" {
 		t.Errorf("Uid = %q, want u0001", res.Uid)
 	}
-	if res.RefreshToken != refresh {
-		t.Error("refresh token should be echoed unchanged")
+	if res.RefreshToken == "" || res.RefreshToken == refresh {
+		t.Error("refresh token should be rotated (fresh jti, not echoed)")
 	}
 	parsed, err := jwt.ParseWithClaims(res.AccessToken, &auth.Claims{}, svc.keyfunc())
 	if err != nil {

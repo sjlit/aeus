@@ -32,13 +32,14 @@ message LoginResponse {
 }
 
 // RefreshTokenRequest carries the refresh token to exchange for a fresh
-// access token. The refresh token itself is NOT rotated.
+// access token. The refresh token IS rotated: the response carries a
+// new refresh token and the old one is denylisted (replay-detectable).
 message RefreshTokenRequest{
   string refresh_token = 1;
 }
 
 // RefreshTokenResponse mirrors LoginResponse in shape; the server
-// populates uid, expires and access_token only.
+// populates uid, expires, access_token, and the rotated refresh_token.
 message RefreshTokenResponse{
   string uid           = 1;
   string username      = 2;
@@ -47,11 +48,13 @@ message RefreshTokenResponse{
   string refresh_token = 5;
 }
 
-// LogoutRequest carries the access token to revoke. The token is
-// deleted from the TokenStore so it can no longer be used; AuthService
-// defaults to an in-memory store unless the application overrides it.
+// LogoutRequest carries the token(s) to revoke. access_token is
+// optional when refresh_token is supplied; at least one is required.
+// Each token's jti is denylisted until its natural expiry so a stolen
+// token cannot outlive the logout.
 message LogoutRequest {
-  string access_token = 1;
+  string access_token  = 1;
+  string refresh_token = 2;
 }
 
 // LogoutResponse acknowledges the logout and echoes the uid of the
@@ -74,8 +77,8 @@ service AuthService {
     };
   }
 
-  // Exchanges a valid refresh token for a fresh access token without
-  // rotating the refresh token.
+  // Exchanges a valid refresh token for a fresh access token and a
+  // ROTATED refresh token (the old one becomes unusable).
   // Wire format: POST /auth/refresh-token.
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {
     option (google.api.http) = {
@@ -84,8 +87,8 @@ service AuthService {
     };
   }
 
-  // Revokes the access token in the TokenStore and returns the uid of
-  // the ended session.
+  // Denylists the presented access token and, when supplied, the
+  // paired refresh token; returns the uid of the ended session.
   // Wire format: POST /auth/logout.
   rpc Logout(LogoutRequest) returns (LogoutResponse) {
     option (google.api.http) = {

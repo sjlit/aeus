@@ -43,11 +43,13 @@ export const useAuthStore = defineStore('auth', {
       // 换用户后菜单可能不同:清空菜单缓存,路由守卫会在首次导航时重新拉取
       useMenuStore().$reset()
     },
-    // 只更新 token —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile
+    // 只更新 token —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile。
+    // refresh_token 是轮换语义:旧值已被服务端吊销,必须持久化新值。
     async refresh(): Promise<boolean> {
       if (!this.refreshToken) return false
       const resp = await apiRefresh(this.refreshToken)
       this.accessToken = resp.access_token
+      if (resp.refresh_token) this.refreshToken = resp.refresh_token
       safeSetString(LS_ACCESS, resp.access_token)
       return true
     },
@@ -72,7 +74,8 @@ export const useAuthStore = defineStore('auth', {
     },
     async logout() {
       try {
-        if (this.accessToken) await apiLogout(this.accessToken)
+        if (this.accessToken || this.refreshToken)
+          await apiLogout(this.accessToken ?? undefined, this.refreshToken ?? undefined)
       } catch {
         // 撤销失败(网络等)不阻塞本地登出
       }

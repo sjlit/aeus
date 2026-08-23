@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -307,6 +308,155 @@ func TestModelTypesEndpoint_RouteRegistered(t *testing.T) {
 	}
 	if !seen {
 		t.Errorf("route GET /rest/model-types/:module/:table not registered; routes=%v", routes)
+	}
+}
+
+// ---------- column allowlist (endpoint_allowlist.go) ----------
+
+// A write-only column (User.Password is scenarios:"create") must be
+// rejected as label or value — the endpoint must not become an
+// arbitrary two-column export.
+func TestModelTypesEndpoint_RejectsWriteOnlyColumn(t *testing.T) {
+	_, httpSrv := setupOptionDB(t)
+	for _, pair := range [][2]string{
+		{"username", "password"},
+		{"password", "username"},
+	} {
+		qs := url.Values{}
+		qs.Set("label", pair[0])
+		qs.Set("value", pair[1])
+		rec := callOptionEndpoint(t, httpSrv, "/rest/model-types/system/sys_users", qs.Encode())
+		var env struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+		}
+		if env.Code != int(errs.CodeInvalid) {
+			t.Errorf("label=%s value=%s: env.Code = %d, want %d (Invalid); msg=%q",
+				pair[0], pair[1], env.Code, errs.CodeInvalid, env.Message)
+		}
+		if !strings.Contains(env.Message, "not selectable") {
+			t.Errorf("label=%s value=%s: msg = %q, want 'not selectable'", pair[0], pair[1], env.Message)
+		}
+	}
+}
+
+func TestModelTypesEndpoint_AllowsReadableColumns(t *testing.T) {
+	_, httpSrv := setupOptionDB(t)
+	qs := url.Values{}
+	qs.Set("label", "name")
+	qs.Set("value", "key")
+	rec := callOptionEndpoint(t, httpSrv, "/rest/model-types/system/sys_roles", qs.Encode())
+	var env typeValueEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if env.Code != 0 {
+		t.Errorf("env.Code = %d, want 0; msg=%q", env.Code, env.Message)
+	}
+}
+
+func TestModelTiersEndpoint_RejectsWriteOnlyParentColumn(t *testing.T) {
+	_, httpSrv := setupOptionDB(t)
+	qs := url.Values{}
+	qs.Set("parent", "parent")
+	qs.Set("label", "name")
+	qs.Set("value", "component")
+	// sys_users has no parent column at all — unknown columns are rejected.
+	rec := callOptionEndpoint(t, httpSrv, "/rest/model-tiers/system/sys_users", qs.Encode())
+	var env struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if env.Code != int(errs.CodeInvalid) {
+		t.Errorf("env.Code = %d, want %d (Invalid); msg=%q", env.Code, errs.CodeInvalid, env.Message)
+	}
+}
+
+// ---------- tenant policy (?tenant= removed) ----------
+
+// The ?tenant= query override is gone: passing it must neither error
+// nor change the result set — global models are always unscoped.
+func TestModelTypesEndpoint_TenantParamIgnored(t *testing.T) {
+	db, httpSrv := setupOptionDB(t)
+	if err := db.Create(&models.Menu{Component: "TenantParamSeed", Name: "tenant param seed"}).Error; err != nil {
+		t.Fatalf("seed menu: %v", err)
+	}
+	qs := url.Values{}
+	qs.Set("label", "name")
+	qs.Set("value", "component")
+	qs.Set("tenant", "some-other-tenant")
+	rec := callOptionEndpoint(t, httpSrv, "/rest/model-types/system/sys_menus", qs.Encode())
+	var env typeValueEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if env.Code != 0 {
+		t.Fatalf("env.Code = %d, want 0; msg=%q", env.Code, env.Message)
+	}
+	found := false
+	for _, item := range env.Data {
+		if item.Label == "tenant param seed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("seed row missing from response with ?tenant= present; body=%s", rec.Body.String())
+	}
+}
+
+// Tenant-scoped models are filtered by the resolver's verdict, not by
+// any client-supplied parameter.
+func TestModelTypesEndpoint_ResolverScopedTenantModel(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	httpSrv := ghttp.New()
+	s := New(
+		WithDB(db),
+		WithRouter(httpSrv),
+		WithTenantResolver(func(ctx context.Context) string { return "tenant-a" }),
+	)
+	if err := s.Setup(context.Background()); err != nil {
+		t.Fatalf("admin.Setup: %v", err)
+	}
+	for i, tid := range []string{"tenant-a", "tenant-b"} {
+		u := &models.User{UID: fmt.Sprintf("u%d", i+1), Username: "user-" + tid, RoleKey: "admin"}
+		u.TenantID = tid
+		if err := db.Create(u).Error; err != nil {
+			t.Fatalf("seed user %s: %v", tid, err)
+		}
+	}
+	qs := url.Values{}
+	qs.Set("label", "username")
+	qs.Set("value", "uid")
+	rec := callOptionEndpoint(t, httpSrv, "/rest/model-types/system/sys_users", qs.Encode())
+	var env typeValueEnvelope
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if env.Code != 0 {
+		t.Fatalf("env.Code = %d, want 0; msg=%q", env.Code, env.Message)
+	}
+	labels := make(map[string]string, len(env.Data))
+	for _, item := range env.Data {
+		var v string
+		if err := json.Unmarshal(item.Value, &v); err != nil {
+			t.Fatalf("value unmarshal: %v", err)
+		}
+		labels[item.Label] = v
+	}
+	if _, ok := labels["user-tenant-a"]; !ok {
+		t.Errorf("same-tenant row missing from scoped query: %v", labels)
+	}
+	if _, ok := labels["user-tenant-b"]; ok {
+		t.Errorf("cross-tenant row leaked into resolver-scoped query: %v", labels)
 	}
 }
 

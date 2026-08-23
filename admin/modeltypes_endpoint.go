@@ -25,13 +25,24 @@ import (
 //	                    default "string" — selects the generic
 //	                    instantiation of rest.ModelTypes used to read
 //	                    the value column.
-//	?tenant=<id>        (optional) explicit tenant override; defaults to
-//	                    s.opts.TenantResolver(ctx). Pass "" to query
-//	                    un-scoped (cross-tenant tooling).
 //
-// Auth:    must be mounted behind the JWT middleware (no allowlist
+// Column policy: label and value must both appear in the selectable
+// allowlist derived from sys_schemas (read scenarios, non-password
+// format) — see endpoint_allowlist.go.  Unknown or write-only columns
+// are rejected with 1001 Invalid, so the endpoint can never be abused
+// as an arbitrary two-column export (e.g. ?label=username&value=password).
 //
-//	entry). All callers must present a valid bearer token.
+// Tenant policy: the ?tenant= query override has been REMOVED.  The
+// tenant filter is always the TenantResolver's verdict, and only for
+// models that actually declare a tenant_id column — global models
+// (Menu / Permission / Tenant) are queried unscoped because rest/v3
+// appends `tenant_id = ?` unconditionally whenever a non-empty tenant
+// is supplied.
+//
+// Auth:    must be mounted behind the JWT middleware, and the route
+//
+//	template "GET /rest/model-types/:module/:table" carries its own
+//	sys_permissions row, so RBAC applies like any cataloged API.
 //
 // Returns: 200 with {code:0, message:"", data:[{label,value}, ...]}
 //	on success; 200 with {code:4001|4004, message:"...", data:null}
@@ -82,8 +93,12 @@ func RegisterModelTypesEndpoint(s *Server) (http.HandlerFunc, error) {
 				"model not registered for module="+module+", table="+table, nil)
 			return
 		}
-		tenant := strings.TrimSpace(r.URL.Query().Get("tenant"))
-		if tenant == "" && s.opts.TenantResolver != nil {
+		if err := requireSelectableColumns(r.Context(), s.opts.DB, module, table, label, value); err != nil {
+			writeEnvelope(w, int(errs.CodeInvalid), err.Error(), nil)
+			return
+		}
+		var tenant string
+		if s.opts.TenantResolver != nil && modelHasTenantIDColumn(s.opts.DB, model) {
 			tenant = s.opts.TenantResolver(r.Context())
 		}
 		items, err := queryModelTypes(r.Context(), s.opts.DB, model, tenant, label, value, valueType)

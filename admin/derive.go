@@ -336,6 +336,59 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 		label
 }
 
+// _endpointPermissionCodes registers the metadata endpoints in the
+// permission catalog so they are RBAC-enforced like any other API.
+// Without catalog rows the PermissionChecker's default fail-open would
+// wave every authenticated user through — including the arbitrary
+// (module, table) enumeration surface these endpoints expose.
+//
+// Data matches the gin route TEMPLATE exactly: transport/http writes
+// RequestPath as gin's FullPath, and the checker compares
+// "<METHOD> <FullPath>" verbatim, so ":module"/":table" literals must
+// be preserved.  Seed's grantFullCatalog diff picks these rows up on
+// the next boot and grants them to super roles automatically; ordinary
+// roles receive them through the role-permission UI as needed.
+var _endpointPermissionCodes = []struct {
+	data, description, group string
+}{
+	{"GET /rest/model-types/:module/:table", "选项查询 元数据下拉", "系统"},
+	{"GET /rest/model-tiers/:module/:table", "层级查询 树形选择", "系统"},
+}
+
+// ensureEndpointPermissions idempotently inserts one sys_permissions
+// row per entry of _endpointPermissionCodes.  Same FirstOrCreate-style
+// contract as ensurePermissionRows: existing rows are never touched,
+// so operator edits (description / group) survive restarts.
+//
+// Called from Setup after the model loop — sys_permissions is already
+// migrated by then, but AutoMigrate runs defensively anyway so the
+// helper stays safe if invoked standalone.
+func (s *Server) ensureEndpointPermissions(db *gorm.DB) error {
+	if err := db.AutoMigrate(&models.Permission{}); err != nil {
+		return fmt.Errorf("migrate sys_permissions: %w", err)
+	}
+	for _, code := range _endpointPermissionCodes {
+		var existing models.Permission
+		err := db.Unscoped().Where("data = ?", code.data).First(&existing).Error
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("lookup sys_permission %q: %w", code.data, err)
+		}
+		row := models.Permission{
+			Type:        string(models.PermissionTypeAPI),
+			Data:        code.data,
+			Description: code.description,
+			Group:       code.group,
+		}
+		if err := db.Create(&row).Error; err != nil {
+			return fmt.Errorf("auto-create endpoint permission %q: %w", code.data, err)
+		}
+	}
+	return nil
+}
+
 // ensurePermissionRows walks one model's scenario set and turns each
 // scenario into one sys_permissions row.  AutoMigrate guarantees the
 // table exists; FirstOrCreate-style existence checks (Unscoped)

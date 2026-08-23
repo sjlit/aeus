@@ -48,12 +48,18 @@ type (
 	// issuance. It is informational only; its return value is ignored.
 	AfterLoginFunc func(ctx context.Context, req *pb.LoginRequest, res *pb.LoginResponse)
 
-	// TokenStore is a revocation store. Put records a freshly issued
-	// access token; Del removes it on logout. NewAuthService defaults
-	// it to an in-memory store (see WithTokenStore).
+	// TokenStore is a revocation DENYLIST keyed by JWT id (jti).
+	// Revoke marks an id unusable until its natural expiry (logout);
+	// Revoked reports whether an id is currently denied;
+	// RevokeIfNotRevoked is the atomic variant refresh rotation uses as
+	// a replay fence.  Nothing is written on login — the denylist only
+	// ever holds explicitly revoked ids.  NewAuthService defaults it to
+	// an in-memory store (see WithTokenStore); the JWT middleware
+	// consumes it through RevocationValidator.
 	TokenStore interface {
-		Put(ctx context.Context, token string, ttl int64) error
-		Del(ctx context.Context, token string) error
+		Revoke(ctx context.Context, jti string, until time.Time) error
+		Revoked(ctx context.Context, jti string) (bool, error)
+		RevokeIfNotRevoked(ctx context.Context, jti string, until time.Time) (bool, error)
 	}
 
 	// AuthServiceOptions holds the dependencies and hook configuration
@@ -102,9 +108,11 @@ func WithTokenExpireSeconds(seconds int64) AuthServiceOption {
 	}
 }
 
-// WithTokenStore overrides the default in-memory store. Pass a shared
-// or persistent store when revocation must survive process restarts or
-// span multiple instances; a nil store falls back to the default.
+// WithTokenStore overrides the default in-memory denylist store.  Pass
+// a shared or persistent store when revocation must survive process
+// restarts or span multiple instances; a nil store falls back to the
+// default.  The store is consumed by RevocationValidator (JWT
+// middleware side) and by RefreshToken / Logout (service side).
 func WithTokenStore(store TokenStore) AuthServiceOption {
 	return func(opts *AuthServiceOptions) {
 		opts.TokenStore = store
@@ -302,11 +310,6 @@ func (s *AuthService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	if err != nil {
 		return nil, err
 	}
-	if s.opts.TokenStore != nil {
-		if err := s.opts.TokenStore.Put(ctx, accessToken, ttl); err != nil {
-			return nil, fmt.Errorf("store access token: %w", err)
-		}
-	}
 	res := &pb.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -399,48 +402,96 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 	if role.Status == "disabled" {
 		return nil, ErrRoleDisabled
 	}
+	// Rotate: atomically claim the old jti BEFORE minting anything —
+	// RevokeIfNotRevoked serializes concurrent refreshes of the same
+	// token (exactly one wins; losers are replays or logged-out tokens
+	// and get 4005).  The winner's new refresh token carries a fresh
+	// jti; the old one stays denylisted until its natural expiry.
+	//
+	// Tokens minted before jti existed (ID == "") skip the fence: they
+	// still receive a rotated pair, but the old token stays valid until
+	// its natural expiry and cannot be replay-detected.
 	ttl := s.ttl()
-	accessToken, err := s.createToken(refreshClaims.UID, refreshClaims.Role, refreshClaims.TenantID, tokenTypeAccess, ttl)
+	if s.opts.TokenStore != nil && refreshClaims.ID != "" {
+		until := time.Now().Add(time.Duration(__refreshTokenTTL) * time.Second)
+		if refreshClaims.ExpiresAt != nil {
+			until = refreshClaims.ExpiresAt.Time
+		}
+		won, rerr := s.opts.TokenStore.RevokeIfNotRevoked(ctx, refreshClaims.ID, until)
+		if rerr != nil {
+			return nil, fmt.Errorf("claim rotated refresh token: %w", rerr)
+		}
+		if !won {
+			return nil, errs.ErrAccessDenied
+		}
+	}
+	newRefresh, err := s.createToken(user.UID, user.RoleKey, user.TenantID, tokenTypeRefresh, __refreshTokenTTL)
 	if err != nil {
 		return nil, err
 	}
-	if s.opts.TokenStore != nil {
-		if err := s.opts.TokenStore.Put(ctx, accessToken, ttl); err != nil {
-			return nil, fmt.Errorf("store access token: %w", err)
-		}
+	// Issue the access token from the FRESH DB row — refreshClaims.Role
+	// may be stale for up to the old refresh TTL after a role change.
+	accessToken, err := s.createToken(user.UID, user.RoleKey, user.TenantID, tokenTypeAccess, ttl)
+	if err != nil {
+		return nil, err
 	}
-	// Echo the (unchanged) refresh token back so the frontend can keep
-	// using it. The token itself is NOT rotated per spec §3.4 — see
-	// pb/auth.proto:28-32 RefreshTokenRequest comment.
 	return &pb.RefreshTokenResponse{
 		AccessToken:  accessToken,
-		RefreshToken: req.RefreshToken,
-		Uid:          refreshClaims.UID,
+		RefreshToken: newRefresh,
+		Uid:          user.UID,
 		Expires:      ttl,
 	}, nil
 }
 
-// Logout validates the access token and revokes it via the TokenStore
-// when configured.
+// Logout revokes the presented token(s) via the TokenStore: the access
+// token's jti is denylisted until its expiry, and — when the client
+// supplies it — the paired refresh token too, so a stolen refresh
+// token cannot outlive the logout.  At least one token must be
+// present.  Unknown / expired tokens are no-ops so logout stays
+// idempotent.
 func (s *AuthService) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.LogoutResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	token, err := jwt.ParseWithClaims(req.AccessToken, &auth.Claims{}, s.keyfunc())
-	if err != nil {
-		return nil, err
+	if req.AccessToken == "" && req.RefreshToken == "" {
+		return nil, errs.Newf(errs.CodeInvalid, "access_token or refresh_token required")
 	}
-	if !token.Valid {
-		return nil, errs.ErrAccessDenied
+	var uid string
+	if req.AccessToken != "" {
+		u, err := s.revokeToken(ctx, req.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		uid = u
 	}
-	claims, ok := token.Claims.(*auth.Claims)
-	if !ok {
-		return nil, errs.ErrIncompatible
-	}
-	if s.opts.TokenStore != nil {
-		if err := s.opts.TokenStore.Del(ctx, req.AccessToken); err != nil {
-			return nil, fmt.Errorf("revoke access token: %w", err)
+	if req.RefreshToken != "" {
+		if _, err := s.revokeToken(ctx, req.RefreshToken); err != nil {
+			return nil, err
 		}
 	}
-	return &pb.LogoutResponse{Uid: claims.UID}, nil
+	return &pb.LogoutResponse{Uid: uid}, nil
+}
+
+// revokeToken parses one raw JWT and denylists its jti until the
+// token's natural expiry.  Unparseable, expired, or legacy (jti-less)
+// tokens are silent no-ops — they can no longer authenticate anyone,
+// and logout must not fail because of them.  Returns the token's UID
+// ("" when nothing could be parsed) for LogoutResponse echo.
+func (s *AuthService) revokeToken(ctx context.Context, raw string) (string, error) {
+	claims := &auth.Claims{}
+	token, err := jwt.ParseWithClaims(raw, claims, s.keyfunc())
+	if err != nil || !token.Valid {
+		return "", nil
+	}
+	if claims.ID == "" || s.opts.TokenStore == nil {
+		return claims.UID, nil
+	}
+	until := time.Now().Add(time.Duration(s.ttl()) * time.Second)
+	if claims.ExpiresAt != nil && claims.ExpiresAt.After(time.Now()) {
+		until = claims.ExpiresAt.Time
+	}
+	if err := s.opts.TokenStore.Revoke(ctx, claims.ID, until); err != nil {
+		return "", fmt.Errorf("revoke token: %w", err)
+	}
+	return claims.UID, nil
 }

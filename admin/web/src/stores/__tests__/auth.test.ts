@@ -54,17 +54,31 @@ describe('auth store', () => {
     expect(authApi.login).toHaveBeenCalledWith({ username: 'admin', password: 'Admin123' })
   })
 
-  it('refresh 只更新 token,不覆盖 profile', async () => {
+  it('refresh 更新 token 与轮换后的 refresh_token,不覆盖 profile', async () => {
+    vi.mocked(authApi.login).mockResolvedValue(loginResp)
+    const s = useAuthStore()
+    await s.login({ username: 'admin', password: 'Admin123' })
+    vi.mocked(authApi.refresh).mockResolvedValue({
+      uid: 'admin',
+      expires: 3600,
+      access_token: 'at-2',
+      refresh_token: 'rt-2',
+    })
+    const ok = await s.refresh()
+    expect(ok).toBe(true)
+    expect(s.accessToken).toBe('at-2')
+    expect(s.refreshToken).toBe('rt-2') // 轮换后的新 refresh token
+    expect(s.profile?.username).toBe('admin') // profile 未被覆盖
+    expect(localStorage.getItem('aeus.access')).toBe('at-2')
+  })
+
+  it('refresh 响应缺 refresh_token 时保留旧值(向后兼容)', async () => {
     vi.mocked(authApi.login).mockResolvedValue(loginResp)
     const s = useAuthStore()
     await s.login({ username: 'admin', password: 'Admin123' })
     vi.mocked(authApi.refresh).mockResolvedValue({ uid: 'admin', expires: 3600, access_token: 'at-2' })
-    const ok = await s.refresh()
-    expect(ok).toBe(true)
-    expect(s.accessToken).toBe('at-2')
-    expect(s.refreshToken).toBe('rt-1') // refresh token 不轮换
-    expect(s.profile?.username).toBe('admin') // profile 未被覆盖
-    expect(localStorage.getItem('aeus.access')).toBe('at-2')
+    await s.refresh()
+    expect(s.refreshToken).toBe('rt-1')
   })
 
   it('无 refreshToken 时 refresh 返回 false', async () => {
@@ -80,7 +94,7 @@ describe('auth store', () => {
     await s.fetchProfile()
     vi.mocked(authApi.logout).mockResolvedValue(undefined)
     await s.logout()
-    expect(authApi.logout).toHaveBeenCalledWith('at-1')
+    expect(authApi.logout).toHaveBeenCalledWith('at-1', 'rt-1')
     expect(s.accessToken).toBeNull()
     expect(s.refreshToken).toBeNull()
     expect(s.profile).toBeNull()
