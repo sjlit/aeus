@@ -10,6 +10,10 @@ import type { MenuNode } from '../types'
 import { normalizeGlobPath, deriveComponentName } from './viewPath'
 
 export const LOGIN_PATH = '/login'
+/** 工作台(dashboard)路由:登录后的默认落地页,固定写在前端,
+ *  不依赖服务端菜单下发。`menu:` 前缀命名让 beforeEach 的
+ *  hasRoute 检查命中,不会被重定向回首页。 */
+export const DASHBOARD_PATH = '/dashboard'
 /** 个人中心路由:固定写在前端,不依赖服务端菜单下发,所以也用 `menu:` 前缀,
  *  让 router.beforeEach 里的 hasRoute 检查通过,不会被重定向回首页。 */
 export const PROFILE_PATH = '/profile'
@@ -26,6 +30,16 @@ const defaultRoute: RouteRecordRaw = {
   name: 'default',
   component: DefaultLayout,
   children: [
+    {
+      // 工作台:登录后的默认落地页,不走菜单分发,前端硬编码。
+      path: DASHBOARD_PATH,
+      name: `menu:${DASHBOARD_PATH}`,
+      component: () => import('../views/dashboard/Index.vue'),
+      meta: {
+        title: '工作台',
+        componentName: deriveComponentName('@/views/dashboard/Index.vue'),
+      },
+    },
     {
       // 个人中心:不走菜单分发,前端硬编码;名字用 menu: 前缀以便
       // beforeEach 的 hasRoute 检查命中。挂在 default 下,
@@ -163,11 +177,10 @@ router.beforeEach(async (to) => {
   // 关键:不要在 addRoute 之后用 `return to` 重放当前导航(vue-router 4 不一定
   // 重算 to.matched);用「未注册则重定向到 /」保证渲染的一定是已知路由。
   await ensureMenuRoutes()
-  const menu = useMenuStore()
 
   if (to.path === '/') {
-    const first = menu.flatIndex.uris[0]
-    return first ? { path: first, replace: true } : true
+    // 登录后默认进入工作台;菜单第一项不再是落地页。
+    return { path: DASHBOARD_PATH, replace: true }
   }
   // 路径不在菜单里 → 重定向到 '/'('/' 分支会再次处理)
   //
@@ -220,7 +233,8 @@ router.afterEach((to) => {
     name: typeof to.name === 'string' ? to.name : to.path,
     title,
     icon: idx.iconsByUri.get(patternUri),
-    closable: to.path !== idx.uris[0],
+    // 工作台是常驻落地页,不可关闭;其余 tab 均可关闭。
+    closable: to.path !== DASHBOARD_PATH,
     query: to.query as Record<string, string>,
   })
 })
