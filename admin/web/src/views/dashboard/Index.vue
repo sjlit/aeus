@@ -5,13 +5,21 @@
 defineOptions({ name: 'DashboardIndex' })
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
+import { useTabsStore } from '@/stores/tabs'
+import { useUiStore } from '@/stores/ui'
 import { usePageTitle } from '@/composables/usePageTitle'
+import { resolveIcon } from '@/utils/icons'
 
 const title = usePageTitle('工作台')
+const route = useRoute()
 const auth = useAuthStore()
 const menu = useMenuStore()
+const tabs = useTabsStore()
+const ui = useUiStore()
 
 /** 按时间段问候。 */
 const greeting = computed(() => {
@@ -40,178 +48,198 @@ const dateLine = computed(() =>
   }).format(now.value),
 )
 
-/** 指标读数:当前为占位,接入真实统计接口时把这份配置换成接口返回值即可。 */
-interface StatItem {
-  key: string
-  label: string
-  value: string
+/**
+ * 快捷导航:按所属节(菜单一级分组)聚合全部可路由节点。
+ * 直接消费 flatIndex + sectionsByUri 两个现成快照,不依赖具体业务模块,
+ * 菜单变化时本页自动跟着变 —— 这是「通用」的关键。
+ */
+interface NavItem {
+  uri: string
+  title: string
+  icon: string
 }
 
-const stats: StatItem[] = [
-  { key: 'users', label: 'USERS', value: '—' },
-  { key: 'sessions', label: 'SESSIONS', value: '—' },
-  { key: 'roles', label: 'ROLES', value: '—' },
-  { key: 'audit', label: 'AUDIT', value: '—' },
-]
+interface NavGroup {
+  name: string
+  items: NavItem[]
+}
 
-/** 快捷入口:取菜单前 6 个可路由节点;菜单为空时该卡片自动隐藏。 */
-const shortcuts = computed(() => {
+const navGroups = computed<NavGroup[]>(() => {
+  const bySection = new Map<string, NavItem[]>()
   const idx = menu.flatIndex
-  return idx.uris.slice(0, 6).map((uri) => ({
-    uri,
-    title: idx.titlesByUri.get(uri) ?? uri,
-  }))
+  for (const uri of idx.uris) {
+    const sec = menu.sectionsByUri.get(uri) || '其他'
+    let items = bySection.get(sec)
+    if (!items) {
+      items = []
+      bySection.set(sec, items)
+    }
+    items.push({
+      uri,
+      title: idx.titlesByUri.get(uri) ?? uri,
+      icon: idx.iconsByUri.get(uri) ?? '',
+    })
+  }
+  return [...bySection.entries()]
+    .map(([name, items]) => ({ name, items }))
+})
+
+/** 最近访问:当前打开的业务标签页(排除落地页自身与不可关的常驻页)。 */
+const recentTabs = computed(() =>
+  tabs.tabs.filter(t => t.closable && t.path !== route.path).slice(0, 8),
+)
+
+/** 个人资料页入口:按 view_path 含 profile 反查 uri;菜单里没有就隐藏入口。 */
+const profileUri = computed(() => {
+  for (const [uri, view] of menu.flatIndex.viewsByUri) {
+    if (view.includes('profile')) return uri
+  }
+  return ''
+})
+
+/** 租户名只在登录瞬态(LoginResponse)里有,刷新后拿不到就隐藏该行。 */
+const tenantName = computed(() => {
+  const c = auth.currentUser as Partial<{ tenant_name: string }> | null
+  return c?.tenant_name ?? ''
 })
 </script>
 
 <template>
-  <div class="console">
-    <!-- 左主区:问候 + 鲸鱼动画 -->
-    <section class="glass main">
-      <header class="main-head">
+  <div class="dash">
+    <!-- 欢迎区:问候 + 全局搜索 + 时钟 -->
+    <section class="hero glass">
+      <div class="hero-left">
         <h1 class="greet">
           {{ greeting }}，<span class="text-gradient">{{ auth.displayName }}</span>
         </h1>
         <p class="date-line">{{ dateLine }}</p>
-      </header>
+      </div>
 
-      <div class="stage">
-        <svg class="whale-scene" viewBox="0 0 260 150" role="img" aria-label="鲸鱼摆尾动画">
-          <defs>
-            <clipPath id="whale-body-clip">
-              <path d="M30 78 C30 46 68 30 112 32 C154 34 180 52 190 74 C192 78 192 82 190 86 C178 106 148 118 108 116 C64 114 30 102 30 78 Z" />
-            </clipPath>
-            <linearGradient id="whale-skin" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stop-color="#8ad2b8" />
-              <stop offset="100%" stop-color="#57b394" />
-            </linearGradient>
-          </defs>
-
-          <!-- 波浪:两层异速横移 -->
-          <g class="waves" aria-hidden="true">
-            <path
-              class="wave w1"
-              d="M0 126 Q13 120 26 126 T52 126 T78 126 T104 126 T130 126 T156 126 T182 126 T208 126 T234 126 T260 126 T286 126 T312 126 T338 126 T364 126 T390 126 T416 126 T442 126 T468 126 T494 126 T520 126 V150 H0 Z"
-            />
-            <path
-              class="wave w2"
-              d="M0 131 Q13 126 26 131 T52 131 T78 131 T104 131 T130 131 T156 131 T182 131 T208 131 T234 131 T260 131 T286 131 T312 131 T338 131 T364 131 T390 131 T416 131 T442 131 T468 131 T494 131 T520 131 V150 H0 Z"
-            />
-          </g>
-
-          <!-- 鲸鱼本体:整体缓慢浮沉 -->
-          <g class="whale">
-            <!-- 喷水 -->
-            <g class="spout" aria-hidden="true">
-              <path class="spout-line" d="M64 34 C64 24 72 22 72 12" />
-              <circle class="drop p1" cx="67" cy="14" r="2" />
-              <circle class="drop p2" cx="76" cy="11" r="1.6" />
-              <circle class="drop p3" cx="71" cy="6" r="1.8" />
-            </g>
-
-            <!-- 尾巴:小幅摆动(旋转原点在尾根) -->
-            <path
-              class="tail"
-              d="M190 78
-                 C202 62 218 52 234 50
-                 C228 62 226 72 230 80
-                 C216 78 202 80 190 84
-                 C202 88 214 94 222 106
-                 C208 104 196 96 188 88
-                 C186 84 187 80 190 78 Z"
-            />
-
-            <!-- 身体 -->
-            <path
-              class="body"
-              d="M30 78 C30 46 68 30 112 32 C154 34 180 52 190 74 C192 78 192 82 190 86 C178 106 148 118 108 116 C64 114 30 102 30 78 Z"
-            />
-            <!-- 肚皮:裁剪进身体轮廓 -->
-            <ellipse
-              class="belly"
-              clip-path="url(#whale-body-clip)"
-              cx="110" cy="114" rx="82" ry="26"
-            />
-
-            <!-- 鳍 -->
-            <path class="fin" d="M116 92 C128 87 138 91 141 100 C133 105 121 103 114 96 Z" />
-
-            <!-- 脸:眼睛(会眨)+ 腮红 + 微笑 -->
-            <g class="eye-group">
-              <circle class="eye" cx="62" cy="70" r="4.2" />
-              <circle class="eye-glint" cx="63.5" cy="68.5" r="1.3" />
-            </g>
-            <circle class="cheek" cx="50" cy="86" r="6.5" />
-            <path class="smile" d="M46 93 Q57 101 70 96" />
-          </g>
-        </svg>
+      <div class="hero-right">
+        <button class="search-pill" type="button" @click="ui.openPalette()">
+          <el-icon><Search /></el-icon>
+          <span>搜索菜单</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+        <span class="clock">{{ clock }}</span>
       </div>
     </section>
 
-    <!-- 右侧栏:时钟 / 指标 / 快捷入口 -->
-    <aside class="side">
-      <section class="glass side-card clock-card">
-        <span class="status">
-          <i class="status-dot" aria-hidden="true" />
-          <span class="micro">SYSTEM ONLINE</span>
-        </span>
-        <p class="clock">{{ clock }}</p>
-      </section>
-
-      <section class="glass side-card">
-        <p class="micro">METRICS</p>
-        <div class="metric-rows">
-          <div v-for="s in stats" :key="s.key" class="metric-row">
-            <span class="metric-label">{{ s.label }}</span>
-            <span class="metric-dots" aria-hidden="true" />
-            <span class="metric-value">{{ s.value }}</span>
+    <div class="bento">
+      <!-- 账号卡 -->
+      <section class="glass tile tile-account">
+        <div class="account">
+          <img
+            v-if="auth.userProfile?.avatar"
+            class="avatar"
+            :src="auth.userProfile.avatar"
+            alt=""
+          >
+          <span v-else class="avatar avatar-fallback">{{ auth.initials }}</span>
+          <div class="account-meta">
+            <p class="account-name">{{ auth.displayName }}</p>
+            <p class="account-sub">{{ auth.userProfile?.email || auth.userProfile?.role || '—' }}</p>
           </div>
         </div>
+        <router-link
+          v-if="profileUri"
+          :to="profileUri"
+          class="account-link"
+        >
+          编辑个人资料 →
+        </router-link>
       </section>
 
-      <section v-if="shortcuts.length > 0" class="glass side-card">
-        <p class="micro">QUICK ACCESS</p>
-        <nav class="quick-list">
+      <!-- 工作区信息卡 -->
+      <section class="glass tile tile-info">
+        <h2 class="tile-title">WORKSPACE</h2>
+        <dl class="info-rows">
+          <div v-if="tenantName" class="info-row">
+            <dt>租户</dt>
+            <dd>{{ tenantName }}</dd>
+          </div>
+          <div class="info-row">
+            <dt>角色</dt>
+            <dd>{{ auth.userProfile?.role || '—' }}</dd>
+          </div>
+          <div class="info-row">
+            <dt>菜单</dt>
+            <dd>{{ menu.flatIndex.uris.length }} 个页面</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- 最近访问 -->
+      <section v-if="recentTabs.length > 0" class="glass tile tile-recent">
+        <h2 class="tile-title">RECENT</h2>
+        <nav class="recent-list">
           <router-link
-            v-for="sc in shortcuts"
-            :key="sc.uri"
-            :to="sc.uri"
-            class="quick-item"
+            v-for="t in recentTabs.slice(0, 5)"
+            :key="t.path"
+            :to="{ path: t.path, query: t.query }"
+            class="recent-item"
           >
-            {{ sc.title }}
+            <el-icon v-if="resolveIcon(t.icon ?? '')" class="recent-icon">
+              <component :is="resolveIcon(t.icon ?? '')" />
+            </el-icon>
+            <span>{{ t.title }}</span>
           </router-link>
         </nav>
       </section>
-    </aside>
+
+      <!-- 快捷导航:整幅宽卡,按节分组排布 -->
+      <section class="glass tile tile-nav">
+        <h2 class="tile-title">QUICK NAV</h2>
+        <div v-if="navGroups.length > 0" class="nav-groups">
+          <div
+            v-for="g in navGroups"
+            :key="g.name"
+            class="nav-group"
+          >
+            <h3 class="nav-group-title">{{ g.name }}</h3>
+            <nav class="nav-list">
+              <router-link
+                v-for="item in g.items"
+                :key="item.uri"
+                :to="item.uri"
+                class="nav-item"
+              >
+                <el-icon v-if="resolveIcon(item.icon)" class="nav-icon">
+                  <component :is="resolveIcon(item.icon)" />
+                </el-icon>
+                <span>{{ item.title }}</span>
+              </router-link>
+            </nav>
+          </div>
+        </div>
+        <p v-else class="nav-empty">菜单为空,请联系管理员分配权限。</p>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
-.console {
+.dash {
   display: flex;
+  flex-direction: column;
   gap: 16px;
   width: 100%;
   min-height: 100%;
 }
 
-.micro {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  color: var(--ink-2);
-}
-
-/* ---- 左主区 ---- */
-.main {
-  flex: 1;
+/* ---- 欢迎区 ---- */
+.hero {
   display: flex;
-  flex-direction: column;
-  padding: 28px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 24px 28px;
 }
 
 .greet {
   font-family: var(--display);
-  font-size: clamp(20px, 2.2vw, 26px);
+  font-size: clamp(22px, 2.4vw, 30px);
   font-weight: 700;
   line-height: 1.3;
 }
@@ -220,233 +248,248 @@ const shortcuts = computed(() => {
   margin-top: 8px;
   font-family: var(--mono);
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--ink-2);
 }
 
-.stage {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  padding-top: 12px;
-}
-
-.whale-scene {
-  width: min(100%, 440px);
-  max-height: 100%;
-}
-
-/* ---- 波浪 ---- */
-.wave {
-  fill: rgba(108, 197, 168, 0.22);
-  animation: wave-drift 9s linear infinite;
-}
-
-.w2 {
-  fill: rgba(108, 197, 168, 0.34);
-  animation-duration: 6s;
-  animation-direction: reverse;
-}
-
-@keyframes wave-drift {
-  /* 波形以 26px 为周期铺满两倍画布宽,位移一个画布宽即无缝 */
-  to { transform: translateX(-260px); }
-}
-
-/* ---- 鲸鱼整体浮沉 ---- */
-.whale {
-  animation: bob 3.4s ease-in-out infinite alternate;
-}
-
-@keyframes bob {
-  from { transform: translateY(-2.5px); }
-  to { transform: translateY(2.5px); }
-}
-
-/* ---- 尾巴小幅摆动:原点钉在尾根(190,80) ---- */
-.tail {
-  fill: url(#whale-skin);
-  transform-box: view-box;
-  transform-origin: 190px 80px;
-  animation: wag 1.8s ease-in-out infinite alternate;
-}
-
-@keyframes wag {
-  from { transform: rotate(-5deg); }
-  to { transform: rotate(6deg); }
-}
-
-.body {
-  fill: url(#whale-skin);
-}
-
-.belly {
-  fill: rgba(255, 255, 255, 0.65);
-}
-
-.fin {
-  fill: #3f9b7e;
-  transform-box: fill-box;
-  transform-origin: 20% 20%;
-  animation: fin-sway 3.4s ease-in-out infinite alternate;
-}
-
-@keyframes fin-sway {
-  from { transform: rotate(-4deg); }
-  to { transform: rotate(5deg); }
-}
-
-/* ---- 喷水:水珠循环上升消散 ---- */
-.spout-line {
-  fill: none;
-  stroke: rgba(108, 197, 168, 0.45);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.drop {
-  fill: var(--acc-mint);
-  opacity: 0;
-  animation: drop-rise 2.4s ease-out infinite;
-}
-
-.p2 { animation-delay: 0.5s; }
-.p3 { animation-delay: 1s; }
-
-@keyframes drop-rise {
-  0% { opacity: 0; transform: translateY(6px); }
-  25% { opacity: 0.9; }
-  60% { opacity: 0; transform: translateY(-8px); }
-  100% { opacity: 0; }
-}
-
-/* ---- 表情 ---- */
-.eye-group {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: blink 4.6s ease-in-out infinite;
-}
-
-.eye {
-  fill: var(--ink);
-}
-
-.eye-glint {
-  fill: rgba(255, 255, 255, 0.9);
-}
-
-@keyframes blink {
-  0%, 93%, 100% { transform: scaleY(1); }
-  95.5% { transform: scaleY(0.08); }
-  98% { transform: scaleY(1); }
-}
-
-.cheek {
-  fill: var(--acc-peach);
-  opacity: 0.45;
-}
-
-.smile {
-  fill: none;
-  stroke: var(--ink-3);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-/* ---- 右侧栏 ---- */
-.side {
-  width: 300px;
-  flex-shrink: 0;
+.hero-right {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 16px;
 }
 
-.side-card {
-  padding: 20px 24px;
+.search-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border: 1px solid rgba(30, 90, 90, 0.14);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  kbd {
+    padding: 1px 7px;
+    border-radius: 6px;
+    border: 1px solid rgba(30, 90, 90, 0.18);
+    background: rgba(255, 255, 255, 0.7);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  &:hover {
+    border-color: var(--acc-mint);
+    color: var(--acc-mint-deeper);
+    box-shadow: var(--ring-soft);
+  }
 }
 
-.clock-card .clock {
-  margin-top: 10px;
+.clock {
   font-family: var(--mono);
-  font-size: 34px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--acc-mint-deep);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
 }
 
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+/* ---- 主区网格 ---- */
+/* ---- Bento 网格 ----
+ * 上排三张小卡(账号 / 工作区 / 最近访问),下面一张整幅宽的快捷导航,
+ * 无论菜单多少都能铺满,不会出现大片留白。 */
+.bento {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
 }
 
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--acc-mint);
-  box-shadow: 0 0 8px var(--acc-mint);
-  animation: pulse 2s ease-in-out infinite;
+.tile {
+  padding: 20px 22px;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+.tile-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
-/* 指标行:点线引导符 */
-.metric-rows {
-  margin-top: 14px;
+.tile-nav {
+  grid-column: 1 / -1;
+}
+
+/* 工作区信息行:点线引导 */
+.info-rows {
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.metric-row {
+.info-row {
   display: flex;
   align-items: baseline;
   gap: 8px;
+
+  dt {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--ink-2);
+    flex-shrink: 0;
+  }
+
+  dd {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 500;
+
+    &::before {
+      content: '';
+      order: -1;
+      flex: 1;
+      border-bottom: 1px dotted rgba(30, 90, 90, 0.25);
+      transform: translateY(-3px);
+      min-width: 12px;
+    }
+  }
 }
 
-.metric-label {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
+.nav-groups {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
 }
 
-.metric-dots {
-  flex: 1;
-  border-bottom: 1px dotted rgba(30, 90, 90, 0.25);
-  transform: translateY(-3px);
+.nav-group {
+  min-width: 150px;
 }
 
-.metric-value {
-  font-family: var(--mono);
-  font-size: 15px;
+.nav-group-title {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
+  color: var(--acc-mint-deeper);
 }
 
-/* 快捷入口 */
-.quick-list {
-  margin-top: 12px;
+.nav-list {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.quick-item {
+.nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   padding: 8px 10px;
-  margin-left: -10px;
+  margin: 0 -10px;
   border-radius: var(--r-sm);
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: 13px;
   text-decoration: none;
   transition: all 0.15s ease;
+
+  .nav-icon {
+    color: var(--acc-mint-deep);
+    font-size: 15px;
+  }
+
+  &:hover {
+    background: var(--menu-active-tint);
+    color: var(--acc-mint-deeper);
+    transform: translateX(2px);
+  }
+}
+
+/* ---- 账号卡 ---- */
+.account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+  color: #fff;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.account-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.account-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 170px;
+}
+
+.account-link {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--acc-mint-deep);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--acc-mint-deeper);
+    text-decoration: underline;
+  }
+}
+
+.recent-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  margin: 0 -10px;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  font-size: 13px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+
+  .recent-icon {
+    font-size: 14px;
+    color: var(--ink-3);
+  }
 
   &:hover {
     background: var(--menu-active-tint-soft);
@@ -455,12 +498,12 @@ const shortcuts = computed(() => {
 }
 
 @media (max-width: 900px) {
-  .console {
-    flex-direction: column;
+  .bento {
+    grid-template-columns: 1fr;
   }
 
-  .side {
-    width: 100%;
+  .search-pill kbd {
+    display: none;
   }
 }
 </style>

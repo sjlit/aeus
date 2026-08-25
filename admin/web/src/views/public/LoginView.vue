@@ -6,6 +6,7 @@ defineOptions({ name: 'PublicLoginView' })
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
+import { Lock, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -44,8 +45,9 @@ async function submit() {
 </script>
 
 <!--
-  LoginView · 登录页(样式迁移自参考项目 login/index.vue)
-  卡片 = .glass 工具类 + 角落两团装饰渐变;品牌行/大标题/脚注均对齐参考。
+  LoginView · 登录页
+  卡片 = .glass 工具类 + 角落两团装饰渐变;文案做减法:
+  无副标题、无表单 label(图标前缀 + placeholder 承担语义)、无找回入口。
   渐变文字复用全局 .text-gradient* 工具,不在此重复声明。
 -->
 <template>
@@ -56,31 +58,24 @@ async function submit() {
         <div class="brand-name text-gradient">aeus</div>
       </div>
 
-      <h1>欢迎回到 <em class="text-gradient--peach">AEUS</em></h1>
-      <p class="lead">登录到 AEUS 管理台</p>
+      <h1>欢迎回来</h1>
 
       <!-- 提交只走 form submit:输入框回车与按钮点击都由原生 submit 触发 -->
-      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent="submit">
-        <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" placeholder="uid 或用户名" autofocus size="large" />
+      <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="submit">
+        <el-form-item prop="username">
+          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" autofocus size="large" />
         </el-form-item>
-        <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="至少 6 位" size="large" />
+        <el-form-item prop="password">
+          <el-input v-model="form.password" type="password" show-password placeholder="密码" :prefix-icon="Lock" size="large" />
         </el-form-item>
-
-        <div class="form-actions">
-          <!-- 占位入口:后端暂无找回流程,拦截跳转避免滚回页顶/污染 URL -->
-          <a href="#" @click.prevent>忘记密码？</a>
-        </div>
 
         <el-button type="primary" size="large" native-type="submit" :loading="loading">
-          登录
+          登 录
         </el-button>
       </el-form>
 
       <div class="footer-row">
-        <span class="ver">v0.1.0</span>
-        <span class="live">系统一切正常</span>
+        <span class="live" title="系统一切正常" />
       </div>
     </div>
   </div>
@@ -96,7 +91,7 @@ async function submit() {
 
 .login-card {
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
   padding: 44px 40px;
   position: relative;
   overflow: hidden;
@@ -133,7 +128,7 @@ async function submit() {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
   position: relative;
 }
 
@@ -159,23 +154,13 @@ async function submit() {
 
 h1 {
   font-family: var(--display);
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  margin-bottom: 6px;
+  margin-bottom: 24px;
   position: relative;
 }
 
-.lead {
-  font-size: 13px;
-  color: var(--ink-2);
-  margin-bottom: 28px;
-  position: relative;
-}
-
-/* label-position="top" 的标签。参考项目是 10px 大写拉丁小标签,
-   但这里标签是中文(用户名/密码):mono 无 CJK 字形、10px 过小、
-   uppercase 无意义,改为 12px 正文家族。 */
 /* 表单抬到装饰光斑之上:卡片 ::before/::after 是定位元素,
    未定位的 in-flow 内容会被其罩色(登录按钮发灰),补一层定位。 */
 .el-form {
@@ -186,46 +171,42 @@ h1 {
   margin-bottom: 16px;
 }
 
-:deep(.el-form-item__label) {
-  display: block;
-  height: auto;
-  line-height: 1.4;
-  padding-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+/* 输入框去边框感、加柔和底色,与玻璃卡片更融合 */
+:deep(.el-input__wrapper) {
+  border-radius: var(--r-md);
+  padding: 4px 14px;
+  box-shadow: 0 0 0 1px var(--glass-border) inset;
+  background: rgba(255, 255, 255, 0.55);
+  transition: box-shadow 0.2s ease, background 0.2s ease;
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--acc-mint) inset;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: var(--ring), 0 0 0 1px var(--acc-mint) inset;
+}
+
+:deep(.el-input__prefix .el-icon) {
   color: var(--ink-2);
-}
-
-.form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 8px 0 24px;
-  font-size: 12px;
-}
-
-/* 参考项目用 --acc-cobalt(已移除),换成主题主色 */
-.form-actions a {
-  color: var(--acc-mint);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.form-actions a:hover {
-  color: var(--acc-mint-deep);
 }
 
 .el-button {
   width: 100%;
   height: 48px;
+  margin-top: 8px;
   font-size: 14px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+  border-radius: var(--r-md);
 }
 
 .footer-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  align-items: center;
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--ink-2);
@@ -235,22 +216,9 @@ h1 {
   position: relative;
 }
 
-/* 版本号是纯拉丁,保留 mono 味道;状态文案是中文,随正文家族 */
-.footer-row .ver {
-  font-family: var(--mono);
-}
-
 .live {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--acc-mint);
-}
-
-.live::before {
-  content: '';
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   background: var(--acc-mint);
   border-radius: 50%;
   box-shadow: 0 0 8px var(--acc-mint);
