@@ -81,19 +81,34 @@ func (m *Role) BeforeUpdate(tx *gorm.DB) error {
 			Delete(&RolePermission{}).Error; err != nil {
 			return err
 		}
+		// Also detach users still pointing at this Key, otherwise
+		// sys_users.role_key keeps a dangling reference (and a later
+		// role recreated under the same Key would silently adopt them).
+		if err := db.Model(&User{}).
+			Where("role_key = ? AND tenant_id = ?", old.Key, old.TenantID).
+			Update("role_key", "").Error; err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // AfterDelete purges the role's RolePermission rows after a hard
-// delete, avoiding orphans.  The soft-delete path is handled by
+// delete, avoiding orphans, and detaches any sys_users rows still
+// referencing the Key.  The soft-delete path is handled by
 // BeforeUpdate (via the DeletedAt change); this only covers hard
 // deletes.
 func (m *Role) AfterDelete(tx *gorm.DB) error {
 	if m.TenantID == "" {
 		return nil
 	}
-	return purgeRolePermissions(tx, func(db *gorm.DB) *gorm.DB {
+	db := tx.Session(&gorm.Session{NewDB: true, SkipHooks: true})
+	if err := db.Model(&User{}).
+		Where("role_key = ? AND tenant_id = ?", m.Key, m.TenantID).
+		Update("role_key", "").Error; err != nil {
+		return err
+	}
+	return purgeRolePermissions(db, func(db *gorm.DB) *gorm.DB {
 		return db.Where("role_key = ? AND tenant_id = ?", m.Key, m.TenantID)
 	})
 }

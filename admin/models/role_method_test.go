@@ -88,7 +88,10 @@ func TestRole_ReplacePermissions_Empty(t *testing.T) {
 // would leave orphan RolePermission rows that come back to life if the
 // row is restored.
 func TestRole_BeforeUpdate_SoftDelete_PurgesPerms(t *testing.T) {
-	db := newRolePermDB(t)
+	// newRolePermUserDB (not newRolePermDB): the soft-delete branch now
+	// also detaches sys_users.role_key, so the schema must include
+	// sys_users — matching production where both tables always exist.
+	db := newRolePermUserDB(t)
 	if err := db.Create(&Role{
 		TenantModel: TenantModel{TenantID: "t1"},
 		Key:         "admin",
@@ -119,6 +122,94 @@ func TestRole_BeforeUpdate_SoftDelete_PurgesPerms(t *testing.T) {
 	db.Model(&RolePermission{}).Where("role_key = ?", "admin").Count(&n)
 	if n != 0 {
 		t.Fatalf("soft-delete must purge RolePermission rows, got %d", n)
+	}
+}
+
+// TestRole_BeforeUpdate_SoftDelete_ClearsUserRoleKey guards the bug
+// that soft-deleting a role leaves sys_users.role_key dangling.  A
+// stale Key would surface as broken logins ("role not found") and,
+// worse, silently re-attach those users if a new role is later created
+// under the same Key.
+func TestRole_BeforeUpdate_SoftDelete_ClearsUserRoleKey(t *testing.T) {
+	db := newRolePermUserDB(t)
+	if err := db.Create(&Role{
+		TenantModel: TenantModel{TenantID: "t1"},
+		Key:         "admin",
+		Name:        "Admin",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&User{
+		TenantModel: TenantModel{TenantID: "t1"},
+		UID:         "u1",
+		Username:    "alice",
+		RoleKey:     "admin",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var role Role
+	if err := db.Where("`key` = ?", "admin").First(&role).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&role).Update("deleted_at", gorm.DeletedAt{Time: time.Now(), Valid: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var u User
+	if err := db.Where("uid = ?", "u1").First(&u).Error; err != nil {
+		t.Fatal(err)
+	}
+	if u.RoleKey != "" {
+		t.Fatalf("soft-delete must clear user role_key, got %q", u.RoleKey)
+	}
+}
+
+// TestRole_AfterDelete_ClearsUserRoleKey pins the hard-delete path:
+// AfterDelete must detach sys_users.role_key in addition to purging
+// RolePermission rows.
+func TestRole_AfterDelete_ClearsUserRoleKey(t *testing.T) {
+	db := newRolePermUserDB(t)
+	if err := db.Create(&Role{
+		TenantModel: TenantModel{TenantID: "t1"},
+		Key:         "ops",
+		Name:        "Ops",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&RolePermission{
+		TenantModel: TenantModel{TenantID: "t1"}, RoleKey: "ops", Type: "menu", Data: "user",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&User{
+		TenantModel: TenantModel{TenantID: "t1"},
+		UID:         "u2",
+		Username:    "bob",
+		RoleKey:     "ops",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var role Role
+	if err := db.Where("`key` = ?", "ops").First(&role).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Unscoped().Select("Delete").Delete(&role).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var u User
+	if err := db.Where("uid = ?", "u2").First(&u).Error; err != nil {
+		t.Fatal(err)
+	}
+	if u.RoleKey != "" {
+		t.Fatalf("hard delete must clear user role_key, got %q", u.RoleKey)
+	}
+	var n int64
+	db.Model(&RolePermission{}).Where("role_key = ?", "ops").Count(&n)
+	if n != 0 {
+		t.Fatalf("hard delete must purge RolePermission rows, got %d", n)
 	}
 }
 

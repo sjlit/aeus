@@ -15,7 +15,7 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 - **声明式 CRUD**：模型上的 `scenarios` / `rule` / `enum` / `format` / `live` 标签直接驱动接口的字段可见性、校验规则与前端表单渲染
 - **自动密码哈希**：`models.User` 在 `BeforeCreate` / `BeforeUpdate` 中对密码做 bcrypt 哈希（对已哈希值幂等）；`LoginLog.AccessToken` 走 SHA-256（高熵随机串无须 bcrypt 慢哈希）
 - **密码策略**：8-32 位字母+数字基线（`CheckPasswordPolicy`），所有写密码路径经 GORM 钩子单点收口
-- **级联清理**：删除菜单/角色（含软删）时自动清理 `sys_role_permissions` 中的关联权限；角色 Key 变更自动同步 `sys_role_permissions.role_key` 与 `sys_users.role_key`（避免用户的角色 Key 失同步）
+- **级联清理**：删除菜单/角色（含软删）时自动清理 `sys_role_permissions` 中的关联权限，并将仍指向该角色的 `sys_users.role_key` 置空（避免悬空引用）；角色 Key 变更自动同步 `sys_role_permissions.role_key` 与 `sys_users.role_key`（避免用户的角色 Key 失同步）
 - **统一响应格式**：内置 responder 输出 `{code, message, data}` envelope（成功 `code=0`），也可用 `WithResponder` 替换
 - **可选的 OpenAPI**：`WithOpenAPI(true)` 后每个资源暴露 `openapi.json`
 - **可插拔认证**：`AuthService` 始终由应用自行 `pb.RegisterAuthServiceRouter(...)` 注册，secret 必须来自运行时通道（见[设计约定](#设计约定)）
@@ -462,7 +462,7 @@ s := admin.New(
 |------|------|------|------|
 | `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）、`created_at` / `updated_at`。全局可见，无 `tenant_id` 列 |
 | `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一）、`username`、`role_key`、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description` |
-| `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`）、`status`（`enabled` / `disabled`）、`builtin`、`is_super`（超管：授权由 Seed 自动管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限 |
+| `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`）、`status`（`enabled` / `disabled`）、`builtin`、`is_super`（超管：授权由 Seed 自动管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限并将 `sys_users.role_key` 置空 |
 | `Menu` | `sys_menus` | ❌ | 菜单树：`parent`（父级菜单 Component，全局共享）、`name`（唯一，标题）、`component`（唯一，标识，路由 keep-alive 用）、`uri`、`view_path`（自动生成的 Vue 路径 `@/views/<module>/<singular>/Index.vue`）、`icon`、`hidden` / `public`、`sort`、`description`。删除自动清理 `sys_role_permissions` 中 `type=menu` 的行 |
 | `Department` | `sys_departments` | ✅ | 部门树：`parent_id`、`name`、`description` |
 | `Permission` | `sys_permissions` | ❌ | 全局权限目录：`type`（`api` 接口 / `button` 按钮 / `data_scope` 数据范围）+ `data`（权限标识，全租户共享，形如 `"<METHOD> <URI>"`）+ `description` |
@@ -853,7 +853,7 @@ admin/
 ├── third_party/       # protoc 依赖的 google api / validate proto
 ├── web/               # Vue 3 + Element Plus 管理后台骨架（@sjlit/rest-ui 驱动 SchemaViewer）
 ├── cmd/mock/          # demo 启动器（ScopeContext + dev-only secret/seed defaults）
-├── docs/              # 设计文档、INTEGRATION-TODO、设计约定 spec
+├── docs/              # 设计文档（docs/api/ 接口契约）、设计约定 spec
 ├── server.go          # Server 装配：租户回调安装 + 资源注册 + 端点挂载
 ├── tenant_scope.go    # GORM 租户回调（aeus:tenant:*）
 ├── derive.go          # 推导 Component/Uri/ViewPath + ensureMenuRow/ensurePermissionRows

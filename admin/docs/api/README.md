@@ -49,6 +49,5 @@
 
 ## 配套文档
 
-- [`../INTEGRATION-TODO.md`](../INTEGRATION-TODO.md) — admin ↔ dashboard/web 集成 TODO(契约、待办、决策日志)
 - [`../../README.md`](../../README.md) — 入门、装配示例、设计原则
 - `pkg/errs/const.go` — 业务码常量定义

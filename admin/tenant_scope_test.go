@@ -115,10 +115,10 @@ func TestTenantScope_Update_DoesNotLeak(t *testing.T) {
 }
 
 func TestTenantScope_Delete_DoesNotLeak(t *testing.T) {
-	// Role.AfterDelete cascades into sys_role_permissions, so that table
-	// must exist for the hook to fire cleanly even though this test doesn't
-	// seed any rows in it.
-	db, ctx := withTenantDB(t, &models.Role{}, &models.RolePermission{})
+	// Role.AfterDelete cascades into sys_role_permissions and detaches
+	// sys_users.role_key, so both tables must exist for the hook to fire
+	// cleanly even though this test doesn't seed any rows in them.
+	db, ctx := withTenantDB(t, &models.Role{}, &models.RolePermission{}, &models.User{})
 	if err := db.WithContext(ctx("t1")).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "shared", Name: "r"}).Error; err != nil {
 		t.Fatal(err)
 	}
