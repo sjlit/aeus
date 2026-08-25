@@ -4,6 +4,11 @@ import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+// REST_UI_LOCAL=1 时,@sjlit/rest-ui 走本地源码 (/mobe/js/rest-ui/src),
+// 改源码即时 HMR;不设置则走 node_modules 里的发布版本。
+const restUiLocal = !!process.env.REST_UI_LOCAL
+const restUiRoot = '/mobe/js/rest-ui'
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -25,11 +30,40 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    },
+    alias: [
+      {
+        find: /^@sjlit\/rest-ui$/,
+        replacement: restUiLocal
+          ? `${restUiRoot}/src/index.ts`
+          : '@sjlit/rest-ui',
+      },
+      {
+        find: '@sjlit/rest-ui/dist/style.css',
+        replacement: restUiLocal
+          ? `${restUiRoot}/src/styles/index.scss`
+          : '@sjlit/rest-ui/dist/style.css',
+      },
+      {
+        find: '@',
+        replacement: fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    ],
+    // 本地源码调试时,rest-ui 源码里的 `import 'vue' / 'element-plus'` 按
+    // Node 解析会命中 /mobe/js/rest-ui/node_modules 下的另一份拷贝(版本还
+    // 不一致),导致 provide/inject 的 Symbol key 对不上 —— App 里的
+    // ElConfigProvider locale 传不进 rest-ui 组件(表现为分页等仍是英文)。
+    // dedupe 强制统一解析到本项目的拷贝。
+    dedupe: restUiLocal
+      ? ['vue', 'element-plus', '@element-plus/icons-vue']
+      : [],
   },
   server: {
+    // 本地源码在项目根目录之外,需要放行文件访问
+    fs: {
+      allow: restUiLocal
+        ? [fileURLToPath(new URL('.', import.meta.url)), restUiRoot]
+        : undefined,
+    },
     port: 5173,
     proxy: {
       '/api': {
@@ -38,6 +72,10 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/api/, ''),
       },
     },
+  },
+  // 本地源码调试时不要让 dep optimizer 预打包它(源码含 .vue/.scss 需走 vite 管线)
+  optimizeDeps: {
+    exclude: restUiLocal ? ['@sjlit/rest-ui'] : [],
   },
   build: {
     target: 'es2022',
