@@ -210,13 +210,15 @@
 
 ### 4.4 操作审计
 
+> **2026-08 后端已落地**:`admin.WithAudit(true)` 开启后,`Setup` 在注册模型前安装 rest/v3 进程级全局 after-hooks,所有 REST create/update/delete 自动记 `sys_audits`(create/update 记 DiffAttr JSON,delete 只记 `{"id":<pk>}`);内置排除 `system/sys_audits`(防递归)与 `system/sys_login_logs`,可用 `WithAuditExcludes` 追加;UID 经 `WithUserResolve`(默认 JWT claims)解析。详见 README「操作审计」一节。覆盖边界:仅 REST CRUD 路径,service 层裸 gorm 写不在内。
+
 #### 后端
-- [ ] **[后端]** `Audit` 模型目前只写不查;加 `GET /audit/list`(或 `/system/sys_audits`)
-- [ ] **[后端]** 在 `RegisterModel` 注入审计钩子:list/create/update/delete 操作记录到 `sys_audits`(目前完全没接)
+- [x] **[后端]** 在 `Setup/RegisterModel` 注入审计钩子:create/update/delete 操作记录到 `sys_audits`
+- [x] **[后端]** 列表查询走通用 REST:`/system/sys_audits`(搜索/详情/导出由 rest/v3 场景自动提供)
 - [ ] **[后端]** 决策:审计是否要"按 user / 按模块 / 按时间"聚合统计?P3
 
 #### 前端
-- [ ] **[前端]** 新增 `src/views/audit/index.vue`(表格 + 高级筛选);新增 `src/api/audit.ts`
+- [ ] **[前端]** 新增 `src/views/audit/index.vue`(表格 + 高级筛选);新增 `src/api/audit.ts`(可直接用 SchemaViewer 通用页过渡)
 
 ### 4.5 多租户 — **未来扩展**(MVP 不启用,见 §1.6)
 

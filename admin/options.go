@@ -7,6 +7,18 @@ import (
 	"gorm.io/gorm"
 )
 
+// AuditOptions configures the operation-audit feature installed by
+// Server.Setup (see audit.go). Enabled flips on the process-global
+// rest/v3 after-hooks that append one models.Audit row per successful
+// REST create/update/delete; Excludes suppresses recording for
+// specific "<module>/<table>" pairs on top of the built-in defaults
+// ("system/sys_audits" — recursion guard — and "system/sys_login_logs",
+// which owns its own LoginLogger pipeline).
+type AuditOptions struct {
+	Enabled  bool
+	Excludes []string
+}
+
 type (
 	// Options holds the dependencies Server wires the admin resources
 	// onto. It is built by New via the With* Option functions.
@@ -26,6 +38,20 @@ type (
 		Router rest.Router
 
 		Logger logger.Logger
+
+		// Audit controls the operation-audit hooks (audit.go). The
+		// zero value keeps the feature off — Setup registers the
+		// global rest/v3 after-hooks only when Audit.Enabled is true.
+		Audit AuditOptions
+
+		// UserResolve derives the caller's UID that lands in
+		// RuntimeScope.User (rest/v3) and in every audit row's uid
+		// column. It is pushed into ResourceConfig.UserResolve by
+		// registerModel for every model registered through this
+		// Server. nil is normalized to middleware.FromClaimsUserResolve,
+		// which reads *auth.Claims.UID off the ctx written by
+		// middleware/auth.JWT.
+		UserResolve rest.ResolveUserFunc
 
 		// VueOutputDir is the directory under which auto-generated
 		// Vue Index.vue files are written when registerModel sees a
@@ -65,6 +91,9 @@ func newOptions(opts ...Option) *Options {
 	}
 	if options.TenantResolver == nil {
 		options.TenantResolver = middleware.FromClaimsResolver
+	}
+	if options.UserResolve == nil {
+		options.UserResolve = middleware.FromClaimsUserResolve
 	}
 	return options
 }
@@ -182,5 +211,50 @@ func WithRouter(router rest.Router) Option {
 func WithVueOutputDir(dir string) Option {
 	return func(o *Options) {
 		o.VueOutputDir = dir
+	}
+}
+
+// WithAudit enables (or disables) the operation-audit hooks installed
+// by Server.Setup. When enabled, Setup registers process-global
+// rest/v3 after-hooks that append one models.Audit row per successful
+// REST create/update/delete — for every resource registered through
+// admin AND for resources any other module registers afterwards, as
+// long as Setup ran first (rest/v3 snapshots global hooks at resource
+// construction time).
+//
+// Writes are synchronous best-effort: a failed audit insert is logged
+// at Warn level and never affects the business response.
+func WithAudit(enabled bool) Option {
+	return func(o *Options) {
+		o.Audit.Enabled = enabled
+	}
+}
+
+// WithAuditExcludes appends "<module>/<table>" pairs to the audit
+// exclusion list. The built-in defaults ("system/sys_audits" and
+// "system/sys_login_logs") always apply; entries added here suppress
+// recording for additional models. Only meaningful when audit is
+// enabled via WithAudit(true).
+func WithAuditExcludes(moduleTable ...string) Option {
+	return func(o *Options) {
+		o.Audit.Excludes = append(o.Audit.Excludes, moduleTable...)
+	}
+}
+
+// WithUserResolve overrides how the caller's UID is derived for
+// RuntimeScope.User and audit rows. The default resolver reads
+// *auth.Claims.UID off the JWT ctx; pass a custom func when callers
+// authenticate differently.
+//
+// # Error contract
+//
+// rest/v3 invokes the resolver on EVERY create / update / delete
+// request before the write executes, and a non-nil error aborts the
+// operation with an "unavailable" response. Return (uid, nil) for the
+// normal path and ("", nil) when no identity is present — reserve
+// errors for identities that MUST reject the request outright.
+func WithUserResolve(fn rest.ResolveUserFunc) Option {
+	return func(o *Options) {
+		o.UserResolve = fn
 	}
 }

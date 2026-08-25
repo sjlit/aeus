@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/rest/v3"
@@ -38,6 +39,11 @@ type Server struct {
 	// endpoints below.  nil-safe; only the endpoints that need model
 	// lookup ever read it.
 	modelsByModuleTable map[string]any
+
+	// auditHooksOnce guards installAuditHooks: Setup may run more than
+	// once in tests, but the global rest/v3 hook registration must
+	// happen exactly once per Server.
+	auditHooksOnce sync.Once
 }
 
 // New builds a Server from the supplied options.
@@ -160,6 +166,9 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterM
 		Router:    s.opts.Router,
 		Responder: s.opts.Responder,
 		Formatter: formats.DefaultFormatter(),
+	}
+	if s.opts.UserResolve != nil {
+		cfg.UserResolve = s.opts.UserResolve
 	}
 	if s.opts.TenantResolver != nil && modelHasTenantIDColumn(resourceDB, model) {
 		resolver := s.opts.TenantResolver
@@ -307,6 +316,14 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// DDL — so order is irrelevant to the schema, only to the first
 	// CRUD call.
 	installTenantScope(s.opts.DB, s.opts.TenantResolver)
+	// Operation audit (audit.go): register the global rest/v3
+	// after-hooks BEFORE the getModels() loop. rest/v3 snapshots the
+	// global hook list when each resource is constructed, so hooks
+	// installed here cover every built-in model below AND every
+	// application model registered afterwards via RegisterModel.
+	if s.opts.Audit.Enabled {
+		s.installAuditHooks()
+	}
 	// schema.Schema{} is the meta-table that rest/v3 queries for resource
 	// metadata; it must exist before RegisterModel can succeed. rest/v3
 	// automatically runs db.AutoMigrate on each registered model inside

@@ -420,6 +420,42 @@ admin.WithTenantResolver(func(ctx context.Context) string {
 - **级联清理不回绕**：`purgePermissions` 使用 `NewDB + SkipHooks` 的独立会话，避免删除权限时再次触发租户回调与递归钩子；
 - **rest/v3 侧同步**：注册资源时把 resolver 注入 `ResourceConfig.TenantResolve`，Search / Export 查询路径自动带 `tenant_id` 过滤——**仅对含 `tenant_id` 列的模型注入**（rest/v3 无条件追加该过滤，注入给全局模型会产生非法 SQL）。
 
+## 操作审计
+
+### 启用
+
+```go
+s := admin.New(
+    admin.WithDB(db),
+    admin.WithRouter(httpSrv),
+    admin.WithAudit(true),                      // 开启操作审计
+    // 可选:追加排除项(内置排除始终生效)
+    admin.WithAuditExcludes("app/high_freq_table"),
+)
+```
+
+### 机制
+
+开启后 `Setup` 在注册任何模型**之前**调用 `installAuditHooks`,向 rest/v3 注册**进程级全局** after-hooks(`RegisterAfterCreate/AfterUpdate/AfterDelete`)。每次 REST 写操作成功后,异步于业务事务地同步追加一行 `sys_audits`:
+
+| 列 | 来源 |
+|----|------|
+| `uid` | `ResourceConfig.UserResolve`(默认读 JWT claims 的 `UID`;可用 `WithUserResolve` 覆盖) |
+| `tenant_id` | `RuntimeScope.TenantID`(与租户隔离同一 resolver) |
+| `action` | `create` / `update` / `delete` |
+| `module` / `table` | 模型的 `ModuleName()` + `TableName()` |
+| `data` | create/update:`[]DiffAttr`(column/label/previous/current)的 JSON;delete:仅 `{"id":<主键>}`(**不序列化整行**,避免把 `User.Password` 等 bcrypt 哈希写进审计表) |
+
+- **全局生效**:由于 rest/v3 在资源构造时快照全局钩子,凡在 `Setup` 之后注册的资源——包括其它模块通过 `NewResourceWithOptions` 注册的应用模型——都自动被审计;
+- **排除项**:内置排除 `system/sys_audits`(防递归)与 `system/sys_login_logs`(登录审计有自己的 `WithLoginLogger` 管线),`WithAuditExcludes` 可按 `"<module>/<table>"` 追加;
+- **无变更不记录**:update 的 diff 为空(未实际修改)时跳过;
+- **best-effort**:审计写入失败仅记 Warn 日志,绝不影响业务响应(after-hook 本就运行在业务事务提交之后、且被库内 `safelog.SafeRun` 包裹);
+- **列宽截断**:`data` 按 10240 字节、`uid`/`module`/`table` 按各自列宽做 UTF-8 安全截断。
+
+### 覆盖边界
+
+审计只拦 **REST CRUD 路径**(rest/v3 的 Create/Update/Delete)。service 层裸 gorm 写、定时任务、gRPC 直写不会产生审计行;如需覆盖这些路径,需另行接入 GORM callback 并处理去重。
+
 ## 数据模型
 
 | 模型 | 表名 | 租户 | 说明 |
@@ -431,7 +467,7 @@ admin.WithTenantResolver(func(ctx context.Context) string {
 | `Department` | `sys_departments` | ✅ | 部门树：`parent_id`、`name`、`description` |
 | `Permission` | `sys_permissions` | ❌ | 全局权限目录：`type`（`api` 接口 / `button` 按钮 / `data_scope` 数据范围）+ `data`（权限标识，全租户共享，形如 `"<METHOD> <URI>"`）+ `description` |
 | `RolePermission` | `sys_role_permissions` | ✅ | 角色-权限中间表：`role_key`（角色 Key）+ `type`（`menu` / `permission`）+ `data`（菜单 Component / 权限标识，按 type 决定宽度），按租户生效 |
-| `Audit` | `sys_audits` | ✅ | 审计日志：`uid`、`action`（`create` / `update` / `delete`，带颜色）、`module`、`table`、`data`（变更内容，size 10240） |
+| `Audit` | `sys_audits` | ✅ | 审计日志：`uid`、`action`（`create` / `update` / `delete`，带颜色）、`module`、`table`、`data`（变更内容，size 10240）。`WithAudit(true)` 开启后由全局钩子自动写入（见「操作审计」一节） |
 | `LoginLog` | `sys_login_logs` | ✅ | 登录日志：`uid`、`ip`、`browser`、`os`、`platform`、SHA-256 `access_token`（不入参；audit 用）、`user_agent` |
 
 所有模型在 `Setup` 时由 rest/v3 自动 `AutoMigrate`，无需手动迁移。模型上的 `scenarios`、`rule`、`enum` 等标签驱动 rest/v3 的字段可见性与校验（如 `User.Uid` 的 `rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`）。
