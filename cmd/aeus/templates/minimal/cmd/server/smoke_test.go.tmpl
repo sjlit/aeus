@@ -1,0 +1,49 @@
+package main
+
+import (
+	"context"
+	"net/http"
+	"testing"
+	"time"
+
+	ghttp "github.com/sjlit/aeus/transport/http"
+)
+
+// TestHealth is the Golden Path check for the minimal template: the
+// server starts with the default wiring and /health answers 200.
+func TestHealth(t *testing.T) {
+	srv := ghttp.New(
+		ghttp.WithAddress("127.0.0.1:0"),
+		ghttp.WithEnableHealth(true),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = srv.Start(ctx) }()
+
+	endpoint, err := waitEndpoint(ctx, srv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Get(endpoint + "/health")
+	if err != nil {
+		t.Fatalf("GET /health: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/health status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func waitEndpoint(ctx context.Context, srv *ghttp.Server) (string, error) {
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		endpoint, err := srv.Endpoint(ctx)
+		if err == nil && endpoint != "" {
+			return endpoint, nil
+		}
+		if time.Now().After(deadline) {
+			return "", err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

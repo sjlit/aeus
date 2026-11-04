@@ -2,7 +2,7 @@
 
 租户域的读端点。租户的写操作走 REST CRUD `/system/sys_tenant`。
 
-> ⚠️ **访问控制必须由应用方确认**:`Tenant` 模型**没有 `tenant_id` 列**(它是所有 tenant_id 列的源头,无法自指),GORM 租户回调对其天然不生效。`/system/sys_tenant*` 与 `/tenant/*` 已写入 `sys_permissions` 目录,默认 fail-closed 下需要角色授权(超管由 `Seed` 自动获得);但如果应用省略 `PermissionChecker` 或把租户路由授给非超管角色,它们仍会暴露给普通 JWT 用户。建议额外挂超管专属中间件。详见 §8.4。
+> ⚠️ **访问控制**:`Tenant` 模型**没有 `tenant_id` 列**(它是所有 tenant_id 列的源头,无法自指),GORM 租户回调对其天然不生效。`/tenant/*` 两个 RPC 已在服务层强制要求 super 角色；`/system/sys_tenant*` 仍走 `sys_permissions` 目录，默认 fail-closed，建议只授给 super 角色。详见 §8.4。
 
 ## 8.1 注册方式
 
@@ -96,42 +96,17 @@ type Tenant struct {
 - **不带 `tenant_id` 列**(`TenantModel` 没嵌入),GORM 租户回调自动跳过,查询天然跨租户。
 - **嵌入 `BaseModel`**:uint 自增 ID 不存在,主键由 `gorm:"primaryKey"` 直接落在 `ID` 上。
 
-## 8.4 ⚠️ 应用方必须加访问控制
+## 8.4 访问控制
 
-```go
-// 推荐实现:按路径前缀拦截,仅允许 IsSuper 角色访问
-func superAdminOnly(db *gorm.DB) middleware.Middleware {
-    return func(next middleware.Handler) middleware.Handler {
-        return func(ctx context.Context) error {
-            path, _ := metadata.Get(ctx, metadata.RequestPath)
-            if !strings.HasPrefix(path, "/system/sys_tenants") &&
-                !strings.HasPrefix(path, "/tenant/") {
-                return next(ctx)  // 非租户路由放行
-            }
-            claims, ok := auth.ClaimsFromContext(ctx)
-            if !ok {
-                return errs.ErrAccessDenied
-            }
-            var role models.Role
-            if err := db.WithContext(ctx).Where("key = ?", claims.Role).
-                First(&role).Error; err != nil || !role.IsSuper {
-                return errs.ErrAccessDenied
-            }
-            return next(ctx)
-        }
-    }
-}
+`TenantService.ListTenantOptions` / `TenantService.Tenant` 已内置 super 检查：从 ctx 读取 `*auth.Claims`，再按 `role.key` **实时**查库，只有 `Role.IsSuper=true` 才放行，否则返回 `4005 AccessDenied`。因此 `/tenant/options` 与 `/tenant/detail` 即使被误授给普通角色，也不会泄露全局租户列表。
 
-// 挂载顺序:JWT 在前(写入 claims) → superAdminOnly 在后
-httpSrv.Use(
-    mwauth.JWT(/* ... */),
-    superAdminOnly(db),
-)
-```
+通用 REST 的 `/system/sys_tenant*` 仍走 `sys_permissions` 目录（fail-closed）：
 
-租户路由（`/tenant/*` 与 `/system/sys_tenant*`）已经写入 `sys_permissions` 目录，默认 fail-closed：超管角色由 `Seed` 自动获得授权，其他角色必须显式授权。**不要**用 `WithCheckerAllowlist` 绕过它们，除非上游已经挂了上面的 `superAdminOnly` 守卫；allowlist 是 bypass，不是更严格的检查。
+- 超管角色由 `Seed` 自动获得授权；
+- 其他角色必须显式授权；
+- 建议只把 `sys_tenant*` 的写权限授给 super 角色，因为租户表没有 `tenant_id` 列，GORM 回调无法为它做行级隔离。
 
-**不要用 allowlist 代替访问控制**——allowlist 只是绕过权限执行器,不会真正鉴权;`superAdminOnly` 这类显式守卫才是真正的访问控制层。
+**不要用 allowlist 代替访问控制**——allowlist 只是绕过权限执行器，不会真正鉴权。租户 RPC 的 super 检查是服务层强制约束，不依赖应用方再挂中间件。
 
 ## 8.5 登录时的租户状态校验
 

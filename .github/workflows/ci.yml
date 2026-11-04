@@ -101,3 +101,38 @@ jobs:
         run: npm test
       - name: 构建
         run: npm run build
+
+  scaffold:
+    name: scaffold (aeus new)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: "**/go.sum"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cmd/aeus/templates/admin/web/package-lock.json
+      - name: minimal template
+        run: |
+          rm -rf /tmp/aeus-min
+          go run ./cmd/aeus new /tmp/aeus-min --template=minimal --local="$GITHUB_WORKSPACE"
+          cd /tmp/aeus-min
+          go test ./...
+          go build ./...
+      - name: admin template (backend)
+        run: |
+          rm -rf /tmp/aeus-admin
+          go run ./cmd/aeus new /tmp/aeus-admin --template=admin --local="$GITHUB_WORKSPACE" --module=github.com/example/aeus-admin
+          cd /tmp/aeus-admin
+          go test ./...
+          go build ./...
+      - name: admin template (web)
+        run: |
+          cd /tmp/aeus-admin/web
+          npm ci
+          npm test
+          npm run build

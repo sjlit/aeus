@@ -1,0 +1,687 @@
+/* =========================================================
+   Element Plus 玻璃化覆盖
+   迁移自参考项目(旧 dashboard 的 ep-glass.css),色值随主题
+   token 已对齐。必须在 EP 的 CSS 之后引入——app.scss 通过
+   @use 保证顺序(main.ts 先 import element css 再 app.scss)。
+========================================================= */
+
+:root {
+  /* 背景全部透明 / 半透明,让毛玻璃透出渐变底色 */
+  --el-bg-color: transparent;
+  --el-bg-color-page: transparent;
+  --el-bg-color-overlay: #ffffff;
+
+  --el-fill-color-blank: rgba(255, 255, 255, 0.72);
+  --el-fill-color-light: rgba(255, 255, 255, 0.5);
+  --el-fill-color-lighter: rgba(255, 255, 255, 0.32);
+  --el-fill-color-extra-light: rgba(255, 255, 255, 0.18);
+
+  --el-border-color: rgba(30, 90, 90, 0.12);
+  --el-border-color-light: rgba(30, 90, 90, 0.08);
+  --el-border-color-lighter: rgba(30, 90, 90, 0.05);
+
+  --el-text-color-primary: #1e3a3a;
+  --el-text-color-regular: #284542;
+  --el-text-color-secondary: #3a5a58;
+  --el-text-color-placeholder: #6b8a88;
+
+  /* B2 主色 = 薄荷 */
+  --el-color-primary: #6cc5a8;
+  --el-color-primary-light-3: #8fd3bd;
+  --el-color-primary-light-5: #b3e1d0;
+  --el-color-primary-light-7: #d2ede1;
+  --el-color-primary-light-9: #ecf7f2;
+  --el-color-primary-dark-2: #4f9a82;
+
+  --el-color-success: #6cc5a8;
+  --el-color-warning: #b8791f;
+  --el-color-danger: #c0392b;
+  --el-color-info: #9b85c4;
+
+  --el-box-shadow: 0 8px 32px rgba(30, 90, 90, 0.12);
+  --el-box-shadow-light: 0 2px 12px rgba(30, 90, 90, 0.08);
+
+  --el-border-radius-base: 10px;
+  --el-font-family: var(--body);
+}
+
+// 浮层统一实色面:白底 + teal 描边,不再用毛玻璃——backdrop-filter 在
+// 弹窗开启动画和身后页面滚动时反复重绘,是浮层渲染成本的大头;
+// 玻璃质感保留给页面骨架(卡片/输入框/侧栏/顶栏)。
+// 白色 --glass-border 在实色底上不可见,描边一律用 teal 系。
+@mixin glass-surface($radius: var(--r-lg), $shadow: 0 24px 64px rgba(30, 60, 60, 0.28)) {
+  background: #fff !important;
+  border: 1px solid var(--el-border-color-light) !important;
+  border-radius: $radius !important;
+  box-shadow: $shadow !important;
+}
+
+/* —— 卡片 / 输入框统一毛玻璃 —————————
+   注意:.el-menu 不在此列——下方有专属规则接管(透明底、无边框),
+   放进来会被完全覆盖成死代码。
+   注意:el-button / el-tag / el-pagination button / el-alert 这类
+   "不透明半透明填充即可"的小元素去掉了 backdrop-filter —— 它们通常
+   被多个叠放在背景上,逐个模糊等于把整片区域反复重画,GPU/CPU 双杀。
+   el-input/el-select wrapper 同理:一页动辄十几个,逐个 blur(20px)
+   是表单页合成开销的大头,只保留半透明底(下方单独规则)。
+   只在真正的浮层 / overlay / chrome 容器上保留毛玻璃(dialog / drawer /
+   message / notification / popper / sidebar / topbar / 命令面板)。 */
+.el-card {
+  background: var(--glass) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+}
+
+/* 输入框/选择器 wrapper:半透明玻璃底,不加 backdrop-filter
+   (数量多,逐个模糊成本远超收益;视觉上与卡片玻璃底几乎无差) */
+.el-input__wrapper,
+.el-select__wrapper {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+}
+
+.el-button,
+.el-tag {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+}
+
+.el-card {
+  border-radius: var(--r-lg) !important;
+}
+
+.el-menu {
+  border-radius: var(--r-md) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 菜单行的兜底尺寸:不加 !important——侧栏(app.scss .nav-menu 的
+   36px/34px 分级)与折叠弹层(.sidebar-pop)各自按需覆盖,
+   之前写死 38px !important 会把侧栏的层级高度静默抹平。 */
+.el-menu-item {
+  border-radius: 10px;
+  margin: 2px 0;
+  height: 38px;
+  line-height: 38px;
+}
+
+.el-menu-item.is-active {
+  background: rgba(255, 255, 255, 0.7) !important;
+  color: var(--ink) !important;
+  box-shadow: 0 2px 8px var(--shadow-soft) !important;
+}
+
+.el-menu-item:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+// 玻璃态 wrapper 上下 padding 用 4px(对齐 select),inner 高度相应减 8px,
+// 总高保持 --el-component-size(默认 32px),与 el-select 等高
+.el-input,
+.el-input--large,
+.el-input--small {
+  --el-input-inner-height: calc(var(--el-input-height, 32px) - 8px);
+}
+
+.el-input__wrapper {
+  padding: 4px 12px !important;
+}
+
+// 交互态统一:input / select 在 hover / focus 时叠加薄荷描边圈,
+// 同时保留上方玻璃块的投影(与 select 此前只有投影、无反馈对齐)
+.el-input__wrapper:hover,
+.el-input.is-focus .el-input__wrapper,
+.el-select__wrapper.is-hovering,
+.el-select__wrapper.is-focused {
+  box-shadow:
+    0 0 0 1px var(--acc-mint) inset,
+    0 4px 16px var(--shadow-soft);
+}
+
+.el-button {
+  border-radius: var(--r-sm);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.el-button:hover {
+  transform: translateY(-1px);
+}
+
+/* primary 实色深薄荷:白字对比度 4.9:1 过 AA;
+   双色相渐变只保留给装饰元素(text-gradient / tab 激活条) */
+.el-button--primary:not(.is-link) {
+  background: var(--acc-mint-deep) !important;
+  border: none !important;
+  color: white !important;
+}
+
+.el-button--primary:not(.is-link):hover,
+.el-button--primary:not(.is-link):active {
+  background: var(--acc-mint-deeper) !important;
+}
+
+.el-button--primary.is-disabled:not(.is-link) {
+  background: var(--el-color-primary-light-5) !important;
+}
+
+.el-button--primary.is-link {
+  background: transparent !important;
+  border: none !important;
+  color: var(--acc-mint-deep) !important;
+}
+
+.el-button--primary.is-link:hover {
+  color: var(--acc-mint-deeper) !important;
+}
+
+.el-checkbox {
+  color: var(--ink-2) !important;
+}
+
+/* —— 弹窗 / 抽屉(overlay 浮层,teleport 到 body,需全局覆盖) ————————— */
+.el-overlay {
+  background: rgba(30, 60, 60, 0.28) !important;
+}
+
+.el-dialog {
+  @include glass-surface;
+}
+
+.el-dialog__header {
+  margin-right: 0 !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
+}
+
+.el-dialog__title {
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+}
+
+.el-dialog__body {
+  color: var(--ink-2) !important;
+}
+
+.el-drawer {
+  background: #fff !important;
+  border-left: 1px solid var(--el-border-color-light) !important;
+}
+
+.el-drawer__header {
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
+}
+
+.el-drawer__body {
+  color: var(--ink-2) !important;
+}
+
+/* —— MessageBox(ElMessageBox.confirm 等,复用 overlay 但无 dialog 外壳) ————————— */
+.el-message-box {
+  @include glass-surface;
+}
+
+.el-message-box__title {
+  color: var(--ink) !important;
+}
+
+.el-message-box__content {
+  color: var(--ink-2) !important;
+}
+
+.el-message-box__status {
+  color: var(--el-color-warning) !important;
+}
+
+/* 浅色 popper 箭头不覆盖:--el-bg-color-overlay 已实色,
+   EP 默认的箭头底色/描边自然对齐,且保留它对内侧两边的透明化处理 */
+
+.el-dropdown-menu__item {
+  color: var(--ink-2) !important;
+  border-radius: 8px !important;
+}
+
+.el-dropdown-menu__item:hover,
+.el-dropdown-menu__item:focus {
+  background: rgba(108, 197, 168, 0.12) !important;
+  color: var(--ink) !important;
+}
+
+.el-dropdown-menu__item.is-disabled {
+  color: var(--ink-3) !important;
+}
+
+/* —— 表格 ————————— */
+.el-table {
+  background: transparent !important;
+  color: var(--ink-2) !important;
+  font-family: var(--body) !important;
+}
+
+.el-table::before,
+.el-table__inner-wrapper::before {
+  display: none !important;
+}
+
+.el-table__header-wrapper th.el-table__cell {
+  background: var(--glass-soft) !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+.el-table__row td.el-table__cell {
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.el-table__row:hover>td.el-table__cell {
+  background: var(--glass-soft) !important;
+}
+
+.el-table--border .el-table__cell,
+.el-table__cell {
+  border-right: none !important;
+}
+
+.el-table .el-table__empty-block {
+  background: transparent !important;
+}
+
+.el-table__empty-text {
+  color: var(--ink-3) !important;
+}
+
+/* —— 标签页 ————————— */
+.el-tabs__header {
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+.el-tabs__item {
+  color: var(--ink-2) !important;
+  transition: all 0.16s !important;
+}
+
+.el-tabs__item:hover {
+  color: var(--ink) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--acc-mint) !important;
+  font-weight: 600 !important;
+}
+
+.el-tabs__active-bar {
+  background: linear-gradient(90deg, var(--acc-mint), var(--acc-lilac)) !important;
+}
+
+/* —— 分页 ————————— */
+.el-pagination {
+  color: var(--ink-2) !important;
+}
+
+.el-pagination button,
+.el-pagination .el-pager li {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--r-sm) !important;
+  color: var(--ink-2) !important;
+  /* 分页按钮密集排布,逐个毛玻璃成本高于收益,改用半透明背景即可 */
+}
+
+.el-pagination button:hover,
+.el-pagination .el-pager li:hover {
+  color: var(--ink) !important;
+}
+
+/* —— 开关(激活色继承主题 primary) ————————— */
+.el-switch__core {
+  border-radius: var(--r-pill) !important;
+}
+
+.el-switch.is-checked .el-switch__core {
+  background: var(--acc-mint-deep) !important;
+  border-color: transparent !important;
+}
+
+/* —— 表单 ————————— */
+.el-form-item__label {
+  color: var(--ink-2) !important;
+  font-weight: 500 !important;
+}
+
+.el-form-item__error {
+  color: var(--el-color-danger) !important;
+}
+
+/* —— Tooltip / Popconfirm(浮层类,teleport 到 body) ————————— */
+.el-popper.is-dark,
+.el-tooltip__popper,
+.el-popconfirm {
+  @include glass-surface($radius: var(--r-sm), $shadow: 0 8px 28px rgba(60, 40, 90, 0.18));
+  color: var(--ink) !important;
+}
+
+/* 箭头覆盖不能加 !important:EP 用 !important 把旋转方块内侧两边描边
+   置透明来只留外侧三角,全量 border-color !important 会把内侧也染色,
+   方块四边全可见 = 看起来两个三角形 */
+.el-popper.is-dark .el-popper__arrow::before,
+.el-tooltip__popper .el-popper__arrow::before {
+  background: #fff;
+  border-color: var(--el-border-color-light);
+}
+
+.el-popconfirm__main {
+  color: var(--ink) !important;
+}
+
+.el-popconfirm__icon {
+  color: var(--el-color-warning) !important;
+}
+
+/* —— Message(ElMessage toast,固定浮层) ————————— */
+.el-message {
+  @include glass-surface($radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
+}
+
+.el-message .el-message__content {
+  color: var(--ink) !important;
+}
+
+.el-message .el-message__icon,
+.el-message--success .el-message__icon {
+  color: var(--el-color-success) !important;
+}
+
+.el-message--warning .el-message__icon {
+  color: var(--el-color-warning) !important;
+}
+
+.el-message--error .el-message__icon {
+  color: var(--el-color-danger) !important;
+}
+
+.el-message--info .el-message__icon {
+  color: var(--el-color-info) !important;
+}
+
+/* —— Notification(ElNotification,右上角浮层) ————————— */
+.el-notification {
+  @include glass-surface($radius: var(--r-md), $shadow: 0 16px 48px rgba(60, 40, 90, 0.2));
+}
+
+.el-notification__title {
+  color: var(--ink) !important;
+}
+
+.el-notification__content {
+  color: var(--ink-2) !important;
+}
+
+/* —— Loading(全屏 / 区域遮罩) ————————— */
+.el-loading-mask {
+  background: rgba(255, 255, 255, 0.45) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+.el-loading-spinner .path {
+  stroke: var(--acc-mint) !important;
+}
+
+.el-loading-spinner .el-loading-text {
+  color: var(--ink-2) !important;
+}
+
+/* —— 日期 / 时间选择器(浮层 + 输入框) ————————— */
+.el-date-picker,
+.el-date-range-picker,
+.el-time-panel {
+  @include glass-surface($radius: var(--r-md), $shadow: 0 12px 40px rgba(60, 40, 90, 0.18));
+  color: var(--ink-2) !important;
+}
+
+.el-date-table td.in-range>div {
+  background: rgba(108, 197, 168, 0.12) !important;
+}
+
+.el-date-table td.available:hover,
+.el-date-table td.today span {
+  color: var(--acc-mint) !important;
+}
+
+.el-date-table td.current:not(.disabled) span {
+  background: var(--acc-mint-deep) !important;
+  color: white !important;
+}
+
+.el-picker-panel__icon-btn,
+.el-date-picker__header-label {
+  color: var(--ink-2) !important;
+}
+
+.el-picker-panel__icon-btn:hover,
+.el-date-picker__header-label:hover {
+  color: var(--ink) !important;
+}
+
+/* —— Radio ————————— */
+.el-radio {
+  color: var(--ink-2) !important;
+}
+
+.el-radio__input.is-checked .el-radio__inner {
+  background: var(--acc-mint-deep) !important;
+  border-color: transparent !important;
+}
+
+.el-checkbox__input.is-checked .el-checkbox__inner,
+.el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background: var(--acc-mint-deep) !important;
+  border-color: transparent !important;
+}
+
+.el-radio__input.is-checked+.el-radio__label {
+  color: var(--ink) !important;
+}
+
+/* —— 进度条 ————————— */
+.el-progress__text {
+  color: var(--ink-2) !important;
+}
+
+.el-progress-bar__outer {
+  background: var(--glass-soft) !important;
+}
+
+.el-progress-bar__inner {
+  background: var(--acc-mint) !important;
+}
+
+/* —— Alert ————————— */
+.el-alert {
+  background: var(--glass) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: var(--r-md) !important;
+  color: var(--ink) !important;
+  /* alert 通常一次只显示一个,毛玻璃收益低;改用半透明背景即可 */
+}
+
+.el-alert__title {
+  color: var(--ink) !important;
+}
+
+.el-alert__content {
+  color: var(--ink-2) !important;
+}
+
+.el-alert--success {
+  --el-alert-color: var(--el-color-success);
+}
+
+.el-alert--warning {
+  --el-alert-color: var(--el-color-warning);
+}
+
+.el-alert--error {
+  --el-alert-color: var(--el-color-danger);
+}
+
+/* —— Badge ————————— */
+.el-badge__content {
+  border: none !important;
+  background: var(--acc-mint-deep) !important;
+  color: white !important;
+}
+
+/* —— Upload ————————— */
+.el-upload--picture-card,
+.el-upload-dragger {
+  background: var(--glass) !important;
+  border: 1px dashed var(--glass-border) !important;
+  border-radius: var(--r-md) !important;
+  color: var(--ink-2) !important;
+}
+
+.el-upload--picture-card:hover,
+.el-upload-dragger:hover {
+  border-color: var(--acc-mint) !important;
+  color: var(--ink) !important;
+}
+
+/* —— Tree ————————— */
+.el-tree {
+  background: transparent !important;
+  color: var(--ink-2) !important;
+}
+
+.el-tree-node__content:hover {
+  background: var(--glass-soft) !important;
+}
+
+.el-tree-node:focus>.el-tree-node__content {
+  background: var(--glass-soft) !important;
+}
+
+.el-tree-node.is-current>.el-tree-node__content {
+  background: var(--glass) !important;
+  color: var(--ink) !important;
+}
+
+/* —— Collapse ————————— */
+.el-collapse {
+  border-top: 1px solid var(--glass-border) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+.el-collapse-item__header {
+  background: transparent !important;
+  color: var(--ink) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+
+.el-collapse-item__wrap {
+  background: transparent !important;
+}
+
+.el-collapse-item__content {
+  color: var(--ink-2) !important;
+}
+
+/* —— Steps ————————— */
+.el-step__title {
+  color: var(--ink-2) !important;
+}
+
+.el-step__title.is-process,
+.el-step__title.is-finish {
+  color: var(--acc-mint) !important;
+}
+
+.el-step__description {
+  color: var(--ink-3) !important;
+}
+
+.el-step__head.is-process .el-step__icon,
+.el-step__head.is-finish .el-step__icon {
+  background: var(--acc-mint-deep) !important;
+  border-color: transparent !important;
+  color: white !important;
+}
+
+.el-step__line {
+  background: var(--glass-border) !important;
+}
+
+/* =========================================================
+   @nobla/rest-ui 主题对齐(原独立 rest-ui.scss 并入)
+   rest-ui/dist/style.css 在 main.ts 里先于 app.scss 引入,
+   此文件经 app.scss 的 @use 排在其后,同优先级选择器可自然覆盖。
+   rest-ui 的 token 走 --su-* 前缀:引用 --el-* 的部分(--su-bg /
+   --su-border / --su-radius 等)已随 ep-glass 自动跟随,这里主要
+   覆盖其硬编码的蓝灰色系,并把页面主体卡片纳入玻璃体系。
+========================================================= */
+
+:root {
+  /* 原值为蓝灰系(#213547 / #95aac9 / #d2ddec / #0067b8 …),
+     与极光薄荷主题冲突;统一映射到 ink / acc 色板 */
+  --su-text-color-primary: var(--ink);
+  --su-text-color-muted: var(--ink-2);
+  --su-placeholder-text-color: var(--el-text-color-placeholder);
+  --su-placeholder-text-size: 0.75rem;
+  --su-form-control-border-color: var(--el-border-color);
+  --su-text-color-available: var(--acc-mint-deep);
+  --su-text-color-link: var(--acc-mint-deep);
+  --su-radius: var(--r-sm);
+  --su-shadow: 0 2px 12px var(--shadow-soft);
+  --su-shadow-hover: 0 8px 28px var(--shadow);
+}
+
+/* 页面外层 padding 归零:内容列与 topbar / el-main 的 --el-main-padding
+   (20px)对齐(rest-ui 默认再垫 12px,会偏离顶栏玻璃卡的竖列) */
+.schema-page {
+  padding: 0;
+}
+
+/* 页面标题跟 display 字体家族,与品牌/hero 一致 */
+.schema-page-header .header-left h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 主体卡片玻璃化:rest-ui 只给了 background-color(--su-bg 在本主题
+   下是透明的),这里补齐毛玻璃/边框/圆角/阴影,与 chrome 的玻璃卡同质 */
+.schema-page-body {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 16px var(--shadow-soft);
+}
+
+/* 搜索表单的 textarea 硬编码 #f2f3f5 灰底 + 0.8s 慢过渡,改玻璃 + 常规速度 */
+.schema-form .el-input .el-textarea__inner {
+  background-color: var(--glass-soft);
+}
+
+.schema-form .el-input .el-textarea__inner:hover {
+  background-color: var(--glass);
+}
+
+.schema-form .el-input .el-input__wrapper {
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}

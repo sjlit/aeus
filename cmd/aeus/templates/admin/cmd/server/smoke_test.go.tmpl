@@ -1,0 +1,175 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	ghttp "github.com/sjlit/aeus/transport/http"
+
+	"__AEUS_MODULE__/internal/bootstrap"
+	"__AEUS_MODULE__/internal/config"
+)
+
+type envelope struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
+}
+
+// TestGoldenPath starts the generated admin stack against SQLite and
+// walks the path a new user takes: health, login, profile, create a
+// user through the generic REST resource.
+func TestGoldenPath(t *testing.T) {
+	webRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(webRoot, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(webRoot, "index.html"), []byte("smoke-index"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(webRoot, "assets", "app.js"), []byte("smoke-asset"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{
+		AppName:       "smoke",
+		HTTPAddr:      "127.0.0.1:0",
+		DBDSN:         ":memory:",
+		JWTSecret:     "test-secret",
+		AdminUser:     "admin",
+		AdminPassword: "Admin123",
+		WebRoot:       webRoot,
+		Debug:         false,
+		AutoMigrate:   true,
+		SeedOnStart:   true,
+	}
+	httpSrv := ghttp.New(
+		ghttp.WithAddress(cfg.HTTPAddr),
+		ghttp.WithEnableHealth(true),
+	)
+	scope := bootstrap.NewScope(cfg)
+	scope.HTTP = httpSrv
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := scope.Init(ctx); err != nil {
+		t.Fatalf("scope init: %v", err)
+	}
+	if err := bootstrap.NewLoader(scope).Init(ctx); err != nil {
+		t.Fatalf("loader init: %v", err)
+	}
+	go func() { _ = httpSrv.Start(ctx) }()
+
+	endpoint, err := waitEndpoint(ctx, httpSrv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := get(t, endpoint+"/health", ""); status != http.StatusOK {
+		t.Fatalf("/health status = %d, want 200", status)
+	}
+	if status, body := get(t, endpoint+"/", ""); status != http.StatusOK || !strings.Contains(string(body), "smoke-index") {
+		t.Fatalf("SPA index status = %d body=%s", status, body)
+	}
+	if status, body := get(t, endpoint+"/assets/app.js", ""); status != http.StatusOK || !strings.Contains(string(body), "smoke-asset") {
+		t.Fatalf("SPA asset status = %d body=%s", status, body)
+	}
+
+	status, body := postJSON(t, endpoint+"/auth/login", "",
+		`{"username":"admin","password":"Admin123"}`)
+	if status != http.StatusOK {
+		t.Fatalf("login status = %d body=%s", status, body)
+	}
+	var login envelope
+	if err := json.Unmarshal(body, &login); err != nil {
+		t.Fatalf("decode login: %v body=%s", err, body)
+	}
+	if login.Code != 0 {
+		t.Fatalf("login code = %d message=%q", login.Code, login.Message)
+	}
+	var tokens struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal(login.Data, &tokens); err != nil || tokens.AccessToken == "" {
+		t.Fatalf("login did not return access_token: %v data=%s", err, login.Data)
+	}
+
+	if status, body := get(t, endpoint+"/user/profile", tokens.AccessToken); status != http.StatusOK {
+		t.Fatalf("profile status = %d body=%s", status, body)
+	}
+
+	status, body = postJSON(t, endpoint+"/system/sys_user", tokens.AccessToken,
+		`{"uid":"u0002","username":"bob","role_key":"admin","dept_id":1,"password":"Bob12345","gender":"other"}`)
+	if status != http.StatusOK {
+		t.Fatalf("create user status = %d body=%s", status, body)
+	}
+	var created envelope
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode create: %v body=%s", err, body)
+	}
+	if created.Code != 0 {
+		t.Fatalf("create user code = %d message=%q", created.Code, created.Message)
+	}
+
+	if status, body := get(t, endpoint+"/system/sys_users", tokens.AccessToken); status != http.StatusOK ||
+		!strings.Contains(string(body), `"bob"`) {
+		t.Fatalf("list users status = %d body=%s", status, body)
+	}
+}
+
+func waitEndpoint(ctx context.Context, srv *ghttp.Server) (string, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		endpoint, err := srv.Endpoint(ctx)
+		if err == nil && endpoint != "" {
+			return endpoint, nil
+		}
+		if time.Now().After(deadline) {
+			return "", err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func get(t *testing.T, url, token string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, body
+}
+
+func postJSON(t *testing.T, url, token, payload string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBufferString(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, body
+}

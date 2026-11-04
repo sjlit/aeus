@@ -355,7 +355,7 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 // lets operators grant them to other roles deliberately.
 //
 // Data matches the gin route TEMPLATE exactly: transport/http writes
-// RequestPath as gin's FullPath, and the checker compares
+// RequestRoute as gin's FullPath, and the checker compares
 // "<METHOD> <FullPath>" verbatim, so ":module"/":table" literals must
 // be preserved.  Seed's grantFullCatalog diff picks these rows up on
 // the next boot and grants them to super roles automatically; ordinary
@@ -392,12 +392,14 @@ var _endpointPermissionCodes = []struct {
 // contract as ensurePermissionRows: existing rows are never touched,
 // so operator edits (description / group) survive restarts.
 //
-// Called from Setup after the model loop — sys_permissions is already
-// migrated by then, but AutoMigrate runs defensively anyway so the
-// helper stays safe if invoked standalone.
+// Called from Setup after the model loop. The defensive AutoMigrate is
+// gated on Server.AutoMigrate so a production deployment that manages
+// its own schema never gets a surprise DDL from Setup.
 func (s *Server) ensureEndpointPermissions(db *gorm.DB) error {
-	if err := db.AutoMigrate(&models.Permission{}); err != nil {
-		return fmt.Errorf("migrate sys_permissions: %w", err)
+	if s.opts.AutoMigrate {
+		if err := db.AutoMigrate(&models.Permission{}); err != nil {
+			return fmt.Errorf("migrate sys_permissions: %w", err)
+		}
 	}
 	for _, code := range _endpointPermissionCodes {
 		var existing models.Permission
@@ -452,8 +454,10 @@ func (s *Server) ensureEndpointPermissions(db *gorm.DB) error {
 // points at the previous model's schema (same root cause as
 // ensureMenuRow).
 func (s *Server) ensurePermissionRows(db *gorm.DB, resource *rest.Resource, overrideScenarios []string) error {
-	if err := db.AutoMigrate(&models.Permission{}); err != nil {
-		return fmt.Errorf("migrate sys_permissions: %w", err)
+	if s.opts.AutoMigrate {
+		if err := db.AutoMigrate(&models.Permission{}); err != nil {
+			return fmt.Errorf("migrate sys_permissions: %w", err)
+		}
 	}
 	module, table := s.modelNaming(resource)
 	if module == "" || table == "" {

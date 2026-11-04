@@ -12,10 +12,9 @@ _posts
 *.dat
 .vscode
 vendor
-# Only the repository-root command/tooling directories are ignored.
-# Go projects commonly keep runnable examples under <module>/cmd; those
-# must stay tracked (e.g. admin/cmd/mock).
-/cmd/
+# Root command/tooling directories other than cmd/ are ignored; cmd/aeus
+# is the published scaffolding CLI and must stay tracked. Per-module
+# commands (e.g. admin/cmd/mock) are always tracked.
 /tools/
 /third_party/
 coverage.out

@@ -254,6 +254,7 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterM
 	resourceOpts := []rest.Option{
 		rest.WithDB(resourceDB),
 		rest.WithOpenAPI(s.opts.EnabledOpenAPI),
+		rest.WithAutoMigrate(s.opts.AutoMigrate),
 	}
 	// Security/audit tables are managed by admin itself. Mounting them
 	// read-only removes the generic write paths that would otherwise let
@@ -290,10 +291,12 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterM
 	// explicit empty MenuSpec{} at the call site overrides the skip.
 	switch {
 	case rmCfg.menuSpec != nil:
-		// Caller supplied a spec — migrate Menu either way (mirrors
-		// the MenuProvider branch below), then insert.
-		if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
-			return fmt.Errorf("migrate sys_menus: %w", err)
+		// Caller supplied a spec — migrate Menu when DDL is enabled
+		// (mirrors the MenuProvider branch below), then insert.
+		if s.opts.AutoMigrate {
+			if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
+				return fmt.Errorf("migrate sys_menus: %w", err)
+			}
 		}
 		spec := s.fillDerivedSpec(resource, *rmCfg.menuSpec)
 		if _, err := s.ensureMenuRow(s.opts.DB, spec); err != nil {
@@ -309,8 +312,10 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterM
 			// Menu's fields against the wrong table — when that table's id
 			// type differs from Menu's uint (e.g. Tenant's char(60) id),
 			// the mismatch triggers a broken ALTER TABLE rebuild.
-			if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
-				return fmt.Errorf("migrate sys_menus: %w", err)
+			if s.opts.AutoMigrate {
+				if err := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true}).AutoMigrate(&models.Menu{}); err != nil {
+					return fmt.Errorf("migrate sys_menus: %w", err)
+				}
 			}
 			spec := s.fillDerivedSpec(resource, p.MenuEntry())
 			if _, err := s.ensureMenuRow(s.opts.DB, spec); err != nil {
@@ -428,8 +433,12 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// metadata; it must exist before RegisterModel can succeed. rest/v3
 	// automatically runs db.AutoMigrate on each registered model inside
 	// NewResourceWithOptions, so we do NOT migrate business models here.
-	if err = s.opts.DB.AutoMigrate(&schema.Schema{}); err != nil {
-		return fmt.Errorf("migrate schema meta table: %w", err)
+	// When AutoMigrate is off the operator's migration step must create
+	// this table (and the business tables) before Setup runs.
+	if s.opts.AutoMigrate {
+		if err = s.opts.DB.AutoMigrate(&schema.Schema{}); err != nil {
+			return fmt.Errorf("migrate schema meta table: %w", err)
+		}
 	}
 
 	for _, m := range s.getModels() {

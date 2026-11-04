@@ -1,0 +1,37 @@
+package main
+
+import (
+	"log"
+
+	"github.com/sjlit/aeus/admin/models"
+	"github.com/sjlit/rest/v3/schema"
+
+	"__AEUS_MODULE__/internal/bootstrap"
+	"__AEUS_MODULE__/internal/config"
+)
+
+// migrate applies the schema explicitly so production can run with
+// AUTO_MIGRATE=false. Add application models to the AutoMigrate call
+// below as you introduce them.
+func main() {
+	cfg := config.Load()
+	db, err := bootstrap.OpenDB(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := db.AutoMigrate(
+		&schema.Schema{},
+		&models.Tenant{},
+		&models.Menu{},
+		&models.Permission{},
+		&models.Role{},
+		&models.RolePermission{},
+		&models.User{},
+		&models.Department{},
+		&models.Audit{},
+		&models.LoginLog{},
+	); err != nil {
+		log.Fatal(err)
+	}
+	log.Print("migration complete")
+}

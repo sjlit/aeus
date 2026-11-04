@@ -55,10 +55,12 @@ const grantsMarker = "SUM(id)"
 //
 // # Matching
 //
-// The request is identified by `RequestMethod + " " + RequestPath`.
-// RequestPath is the registered route pattern (gin FullPath, e.g.
+// The request is identified by `RequestMethod + " " + RequestRoute`.
+// RequestRoute is the registered route pattern (gin FullPath, e.g.
 // "PUT /system/sys_user/:id"), which matches the "<METHOD> <URI>"
-// format derive.go writes into sys_permissions.
+// format derive.go writes into sys_permissions. Embedders that only
+// populate RequestPath fall back to it; NoRoute/static requests carry
+// an empty RequestRoute and are treated as infrastructure.
 //
 // # Default policy: fail-closed
 //
@@ -159,6 +161,12 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 		}
 		method, _ := metadata.Get(ctx, metadata.RequestMethod)
 		path, _ := metadata.Get(ctx, metadata.RequestPath)
+		route, routeSet := metadata.Get(ctx, metadata.RequestRoute)
+		if !routeSet {
+			// Tests and embedders that only populate RequestPath predate
+			// RequestRoute; treat the path as the route template.
+			route = path
+		}
 
 		// Infrastructure routes are not business APIs and have no
 		// catalog entries. Let them through: JWT still authenticates
@@ -167,7 +175,7 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 		// /health, /metrics, /mcp, or the generated openapi.json docs.
 		// Without this bypass the fail-closed default turns a 404 or a
 		// static asset into a misleading 403.
-		if isInfrastructurePath(path) {
+		if isInfrastructurePath(route) {
 			return nil
 		}
 
@@ -178,7 +186,7 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 			return nil
 		}
 
-		code := method + " " + path
+		code := method + " " + route
 
 		// Catalog set first: an empty catalog means every non-public
 		// request is denied by the fail-closed default.

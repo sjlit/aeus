@@ -1,0 +1,26 @@
+package main
+
+import (
+	"log"
+
+	"github.com/sjlit/aeus"
+	ghttp "github.com/sjlit/aeus/transport/http"
+
+	"__AEUS_MODULE__/internal/config"
+)
+
+func main() {
+	cfg := config.Load()
+
+	app := aeus.New(
+		aeus.WithName(cfg.AppName),
+		aeus.WithDebug(cfg.Debug),
+		aeus.WithServer(ghttp.New(
+			ghttp.WithAddress(cfg.HTTPAddr),
+			ghttp.WithEnableHealth(true),
+		)),
+	)
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
+}

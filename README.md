@@ -83,7 +83,35 @@ AEUS 定位为**脚手架框架**，在抽象与务实之间做了明确的取�
 
 ## 快速开始
 
-> 仓库暂未提供 `cmd/aeus` CLI 脚手架（规划中）。在 `main.go` 中直接组装 `Service` 即可：
+```bash
+# 发布后：
+go install github.com/sjlit/aeus/cmd/aeus@latest
+
+# 不带 admin 的最小 HTTP 服务
+aeus new my-service
+
+# 带 admin 后台（JWT/RBAC + Seed + Vue 管理界面）
+aeus new my-admin --template=admin
+
+cd my-service && make run
+# 或：
+cd my-admin && make web && make run
+```
+
+> 本次发布前的开发期，请在仓库内使用
+> `go run ./cmd/aeus new ... --local="$PWD"`；`--local` 会生成指向当前
+> checkout 的 `replace`，避免依赖尚未发布的根模块版本。
+
+`admin` 模板首次启动后打开 <http://localhost:8080>，使用 `admin / Admin123`
+登录；请立即修改默认密码和 `JWT_SECRET`。
+
+在仓库内开发 CLI 时，用 `--local` 指向当前 checkout，避免依赖已发布版本：
+
+```bash
+go run ./cmd/aeus new /tmp/demo --template=admin --local="$PWD"
+```
+
+手工组装 `Service` 仍然可用：
 
 ```go
 package main
@@ -703,6 +731,8 @@ git push origin --tags
 若自上次发布以来没有模块内容变更，`make release` 会中止并打印 `nothing to release: 自上次发布以来没有模块内容变更`。
 
 `scripts/release.sh` 还会自动同步本次发布的子模块对根模块的 `require`（即便根模块没发布，也会对齐当前最新根 tag），避免子模块引用过期根版本。
+
+`cmd/aeus/versions.json` 保存脚手架生成的模块版本，发布时需与本次 tag 对齐；否则生成的项目会引用旧版本。
 
 > **发布后验证**：在干净工作区、`GOWORK=off` 下对受影响模块执行 `go build ./...`。子模块新增了根模块包（例如 `pkg/response`）时，根模块必须与 `transport/http`、`admin` 在同一次发布中打 tag；否则子模块会指向不含该包的旧根版本。
 

@@ -1,0 +1,126 @@
+// =========================================================
+// B2 SHARED · 极光薄荷+丁香+蜜桃+深松绿
+// 共用色系 · 4 个布局都引用此
+// =========================================================
+:root {
+  // 背景色系对齐参考项目(旧 dashboard 的 aurora 默认主题):
+  // 三层 radial 拼色取调淡版,底色提亮
+  --bg-1: #e3f3ea;
+  --bg-2: #ede6f3;
+  --bg-3: #fde9e0;
+  --bg-base: #f9fcfb;
+  --ink: #1e3a3a;
+  --ink-2: #5b7a78;
+  --ink-3: #3a5a58;
+  /* 侧栏菜单文字:比 --ink-2 再实一档,浅玻璃底上不发灰 */
+  --sidebar-ink: #3f625f;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.85);
+  --glass-soft: rgba(255, 255, 255, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --shadow: rgba(30, 90, 90, 0.16);
+  --shadow-soft: rgba(30, 90, 90, 0.08);
+  --acc-mint: #6cc5a8;
+  --acc-lilac: #9b85c4;
+  --acc-peach: #f4a484;
+  /* 深一档的 mint:链接/悬浮态用,替代散落的 #2f7d63 / #245f4c */
+  --acc-mint-deep: #2f7d63;
+  --acc-mint-deeper: #245f4c;
+  /* 暖色渐变:品牌方块(.brand::before)/ hero em / .mark-a 共用 */
+  --grad-warm: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
+  /* 扩展色板:aura 光晕变体与 .dot-attention 状态点用,
+     取值与 motion.scss 里同色系的 rgba 光晕对齐 */
+  --acc-violet-1: #8b7ec8;
+  --acc-amber-1: #d4a04a;
+  --acc-peach-3: #c47859;
+  /* 菜单激活色:静默高亮方案 —— mint 淡染底 + 深松绿文字,
+     不再用渐变色块(与 primary 按钮同族渐变互相抢戏,白字对比度也不足)。
+     --menu-active-1 保留给小点缀:二级圆点 / tab 与命令面板的激活图标。 */
+  --menu-active-1: #3f9b7e;
+  --menu-active-tint: rgba(108, 197, 168, 0.14);
+  --menu-active-tint-soft: rgba(108, 197, 168, 0.08);
+  /* 聚焦/悬浮光环:acc-mint 的 15%/20% 透明版本 */
+  --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.15);
+  --ring: 0 0 0 3px rgba(108, 197, 168, 0.2);
+  /* 字体由 @fontsource-variable 自托管(main.ts 引入),族名带 "Variable" 后缀。
+     西文走自托管字体,中文回退到系统中文字体(苹方/雅黑/思源)。 */
+  --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --body: 'Inter Tight Variable', 'Inter Tight', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+
+  /* ---- 几何 ---- */
+  --r-lg: 24px;
+  --r-md: 16px;
+  --r-sm: 12px;
+  --r-pill: 100px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+// body 只放底色与基础排版;极光渐变与点阵装饰放到独立的 ::before 层,
+// 用 absolute 定位 + z-index:-1,避免 background-attachment: fixed 与
+// 固定定位 ::before 在滚动时强制重绘整个视口。
+body {
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14px;
+  position: relative;
+  isolation: isolate;          // 独立堆叠上下文,装饰层被推到 body 内容之下
+}
+
+// 极光渐变背景层:absolute 跟随 body 尺寸,不再 fixed。
+body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(at 20% 10%, var(--bg-1) 0%, transparent 50%),
+    radial-gradient(at 80% 0%, var(--bg-3) 0%, transparent 55%),
+    radial-gradient(at 50% 100%, var(--bg-2) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+// 点阵装饰层:同样 absolute + z-index:-2,避免覆盖在渐变之上。
+body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  opacity: 0.18;
+}
+
+// ---- glass utility ----
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+// ---- gradient text(渐变文字统一入口) ----
+.text-gradient {
+  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient--peach {
+  background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

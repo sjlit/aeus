@@ -17,14 +17,32 @@ func newTenantSvcDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&models.Tenant{}); err != nil {
+	if err := db.AutoMigrate(&models.Tenant{}, &models.Role{}); err != nil {
 		t.Fatal(err)
 	}
 	return db
 }
 
-func TestTenantService_ListTenantOptions_AllSortedByName(t *testing.T) {
+// newTenantSvc creates the role named by roleKey and returns a service
+// wired to the same DB. Tenant RPCs are super-only, so every test must
+// explicitly choose the caller's role instead of relying on the old
+// unauthenticated behavior.
+func newTenantSvc(t *testing.T, roleKey string, isSuper bool) (*gorm.DB, *TenantService) {
+	t.Helper()
 	db := newTenantSvcDB(t)
+	if err := db.Create(&models.Role{
+		Key:     roleKey,
+		Name:    roleKey,
+		Status:  "enabled",
+		IsSuper: isSuper,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	return db, NewTenantService(WithTenantServiceDB(db))
+}
+
+func TestTenantService_ListTenantOptions_AllSortedByName(t *testing.T) {
+	db, svc := newTenantSvc(t, "root", true)
 	for _, tn := range []*models.Tenant{
 		{ID: "t-zhang", Name: "张氏集团", Status: "enabled"},
 		{ID: "t-li", Name: "李氏科技", Status: "enabled"},
@@ -35,8 +53,7 @@ func TestTenantService_ListTenantOptions_AllSortedByName(t *testing.T) {
 		}
 	}
 
-	svc := NewTenantService(WithTenantServiceDB(db))
-	res, err := svc.ListTenantOptions(context.Background(), &pb.Empty{})
+	res, err := svc.ListTenantOptions(claimsCtx("alice", "root", "t1"), &pb.Empty{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,13 +76,12 @@ func TestTenantService_ListTenantOptions_AllSortedByName(t *testing.T) {
 }
 
 func TestTenantService_Tenant_Found(t *testing.T) {
-	db := newTenantSvcDB(t)
+	db, svc := newTenantSvc(t, "root", true)
 	if err := db.Create(&models.Tenant{ID: "t1", Name: "租户一", Status: "enabled"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	svc := NewTenantService(WithTenantServiceDB(db))
-	res, err := svc.Tenant(context.Background(), &pb.TenantRequest{Id: "t1"})
+	res, err := svc.Tenant(claimsCtx("alice", "root", "t1"), &pb.TenantRequest{Id: "t1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,19 +94,39 @@ func TestTenantService_Tenant_Found(t *testing.T) {
 }
 
 func TestTenantService_Tenant_NotFound(t *testing.T) {
-	db := newTenantSvcDB(t)
+	_, svc := newTenantSvc(t, "root", true)
 
-	svc := NewTenantService(WithTenantServiceDB(db))
-	_, err := svc.Tenant(context.Background(), &pb.TenantRequest{Id: "missing"})
+	_, err := svc.Tenant(claimsCtx("alice", "root", "t1"), &pb.TenantRequest{Id: "missing"})
 	wantPkError(t, err, errs.CodeNotFound)
 }
 
 func TestTenantService_Tenant_InvalidRequest(t *testing.T) {
-	db := newTenantSvcDB(t)
+	_, svc := newTenantSvc(t, "root", true)
 
-	svc := NewTenantService(WithTenantServiceDB(db))
-	_, err := svc.Tenant(context.Background(), &pb.TenantRequest{})
+	_, err := svc.Tenant(claimsCtx("alice", "root", "t1"), &pb.TenantRequest{})
 	if err == nil {
 		t.Fatal("empty id should fail validation")
+	}
+}
+
+func TestTenantService_NonSuperDenied(t *testing.T) {
+	db, svc := newTenantSvc(t, "ops", false)
+	if err := db.Create(&models.Tenant{ID: "t1", Name: "租户一", Status: "enabled"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	ctx := claimsCtx("alice", "ops", "t1")
+
+	if _, err := svc.ListTenantOptions(ctx, &pb.Empty{}); !errs.IsCode(err, errs.CodeAccessDenied) {
+		t.Fatalf("ListTenantOptions: got %v, want AccessDenied", err)
+	}
+	if _, err := svc.Tenant(ctx, &pb.TenantRequest{Id: "t1"}); !errs.IsCode(err, errs.CodeAccessDenied) {
+		t.Fatalf("Tenant: got %v, want AccessDenied", err)
+	}
+}
+
+func TestTenantService_NoClaimsDenied(t *testing.T) {
+	_, svc := newTenantSvc(t, "root", true)
+	if _, err := svc.ListTenantOptions(context.Background(), &pb.Empty{}); !errs.IsCode(err, errs.CodeAccessDenied) {
+		t.Fatalf("no claims: got %v, want AccessDenied", err)
 	}
 }

@@ -41,10 +41,11 @@ httpSrv.Use(mwauth.JWT(
 
 ## 9.3 请求标识
 
-请求码 = `RequestMethod + " " + RequestPath`。
+请求码 = `RequestMethod + " " + RequestRoute`。
 
 - `RequestMethod`:来自 `metadata.Get(ctx, metadata.RequestMethod)`,例 `"PUT"`。
-- `RequestPath`:transport/http 写入的是 gin 的 **FullPath 路由模板**(例 `"PUT /system/sys_user/:id"`),不是实例化的实际路径。
+- `RequestRoute`:transport/http 写入的是 gin 的 **FullPath 路由模板**(例 `"PUT /system/sys_user/:id"`),不是实例化的实际路径。
+- 仅有 `RequestPath`、没有 `RequestRoute` 的嵌入方回退到 `RequestPath`;NoRoute/静态请求得到原始路径的 `RequestPath` 和空 `RequestRoute`。
 
 > wire URL 形式 `"PUT /system/sys_user/:id"` 与 `sys_permissions.data` 写入的 `"PUT /system/sys_user/:id"` 同构,精确匹配。
 
@@ -62,7 +63,7 @@ httpSrv.Use(mwauth.JWT(
 补充规则:
 
 - 非 HTTP 协议 → 步骤 0 提前放行,所有步骤跳过。
-- 基础设施路由(`FullPath` 为空、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json`)→ 直接放行,不查 catalog;JWT 仍负责认证。否则 fail-closed 会把静态资源/404 误报为 403。
+- 基础设施路由(`RequestRoute` 为空即 NoRoute/静态文件,以及 `/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json`)→ 直接放行,不查 catalog;JWT 仍负责认证。静态资源本身需要在 JWT `WithAllow` 中放行(例如 `/assets/*`)。否则 fail-closed 会把静态资源/404 误报为 403。
 - claims 不是 `*auth.Claims` → 直接 `4005 AccessDenied`(接线错误直接暴露在请求上,避免静默放行)。
 - `type=button` / `type=data_scope` 不参与接口鉴权——只走角色编辑页的分配。
 

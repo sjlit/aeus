@@ -109,6 +109,9 @@ func (s *ServiceLoader) Init(ctx context.Context) (err error) {
 		service.WithMenuServiceDB(db),
 		service.WithMenuServiceCache(sharedCache),
 	))
+	pb.RegisterTenantServiceRouter(http, service.NewTenantService(
+		service.WithTenantServiceDB(db),
+	))
 
 	// Seed after Setup so the catalog exists, but before the servers
 	// start: with the checker's fail-closed default, a super role must

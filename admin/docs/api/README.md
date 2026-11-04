@@ -17,6 +17,7 @@
 | 9 | [rbac.md](./rbac.md) | `NewPermissionChecker` — JWT 中间件上挂接的接口权限执行 |
 | 10 | [tenant-scope.md](./tenant-scope.md) | GORM 租户回调、`WithTenantResolver` 契约、跨租户边界 |
 | 11 | [seed-options.md](./seed-options.md) | `admin.Seed` 引导、`admin.New` 与各 Service 的 Functional Options |
+| 12 | [security-upgrade.md](./security-upgrade.md) | fail-open → fail-closed、单租户 → 多租户、只读表与 super-only 操作的迁移指南 |
 
 ## 服务清单
 

@@ -1,0 +1,284 @@
+// =========================================================
+// visual · 视觉工具类合集(原 aura / motion / texture 三文件合并)
+// 依赖 style.scss 的 token;内部顺序:光晕 → 动效 → 纹理
+// =========================================================
+
+// =========================================================
+// aura · 角落光晕工具(从登录页抽离,通用化)
+// 挂在 .aura 元素上,叠加一对 ::before / ::after 极光球;
+// 通过 --aura-c1/c2 改颜色, --aura-o1/o2 改强度;
+// .aura--cool / --warm / --mono / --muted / --strong 是预设变体,直接套。
+// 父级需要 position: relative + isolation: isolate(.aura 已自带),
+// 否则 z-index: -1 会落到 body 之下看不见。
+// =========================================================
+
+.aura {
+  position: relative;
+  isolation: isolate;
+}
+
+.aura::before,
+.aura::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  // 不加 filter:blur —— radial-gradient 到 70% 处已过渡到透明,
+  // 边缘天然柔和;40px 的模糊首次绘制成本很高且无视觉增益
+  pointer-events: none;
+}
+
+// 默认:右上蜜桃 + 左下紫蓝(与登录页同款,但 c2 已替换为新的 violet)
+.aura::before {
+  top: -80px;
+  right: -80px;
+  width: 240px;
+  height: 240px;
+  background: radial-gradient(circle, var(--aura-c1, var(--acc-peach)), transparent 70%);
+  opacity: var(--aura-o1, 0.5);
+}
+
+.aura::after {
+  bottom: -60px;
+  left: -60px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, var(--aura-c2, var(--acc-violet-1)), transparent 70%);
+  opacity: var(--aura-o2, 0.4);
+}
+
+// ---- 配色变体 ----
+// 放在 base 之后,让 variant 的 var 覆盖默认值
+.aura--cool {
+  --aura-c1: var(--acc-mint);
+  --aura-c2: var(--acc-violet-1);
+}
+
+.aura--warm {
+  --aura-c1: var(--acc-peach);
+  --aura-c2: var(--acc-amber-1);
+}
+
+.aura--mono {
+  --aura-c1: var(--acc-mint);
+  --aura-c2: var(--acc-mint-deep);
+}
+
+// ---- 强度变体(叠加在配色之上) ----
+.aura--muted {
+  --aura-o1: 0.18;
+  --aura-o2: 0.18;
+}
+
+.aura--strong {
+  --aura-o1: 0.65;
+  --aura-o2: 0.55;
+}// =========================================================
+// motion · 入场编排 + 数据呼吸 + 加载/空状态叙事
+// 速度表统一在这里声明(--ease-* / --dur-*),
+// 后续 transition / animation 全部引用,避免散落的 0.16 / 0.18。
+// =========================================================
+
+:root {
+  --ease-out:    cubic-bezier(.2, .7, .2, 1);    /* 入场首选 */
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);     /* hover / 颜色过渡 */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);/* 弹簧,徽章弹出 */
+  --dur-instant: 0.10s;
+  --dur-fast:    0.16s;
+  --dur-base:    0.24s;
+  --dur-slow:    0.40s;
+}
+
+// ---- 入场:rise + staggered 编排 ----
+// 用法:<div class="rise-in" :data-i="Math.min(i, 9)">
+// data-i 封顶 9,避免 >9 项时 delay 累积过长
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rise-in {
+  animation: rise 0.36s var(--ease-out) both;
+}
+
+.rise-in[data-i="0"] { animation-delay: 0ms; }
+.rise-in[data-i="1"] { animation-delay: 30ms; }
+.rise-in[data-i="2"] { animation-delay: 60ms; }
+.rise-in[data-i="3"] { animation-delay: 90ms; }
+.rise-in[data-i="4"] { animation-delay: 120ms; }
+.rise-in[data-i="5"] { animation-delay: 150ms; }
+.rise-in[data-i="6"] { animation-delay: 180ms; }
+.rise-in[data-i="7"] { animation-delay: 210ms; }
+.rise-in[data-i="8"] { animation-delay: 240ms; }
+.rise-in[data-i="9"] { animation-delay: 270ms; }
+
+// ---- 骨架:薄荷→丁香扫光 ----
+// 扫光走伪元素 transform(合成器动画,零重绘);
+// 之前直接动 background-position,每帧都触发 paint,骨架数量多时
+// 加载期间 CPU/GPU 持续空转。
+@keyframes skeleton-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-soft);
+  border-radius: 8px;
+  min-height: 14px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(155, 133, 196, 0.12) 50%,
+      transparent 100%);
+    animation: skeleton-sweep 1.4s ease-in-out infinite;
+  }
+}
+
+// ---- 漂浮:空状态插画 ----
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+.empty-illust {
+  animation: float 3s ease-in-out infinite;
+}
+
+// ---- 触觉按下反馈 ----
+// 给任意"可点"元素加 .pressable,按下回沉 + 微缩,给用户"摁到了"的确认
+.pressable {
+  transition:
+    background var(--dur-fast) var(--ease-in-out),
+    color var(--dur-fast) var(--ease-in-out),
+    border-color var(--dur-fast) var(--ease-in-out),
+    box-shadow var(--dur-fast) var(--ease-in-out),
+    transform var(--dur-instant) var(--ease-out);
+}
+
+.pressable:active {
+  transform: translateY(1px) scale(0.985);
+  box-shadow: 0 1px 2px var(--shadow-soft);
+}
+
+// ---- 脉冲圆点 ----
+// 复用登录页 .live 的脉冲效果;暖色 amber-1,与主色错开表示"待办/未读"
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(1.4); }
+}
+
+.dot-attention {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--acc-amber-1);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(212, 160, 74, 0.18);
+  animation: pulse 1.6s ease-in-out infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+// 三态变体:覆盖背景色 + 同色光晕。放在 base 之后才生效。
+.dot-attention--ok {
+  background: var(--acc-mint);
+  box-shadow: 0 0 0 3px rgba(108, 197, 168, 0.18);
+}
+
+.dot-attention--danger {
+  background: var(--acc-peach-3);
+  box-shadow: 0 0 0 3px rgba(196, 120, 89, 0.18);
+}
+
+// ---- 路由过渡:page-* ----
+// 用法:&lt;Transition name=&quot;page&quot; mode=&quot;out-in&quot;&gt; 包裹 router-view 内层。
+// leave 比 enter 略快(--dur-fast vs --dur-base),
+// 让用户感觉"老页面利落退场、新页面从容登场"。
+.page-enter-active {
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.page-leave-active {
+  transition:
+    opacity var(--dur-fast) var(--ease-in-out),
+    transform var(--dur-fast) var(--ease-in-out);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+// ---- 减少动效偏好 ----
+// 系统级 / 用户级 prefers-reduced-motion: reduce 时,关掉本页所有编排动画
+@media (prefers-reduced-motion: reduce) {
+
+  .rise-in,
+  .skeleton,
+  .empty-illust,
+  .dot-attention,
+  .pressable {
+    animation: none !important;
+    transition: none !important;
+  }
+}// =========================================================
+// texture · 噪点 + 点阵纹理工具
+// 给玻璃面、卡片、空状态加一点"纸感/触感",避免大面积纯色塑料感;
+// ⚠️ 不要挂在 body 上(body::before 已被极光渐变占用),
+//    挂在卡片 / 大区块 / 空状态容器最合适。
+// =========================================================
+
+// ---- grain · SVG 噪点 ----
+// 内联 data-uri 零网络请求;160×160 平铺,fractalNoise 频率 0.85;
+// 不用 mix-blend-mode —— 混合模式会强制所在堆叠上下文额外合成一遍,
+// 噪点透明度只有 ~0.035,直接叠加视觉上几乎无差。
+.grain {
+  position: relative;
+  isolation: isolate;
+}
+
+.grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 160px 160px;
+  opacity: var(--grain-op, 0.035);
+}
+
+// 强度变体:加深或减淡
+.grain--strong { --grain-op: 0.06; }
+.grain--soft   { --grain-op: 0.018; }
+
+// ---- dots · 点阵纹理 ----
+// 抽自 body::after 的全局点阵,做成可挂在任意元素的工具类;
+// --dots-size 控制间距,--dots-op 控制透明度。
+.dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: var(--dots-size, 28px) var(--dots-size, 28px);
+  opacity: var(--dots-op, 0.18);
+}
+
+// 落在深色玻璃上:用青绿点代替白点
+.dots--dark {
+  background-image: radial-gradient(rgba(30, 90, 90, 0.4) 1px, transparent 1px);
+}
+
+// 密度变体
+.dots--tight  { --dots-size: 14px; --dots-op: 0.08; }   /* 表格头 / 表单区 */
+.dots--sparse { --dots-size: 48px; --dots-op: 0.12; }   /* 大空白卡 / hero */

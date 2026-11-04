@@ -186,6 +186,41 @@ if [ -f admin/go.mod ]; then
   fi
 fi
 
+# 脚手架 CLI 把版本写进生成的 go.mod；随本次 tag 一起对齐，避免
+# 生成的项目引用旧版本。
+module_version() {
+  local mod="$1" v last pat
+  v="$(ver_of "$mod" "$RELEASE")"
+  if [ -n "$v" ]; then
+    printf '%s' "$v"
+    return
+  fi
+  if [ "$mod" = "." ]; then
+    pat='v[0-9]*'
+  else
+    pat="$mod/v[0-9]*"
+  fi
+  last="$(git tag -l "$pat" | sort -V | tail -1)"
+  if [ -n "$last" ]; then
+    printf '%s' "${last##*/}"
+  else
+    printf 'v1.0.0'
+  fi
+}
+
+if [ -d cmd/aeus ]; then
+  cli_root="$(module_version ".")"
+  cli_http="$(module_version "transport/http")"
+  cli_admin="$(module_version "admin")"
+  cat > cmd/aeus/versions.json <<EOF
+{
+  "root": "${cli_root}",
+  "transport/http": "${cli_http}",
+  "admin": "${cli_admin}"
+}
+EOF
+fi
+
 # --- 提交并打标签(无文件改动时跳过提交,直接对 HEAD 打标签) ---
 git add -A
 if [ -n "$(git diff --cached --name-only)" ]; then

@@ -1,0 +1,43 @@
+package config
+
+import (
+	"os"
+	"strconv"
+)
+
+// Config holds the minimal service settings. Everything is read from
+// the environment so the binary has no config-file dependency; copy
+// .env.example and export the values you need.
+type Config struct {
+	AppName  string
+	HTTPAddr string
+	Debug    bool
+}
+
+// Load reads the environment and applies development defaults.
+func Load() Config {
+	return Config{
+		AppName:  env("APP_NAME", "__AEUS_NAME__"),
+		HTTPAddr: env("HTTP_ADDR", ":8080"),
+		Debug:    envBool("DEBUG", true),
+	}
+}
+
+func env(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func envBool(key string, fallback bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}

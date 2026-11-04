@@ -1,0 +1,477 @@
+@use './style';
+// Element Plus 玻璃化覆盖(迁移自参考项目),完整 EP token + 组件样式;
+// 文件末尾附带 @nobla/rest-ui(schema 驱动页)的主题对齐
+@use './glass';
+// ---- 视觉工具:角落光晕 + 动效编排 + 纹理 ----
+// 排在 chrome 规则之后,工具类优先级与组件样式持平(各自有专属类名,不打架)
+@use './visual';
+
+// L3 模板的 body 有 padding:28px,管理台不需要
+body {
+  padding: 0;
+}
+
+// ---- L3 chrome 布局(el-container 接管 flex,这里只填装饰) ----
+.app-main {
+  // 让外层容器占满视口;高度交给 el-container 自身 100% 推断
+  height: 100vh;
+
+  --el-main-padding: 20px;
+}
+
+// 左侧栏(el-aside):只在桌面下挂载(移动端切到 .mobile-menu 抽屉)
+// 外层 chrome = 玻璃背景 / 右边框 / 内边距 / 折叠过渡;
+// 内层 chrome(品牌+导航)在 .menu-chrome 块,桌面抽屉共用。
+.sidebar {
+  background: var(--glass-strong);
+  // blur 半径 16px:30px 的采样成本约是 16px 的数倍,视觉差异很小
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-right: 1px solid var(--glass-border);
+  padding: 28px 18px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  // 折叠切换时宽度/内边距平滑过渡
+  transition: width 0.25s ease, padding 0.25s ease;
+
+  // 折叠态:收窄内边距,文字(品牌名/分组标题)隐藏,只剩图标
+  &.is-collapsed {
+    padding: 28px 8px;
+  }
+}
+
+// ---- 抽屉内的菜单 chrome ----
+// el-drawer 自带 panel 背景,这里只补内层导航所需的布局;
+// 背景/边框/外边距由抽屉本身提供,避免双重玻璃叠加。
+.mobile-menu {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 18px 14px 18px 18px;
+  overflow: hidden;
+}
+
+// ---- 通用菜单 chrome(品牌 + 导航树)----
+// 桌面侧栏、移动端抽屉共用同一套内部样式。
+// 注意:app.scss 是全局 CSS,直接用后代选择器即可(不要写 :deep()—
+// Vue SFC 的 <style scoped> 才会处理 :deep(),全局 CSS 写了反而让浏览器
+// 把整条规则当成无效伪类丢掉)
+// ⚠️ 不要在这里加 `flex: 1 1 auto`:桌面下这条会挂到 <el-aside> 上,
+//   而 el-aside 是 el-container 的 flex 子项,grow:1 会把它撑得比
+//   :width="240px" 还宽很多。抽屉里 .mobile-menu 自己负责高度。
+.menu-chrome {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  .brand {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    padding: 0 8px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+
+    &::before {
+      // 系统标:暖色渐变方块 + 小写 italic 'a'(倾斜 -6°)。
+      // 与绿色菜单行形成冷暖对位,是侧栏唯一带暖色的元素 → 强品牌点。
+      content: 'a';
+      width: 24px;
+      height: 24px;
+      background: var(--grad-warm);
+      color: white;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1;
+      letter-spacing: 0;
+      transform: rotate(-6deg);
+      box-shadow: 0 3px 10px rgba(244, 164, 132, 0.35);
+      flex-shrink: 0;
+    }
+  }
+
+  .nav-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    // 滚动条留白:让最后一项的底部圆角不被裁掉
+    padding-right: 2px;
+  }
+
+  .nav-section {
+    margin-bottom: 22px;
+
+    .nav-section-title {
+      // 分组名是中文:不能用 mono(mono 无 CJK 字形会回落系统字体),
+      // 10px + uppercase 也是纯拉丁写法;改为 12px 正文家族 + 弱字距
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      color: var(--ink-3);
+      padding: 0 8px;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .nav-group-label {
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-2);
+      opacity: 0.6;
+    }
+  }
+
+  // el-menu 接管菜单项的渲染;只调样式,不接管结构
+  .nav-menu {
+    --el-menu-bg-color: transparent;
+    --el-menu-hover-bg-color: var(--glass-soft);
+    --el-menu-border-color: transparent;
+    border-right: none;
+
+    // 左侧 3px mint 竖条指示的占位,默认 0 宽,hover/active 时撑开
+    .el-menu-item,
+    .el-sub-menu__title {
+      position: relative;
+      border-radius: 8px;
+      margin: 2px 0;
+      height: 40px;
+      line-height: 40px;
+      font-size: 14px;
+      color: var(--sidebar-ink);
+      font-weight: 500;
+      transition: background-color 0.16s, color 0.16s, transform 0.16s, box-shadow 0.16s;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        transform: translateY(-50%) scaleY(0);
+        width: 3px;
+        height: 18px;
+        background: var(--acc-mint);
+        border-radius: 0 2px 2px 0;
+        transition: transform 0.16s;
+        transform-origin: center;
+      }
+
+      &:hover {
+        background: var(--glass-soft) !important;
+        color: var(--ink) !important;
+        transform: translateX(2px);
+
+        &::before {
+          transform: translateY(-50%) scaleY(1);
+        }
+      }
+    }
+
+    // 叶子项 active:静默高亮 —— mint 淡染底 + 深松绿文字 + 左侧竖条。
+    // 文字/图标走 currentColor,淡染上的 #245f4c 对比度 ~7:1(AA)。
+    .el-menu-item.is-active {
+      background: var(--menu-active-tint) !important;
+      color: var(--acc-mint-deeper) !important;
+      font-weight: 600;
+
+      &::before {
+        transform: translateY(-50%) scaleY(1);
+        background: var(--acc-mint);
+      }
+    }
+
+    // 文件夹右侧的小箭头:小一号 + 弱化
+    .el-sub-menu__icon-arrow {
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+
+    // 二级菜单的子项:缩进更深 + 字号更小,和顶层拉开层级
+    .el-sub-menu .el-menu {
+      background: transparent;
+      padding: 2px 0;
+
+      .el-menu-item {
+        font-size: 13.5px;
+        height: 36px;
+        line-height: 36px;
+        padding-left: 38px !important;
+        color: var(--sidebar-ink);
+
+        &::before {
+          left: 14px;
+        }
+      }
+
+      // 二级菜单 active:与一级同族但更浅(mint 8% 淡染),靠底色深浅分层;
+      // 圆点沿用 --menu-active-1
+      .el-menu-item.is-active {
+        background: var(--menu-active-tint-soft) !important;
+        color: var(--acc-mint-deeper) !important;
+        font-weight: 600;
+        box-shadow: none;
+
+        // 二级用圆点不用竖条,避免左边两条并行视觉混乱
+        // 尺寸对齐参考项目(4px)
+        &::before {
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          left: 18px;
+          background: var(--menu-active-1);
+        }
+      }
+    }
+
+    // 折叠态(图标栏):关掉 hover 位移与左侧竖条,图标保持居中
+    &.el-menu--collapse {
+      // EP 默认给折叠菜单固定宽度 64px(icon 24 + 左右级距 20×2),
+      // 但 aside 折叠态扣掉内边距后内容区只有 48px:菜单溢出会在
+      // nav-scroll 底部撑出横向滚动条,图标也比居中的品牌点偏右 8px。
+      // 改为撑满容器 + 级距归零 + flex 居中,图标即与品牌点对齐。
+      width: 100%;
+      --el-menu-base-level-padding: 0px;
+
+      .el-menu-item,
+      .el-sub-menu__title {
+        justify-content: center;
+
+        &:hover {
+          transform: none;
+
+          &::before {
+            transform: translateY(-50%) scaleY(0);
+          }
+        }
+
+        &::before {
+          display: none;
+        }
+      }
+    }
+  }
+}
+
+// ---- 桌面折叠态下隐藏文字 ----
+// 挂到 .sidebar 上而非 .menu-chrome,保证抽屉不受影响。
+.sidebar.is-collapsed {
+
+  // nav-scroll 展开态的 2px 滚动条留白会让折叠态图标比品牌点左偏 1px
+  .nav-scroll {
+    padding-right: 0;
+  }
+
+  .brand {
+    justify-content: center;
+    padding: 0 0 18px;
+
+    .brand-name {
+      display: none;
+    }
+  }
+
+  .nav-section-title,
+  .nav-group-label {
+    display: none;
+  }
+}
+
+// 右侧内容区(外层 el-container,内部垂直堆叠 header + main)
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+
+.topbar {
+  // 整张玻璃卡片:与 sidebar 视觉对称,sticky 留 12px 顶部边距
+  position: sticky;
+  top: 12px;
+  z-index: 10;
+  background: var(--glass-strong);
+  // sticky + blur:滚动时每帧都要重新采样模糊,半径控制在 16px 降成本
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm, 12px);
+  box-shadow: 0 8px 28px var(--shadow-soft);
+  padding: 0;
+  // 左右留 --el-main-padding 与 el-main 的内容区对齐,
+  // 玻璃卡片不再横贯整个内容区
+  margin: 0 var(--el-main-padding) 0;
+  // 高度由内容决定:工具栏 60px + 分隔线 + 多标签栏 48px
+  height: auto;
+}
+
+// 工具栏 / 多标签栏之间的细分隔线(两端渐隐,参考项目 UnifiedHeader 同款)
+.chrome-sep {
+  height: 1px;
+  background: var(--glass-border);
+  position: relative;
+}
+
+.chrome-sep::before,
+.chrome-sep::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: linear-gradient(90deg, var(--glass-border), transparent);
+  pointer-events: none;
+}
+
+.chrome-sep::before {
+  left: 0;
+}
+
+.chrome-sep::after {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.hero {
+  h1 {
+    font-family: var(--display);
+    font-size: 36px;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    margin-bottom: 6px;
+
+    em {
+      // 暖色渐变强调词:hero 里 <em>自动承接,无需 .text-gradient--warm 类名
+      font-style: italic;
+      background: var(--grad-warm);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+}
+
+// ---- 系统标 .mark-a ----
+// 全系统可复用的字符级品牌符号:favicon、loading 转圈、空状态插画中央字符、邮件角标都套这个。
+// 用法:<span class="mark-a">a</span>(默认显示 a;也可以包在 svg / 空态图中央)
+.mark-a {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--grad-warm);
+  color: white;
+  border-radius: 5px;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0;
+  transform: rotate(-6deg);
+  box-shadow: 0 2px 6px rgba(244, 164, 132, 0.3);
+  flex-shrink: 0;
+}
+
+// ---- 通用内容页容器(不走 SchemaViewer 的手写视图用) ----
+// schema 驱动页自带 rest-ui 的 .schema-page 骨架(见 rest-ui.scss);
+// 手写视图用 .page 包一层、正文区套 .glass 工具类,得到同样的节奏。
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  h2 {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+}
+
+// ---- el-sub-menu 浮层(teleport 到 body,scoped 够不着,放全局) ----
+.sidebar-pop {
+  background: var(--el-color-white);
+  opacity: 1;
+  padding: 4px;
+}
+
+.sidebar-pop .el-menu {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.sidebar-pop .el-menu .el-menu-item {
+  border-radius: 8px !important;
+  margin: 2px 0 !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  font-size: 14px !important;
+  color: var(--sidebar-ink) !important;
+  transition: all 0.16s;
+}
+
+.sidebar-pop .el-menu .el-menu-item:hover {
+  background: var(--glass-soft);
+  color: var(--ink);
+}
+
+.sidebar-pop .el-menu .el-menu-item.is-active {
+  background: var(--menu-active-tint) !important;
+  color: var(--acc-mint-deeper) !important;
+  font-weight: 600;
+}
+
+// ---- 移动端(<=768px)整体收口 ----
+// 桌面端在 980/720 还有自己的一套折叠,但 .sidebar 在这里已被 v-if 干掉,
+// 只剩内容区需要重排 padding/margin 与 topbar 留白。
+@media (max-width: 768px) {
+
+  // 内容区让出顶部 topbar 高度的 12px,左右贴边各 12px
+  .content>.el-main {
+    padding: 16px 14px;
+  }
+
+  .topbar {
+    // 抽屉打开时贴边,玻璃卡变窄一点
+    margin: 0 12px 12px;
+    top: 8px;
+    border-radius: 10px;
+  }
+}
+
+// ---- 移动端抽屉外观 ----
+// el-drawer 默认 panel 是白底,这里套上主题玻璃风,跟侧栏一致。
+.sidebar-drawer {
+
+  // el-drawer 根容器(append-to-body),只调整外层
+  .el-drawer__header {
+    display: none;
+  }
+}
+
+.sidebar-drawer .el-drawer__body {
+  padding: 0;
+  background: var(--glass-strong);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}

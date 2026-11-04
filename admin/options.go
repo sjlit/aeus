@@ -33,6 +33,13 @@ type (
 		// WithMultiTenant(true) or WithTenantResolver(...).
 		MultiTenant bool
 
+		// AutoMigrate controls the GORM table DDL that Setup and the
+		// rest/v3 resource registration run at boot. The default is
+		// true so a zero-config quick start works; production
+		// deployments should set WithAutoMigrate(false) and apply the
+		// schema with a dedicated migration step.
+		AutoMigrate bool
+
 		// TenantResolver derives the tenant id that scopes every GORM
 		// operation on a TenantModel row. It is only used when
 		// MultiTenant is true. nil is normalized to
@@ -90,8 +97,9 @@ type (
 
 func newOptions(opts ...Option) *Options {
 	options := &Options{
-		Responder: newResponder(),
-		Logger:    logger.Default(),
+		Responder:   newResponder(),
+		Logger:      logger.Default(),
+		AutoMigrate: true,
 	}
 	for _, o := range opts {
 		o(options)
@@ -132,6 +140,17 @@ func WithLogger(logger logger.Logger) Option {
 func WithDB(db *gorm.DB) Option {
 	return func(o *Options) {
 		o.DB = db
+	}
+}
+
+// WithAutoMigrate controls the table DDL performed by Setup and by
+// every rest/v3 resource registered through this Server. The default
+// is true. Set it to false in production after the schema has been
+// created by a dedicated migration step; Setup will then only write
+// the menu / permission catalog rows that already have tables.
+func WithAutoMigrate(enabled bool) Option {
+	return func(o *Options) {
+		o.AutoMigrate = enabled
 	}
 }
 

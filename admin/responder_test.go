@@ -96,6 +96,22 @@ func TestRespond_PlainError(t *testing.T) {
 	}
 }
 
+// TestRespond_BusinessErrorKeepsHTTP200 pins the transport convention:
+// admin business errors travel in the envelope with HTTP 200 so the
+// front-end can route on `code`; only JWT/rate-limit/404/5xx use
+// non-2xx status codes.
+func TestRespond_BusinessErrorKeepsHTTP200(t *testing.T) {
+	rec := httptest.NewRecorder()
+	newResponder().Respond(rec, httptest.NewRequest(http.MethodGet, "/", nil), errs.ErrPermissionDenied)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	code, _ := decodeEnvelope(t, rec.Body.Bytes())
+	if code != int(errs.CodePermissionDenied) {
+		t.Fatalf("code = %d, want %d", code, errs.CodePermissionDenied)
+	}
+}
+
 // TestRespond_Success locks the success branch: any non-error data goes
 // out as code=OK (0) with the payload under `data`.
 func TestRespond_Success(t *testing.T) {

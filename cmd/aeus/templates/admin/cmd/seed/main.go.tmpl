@@ -1,0 +1,40 @@
+package main
+
+import (
+	"context"
+	"log"
+
+	"github.com/sjlit/aeus/admin"
+	ghttp "github.com/sjlit/aeus/transport/http"
+
+	"__AEUS_MODULE__/internal/bootstrap"
+	"__AEUS_MODULE__/internal/config"
+)
+
+func main() {
+	cfg := config.Load()
+	db, err := bootstrap.OpenDB(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Setup derives the menu and permission catalog from the registered
+	// models. Run it against a throwaway router so `make seed` works as
+	// a standalone production Job after `make migrate`.
+	seedOpts := []admin.Option{
+		admin.WithDB(db),
+		admin.WithRouter(ghttp.New()),
+		admin.WithAutoMigrate(cfg.AutoMigrate),
+	}
+	if cfg.MultiTenant {
+		seedOpts = append(seedOpts, admin.WithMultiTenant(true))
+	}
+	srv := admin.New(seedOpts...)
+	if err := srv.Setup(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+	if err := admin.Seed(db, cfg.AdminUser, cfg.AdminPassword); err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("seeded admin user %q", cfg.AdminUser)
+}

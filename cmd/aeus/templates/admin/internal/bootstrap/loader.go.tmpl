@@ -1,0 +1,122 @@
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/sjlit/aeus/admin"
+	adminAuth "github.com/sjlit/aeus/admin/auth"
+	"github.com/sjlit/aeus/admin/pb"
+	"github.com/sjlit/aeus/admin/service"
+	memcache "github.com/sjlit/aeus/infra/cache/memory"
+	mw "github.com/sjlit/aeus/middleware/auth"
+)
+
+// Loader wires the admin REST resources, auth RPCs, JWT middleware and
+// seed data. It implements aeus.ServiceLoader.
+type Loader struct {
+	scope *Scope
+}
+
+// NewLoader returns a loader bound to the scope built in cmd/server.
+func NewLoader(scope *Scope) *Loader {
+	return &Loader{scope: scope}
+}
+
+func (l *Loader) Init(ctx context.Context) error {
+	return l.scope.wire(ctx)
+}
+
+// Run is intentionally a no-op: seeding happens before the HTTP server
+// starts so the fail-closed permission checker has grants on the first
+// request.
+func (l *Loader) Run(context.Context) error { return nil }
+
+func (s *Scope) wire(ctx context.Context) error {
+	if s.Admin == nil {
+		return fmt.Errorf("bootstrap: admin server was not initialized")
+	}
+	if err := s.Admin.Setup(ctx); err != nil {
+		return fmt.Errorf("admin setup: %w", err)
+	}
+
+	secret := []byte(s.Cfg.JWTSecret)
+	httpSrv := s.HTTP
+	db := s.DB
+
+	pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
+		service.WithAuthServiceDB(db),
+		service.WithAuthSecret(s.Cfg.JWTSecret),
+	))
+
+	sharedCache := memcache.NewCache()
+	// RateLimit sits before JWT so login spam cannot burn bcrypt
+	// cycles. Tune Capacity/Refill for production.
+	httpSrv.Use(mw.RateLimit(mw.RateLimitOpts{
+		Path:     "/auth/login",
+		Keys:     []string{"login:ip:{ip}"},
+		Capacity: 5,
+		Refill:   1.0 / 60,
+	}))
+	httpSrv.Use(mw.JWT(
+		func(*jwt.Token) (any, error) { return secret, nil },
+		mw.WithClaims(adminAuth.Claims{}),
+		mw.WithPermissionChecker(admin.NewPermissionChecker(db, admin.WithCheckerCache(sharedCache))),
+		mw.WithAllow(
+			"/auth/login",
+			"/auth/refresh-token",
+			"/auth/logout",
+			"/health",
+			"/ready",
+			// The SPA is served by this binary; its shell and assets
+			// must be reachable before the user signs in.
+			"/",
+			"/index.html",
+			"/favicon.ico",
+			"/assets/*",
+		),
+	))
+
+	pb.RegisterUserServiceRouter(httpSrv, service.NewUserService(
+		service.WithUserServiceDB(db),
+		service.WithUserServiceCache(sharedCache),
+	))
+	pb.RegisterRoleServiceRouter(httpSrv, service.NewRoleService(
+		service.WithRoleServiceDB(db),
+		service.WithRoleServiceCache(sharedCache),
+	))
+	pb.RegisterPermissionServiceRouter(httpSrv, service.NewPermissionService(
+		service.WithPermissionServiceDB(db),
+	))
+	pb.RegisterMenuServiceRouter(httpSrv, service.NewMenuService(
+		service.WithMenuServiceDB(db),
+		service.WithMenuServiceCache(sharedCache),
+	))
+	// TenantService is super-only at the service layer; registering it
+	// keeps the admin RPC surface complete even though the bundled web
+	// uses the generic REST resource for the tenant page.
+	pb.RegisterTenantServiceRouter(httpSrv, service.NewTenantService(
+		service.WithTenantServiceDB(db),
+	))
+
+	// Seed is idempotent, but multi-instance production deployments
+	// should set SEED_ON_START=false and run cmd/seed as a one-off Job.
+	if s.Cfg.SeedOnStart {
+		if err := admin.Seed(db, s.Cfg.AdminUser, s.Cfg.AdminPassword); err != nil {
+			return fmt.Errorf("seed admin: %w", err)
+		}
+	}
+
+	if s.Cfg.WebRoot != "" {
+		if info, err := os.Stat(s.Cfg.WebRoot); err == nil && info.IsDir() {
+			httpSrv.Webroot("/", true, http.Dir(s.Cfg.WebRoot))
+		} else {
+			log.Printf("warning: web root %s not found; serving API only (run `make web`)", s.Cfg.WebRoot)
+		}
+	}
+	return nil
+}

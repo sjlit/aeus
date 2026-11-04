@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/sjlit/aeus/admin/auth"
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/admin/pb"
 	"github.com/sjlit/aeus/pkg/errs"
@@ -47,6 +48,9 @@ func NewTenantService(opts ...TenantServiceOption) *TenantService {
 // unfiltered: tenants are global, and a disabled tenant is still a
 // selectable option (status gates login, not listing).
 func (s *TenantService) ListTenantOptions(ctx context.Context, _ *pb.Empty) (*pb.ListTenantOptionsResponse, error) {
+	if err := s.requireSuper(ctx); err != nil {
+		return nil, err
+	}
 	var tenants []models.Tenant
 	if err := s.opts.DB.WithContext(ctx).Find(&tenants).Error; err != nil {
 		return nil, err
@@ -62,6 +66,9 @@ func (s *TenantService) ListTenantOptions(ctx context.Context, _ *pb.Empty) (*pb
 // Tenant returns the stable wire shape of the tenant with the given
 // id, or ErrNotFound.
 func (s *TenantService) Tenant(ctx context.Context, req *pb.TenantRequest) (*pb.TenantInfo, error) {
+	if err := s.requireSuper(ctx); err != nil {
+		return nil, err
+	}
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -73,4 +80,27 @@ func (s *TenantService) Tenant(ctx context.Context, req *pb.TenantRequest) (*pb.
 		return nil, err
 	}
 	return &pb.TenantInfo{Id: t.ID, Name: t.Name, Status: t.Status, CreatedAt: t.CreatedAt}, nil
+}
+
+// requireSuper gates tenant-wide reads on the caller's current role.
+// Tenant rows are global (no tenant_id filter), so the route-level
+// permission grant alone is not enough: a non-super role with
+// /tenant/options would see every tenant name. Re-reading the role
+// from the DB means a demotion takes effect immediately.
+func (s *TenantService) requireSuper(ctx context.Context) error {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return errs.ErrAccessDenied
+	}
+	var role models.Role
+	if err := s.opts.DB.WithContext(ctx).Where("`key` = ?", claims.Role).First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errs.ErrAccessDenied
+		}
+		return err
+	}
+	if !role.IsSuper {
+		return errs.ErrAccessDenied
+	}
+	return nil
 }

@@ -305,7 +305,7 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 
 **执行时机**：checker 在 JWT 中间件 **token 验证通过之后、claims 写入 ctx 之前**运行（`middleware/auth/jwt.go`）——它以参数形式接收解析出的 claims，**不能**依赖 `auth.ClaimsFromContext`；后续 handler 与 GORM 租户回调才从 ctx 读 claims。
 
-**请求标识**：`metadata.RequestMethod + " " + metadata.RequestPath`。transport/http 写入的 `RequestPath` 是 gin 的 **FullPath 路由模板**（如 `PUT /system/sys_user/:id`），与 `permissionCode` 生成 `sys_permissions.data` 的 `"<METHOD> <URI>"` 格式同构，二者精确匹配。
+**请求标识**：`metadata.RequestMethod + " " + metadata.RequestRoute`。transport/http 写入的 `RequestRoute` 是 gin 的 **FullPath 路由模板**（如 `PUT /system/sys_user/:id`），与 `permissionCode` 生成 `sys_permissions.data` 的 `"<METHOD> <URI>"` 格式同构，二者精确匹配。仅有 `RequestPath`、没有 `RequestRoute` 的嵌入方会回退到 `RequestPath`；NoRoute/静态请求的 `RequestRoute` 为空，checker 直接放行。
 
 **判定流程**（仅 `RequestProtocol == "http"` 时生效，CLI / 其它协议直接放行）：
 
@@ -322,7 +322,7 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 - **fail-closed 默认拒绝**：未收录路由（包括新加的业务 RPC）默认拒绝；自助路由（`/user/profile`、`/user/menus`、`/menu/tree` 等）由 `defaultCheckerAllowlist` 放行；admin 的 CRUD 与业务 RPC 在 `derive.go` 中写入 `sys_permissions`，由 `Seed` 授给超管、由运维按角色授权；
 - **目标级守卫**：通用 REST 的角色变更、super 角色/用户的 status 更新和删除都要求调用者自身是 super；仅靠路由级 `sys_permissions` 不够，否则拥有用户管理权限的非 super 角色可以禁用/删除超管；
 - **`WithCheckerAllowlist` 是 bypass**：命中即跳过目录与角色校验。它不会让检查更严格；新增 bypass 必须能说明“该路由由其他机制保护或本就公开”；
-- **基础设施路由**：NoRoute/静态文件（`FullPath` 为空）、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json` 不属于业务 API，checker 直接放行，仍由 JWT 负责认证；否则 fail-closed 会把静态资源/404 误报成 403；
+- **基础设施路由**：NoRoute/静态文件（`RequestRoute` 为空）、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json` 不属于业务 API，checker 直接放行，仍由 JWT 负责认证；否则 fail-closed 会把静态资源/404 误报成 403；JWT 的 `WithAllow("/assets/*")` 等需要放行静态资源本身；
 - **租户隔离显式化**：授权查询显式过滤 `tenant_id`——checker 运行时 claims 尚未进入 ctx，GORM 租户回调不会自动过滤，不显式传会导致跨租户串权；
 - **接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
 - **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker（`/auth/logout` 也应加入该列表，见下方会话说明）；
@@ -480,7 +480,7 @@ s := admin.New(
 | `Audit` | `sys_audits` | ✅ | 审计日志：`uid`、`action`（`create` / `update` / `delete`，带颜色）、`module`、`table`、`data`（变更内容，size 10240）。`WithAudit(true)` 开启后由全局钩子自动写入（见「操作审计」一节） |
 | `LoginLog` | `sys_login_logs` | ✅ | 登录日志：`uid`、`ip`、`browser`、`os`、`platform`、SHA-256 `access_token`（不入参；audit 用）、`user_agent` |
 
-所有模型在 `Setup` 时由 rest/v3 自动 `AutoMigrate`，无需手动迁移。模型上的 `scenarios`、`rule`、`enum` 等标签驱动 rest/v3 的字段可见性与校验（如 `User.Uid` 的 `rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`）。
+所有模型默认在 `Setup` 时由 rest/v3 自动 `AutoMigrate`，无需手动迁移。生产环境可用 `admin.WithAutoMigrate(false)` 关闭建表 DDL，先执行显式迁移，再启动服务；`sys_schemas` 元数据仍会在资源注册时同步。模型上的 `scenarios`、`rule`、`enum` 等标签驱动 rest/v3 的字段可见性与校验（如 `User.Uid` 的 `rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`）。
 
 ## Migrations
 
@@ -777,10 +777,10 @@ pb.RegisterTenantServiceRouter(httpSrv, service.NewTenantService(service.WithTen
 
 租户 CRUD 走 rest/v3 通用路径 `/system/sys_tenants`（同 User/Role 形态）。
 
-> **⚠️ 访问控制（应用方必须确认）**：`Tenant` 模型**没有 `tenant_id` 列**，租户隔离回调对其天然跳过。`/system/sys_tenant*` 与 `/tenant/*` 已写入 `sys_permissions` 目录，默认 fail-closed 下需要角色授权（超管由 `Seed` 自动获得）；如果应用省略 `PermissionChecker` 或把租户路由授给非超管角色，它们仍会暴露给普通 JWT 用户。建议额外挂 super-admin 专属中间件，例如（IsSuper 检查与 `UserService.ResetPassword` 同款，见 `service/user.go`）：
+> **⚠️ 访问控制**：`Tenant` 模型**没有 `tenant_id` 列**，租户隔离回调对其天然跳过。`TenantService` 的两个 RPC 已在服务层强制要求 super 角色；`/system/sys_tenant*` 仍走 `sys_permissions` 目录（fail-closed），建议只把写权限授给 super 角色。如果应用还希望对 `sys_tenant*` REST 路由增加一层显式守卫，可参考下面的模式（`TenantService` 本身不需要这层）：
 >
 > ```go
-> // 按路径前缀拦截租户管理路由,仅允许 IsSuper 角色访问
+> // 仅保护通用 REST 的租户写路径;TenantService 已有服务层检查
 > func superAdminOnly(db *gorm.DB) middleware.Middleware {
 >     return func(next middleware.Handler) middleware.Handler {
 >         return func(ctx context.Context) error {

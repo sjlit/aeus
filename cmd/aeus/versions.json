@@ -1,0 +1,5 @@
+{
+  "root": "v1.0.0",
+  "transport/http": "v1.0.0",
+  "admin": "v1.0.0"
+}

@@ -328,7 +328,17 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 			md.Set(metadata.RequestID, uuid.New().String())
 		}
 		md.Set(metadata.RequestProtocol, Protocol)
-		md.Set(metadata.RequestPath, ginCtx.FullPath())
+		route := ginCtx.FullPath()
+		requestPath := route
+		if requestPath == "" {
+			// NoRoute/static requests have no route template. The raw
+			// path is what JWT allowlists and rate-limit keys need;
+			// RequestRoute stays empty so the permission checker can
+			// treat the request as infrastructure.
+			requestPath = ginCtx.Request.URL.Path
+		}
+		md.Set(metadata.RequestPath, requestPath)
+		md.Set(metadata.RequestRoute, route)
 		md.Set(metadata.RequestMethod, ginCtx.Request.Method)
 		ctx = metadata.NewContext(ctx, md)
 

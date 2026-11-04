@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"github.com/glebarez/sqlite"
 	"github.com/sjlit/aeus/admin"
@@ -82,7 +81,6 @@ func (s *ScopeContext) Init(ctx context.Context) (err error) {
 		// The mock intentionally exercises the multi-tenant path. Real
 		// single-tenant projects can omit this option.
 		admin.WithMultiTenant(true),
-		admin.WithVueOutputDir(vueOutputDir()),
 	)
 	// Wire the framework-injected *http.Server into admin so Setup
 	// can register REST + RPC routes onto the same gin engine that
@@ -99,16 +97,6 @@ func dbPath() string {
 		return v
 	}
 	return defaultDBPath
-}
-
-// vueOutputDir resolves the optional Vue view-generation directory.
-// The default assumes `go run .` from admin/cmd/mock; override with
-// AEUS_VUE_OUTPUT_DIR when running from a different working directory.
-func vueOutputDir() string {
-	if v := os.Getenv("AEUS_VUE_OUTPUT_DIR"); v != "" {
-		return v
-	}
-	return filepath.Join("..", "..", "web", "src", "views")
 }
 
 // NewScopeContext constructs an empty ScopeContext; the aeus framework

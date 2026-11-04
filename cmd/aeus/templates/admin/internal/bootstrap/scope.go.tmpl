@@ -1,0 +1,80 @@
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/glebarez/sqlite"
+	"github.com/sjlit/aeus/admin"
+	ghttp "github.com/sjlit/aeus/transport/http"
+	"gorm.io/gorm"
+
+	"__AEUS_MODULE__/internal/config"
+)
+
+// Scope owns the long-lived resources: config, HTTP server, DB and the
+// admin server. The aeus framework fills HTTP via reflection because
+// WithServer was registered before WithScope; see cmd/server/main.go.
+type Scope struct {
+	Cfg   config.Config
+	HTTP  *ghttp.Server
+	DB    *gorm.DB
+	Admin *admin.Server
+}
+
+// NewScope creates an empty scope; Init runs before ServiceLoader.Init.
+func NewScope(cfg config.Config) *Scope {
+	return &Scope{Cfg: cfg}
+}
+
+// Init opens the database and constructs the admin server. Route
+// registration and seeding happen in Loader.Init so failures surface
+// through the framework's lifecycle.
+func (s *Scope) Init(context.Context) error {
+	if s.HTTP == nil {
+		return fmt.Errorf("bootstrap: HTTP server was not injected")
+	}
+	db, err := OpenDB(s.Cfg)
+	if err != nil {
+		return err
+	}
+	s.DB = db
+
+	opts := []admin.Option{
+		admin.WithDB(db),
+		admin.WithRouter(s.HTTP),
+		admin.WithOpenAPI(true),
+		admin.WithAudit(true),
+		admin.WithAutoMigrate(s.Cfg.AutoMigrate),
+	}
+	if s.Cfg.MultiTenant {
+		opts = append(opts, admin.WithMultiTenant(true))
+	}
+	s.Admin = admin.New(opts...)
+	return nil
+}
+
+// OpenDB opens the SQLite database and creates its parent directory.
+// ":memory:" is kept single-connection so tests and local runs see one
+// consistent in-memory database.
+func OpenDB(cfg config.Config) (*gorm.DB, error) {
+	if cfg.DBDSN != ":memory:" {
+		if dir := filepath.Dir(cfg.DBDSN); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("create database directory: %w", err)
+			}
+		}
+	}
+	db, err := gorm.Open(sqlite.Open(cfg.DBDSN), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	if cfg.DBDSN == ":memory:" {
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.SetMaxOpenConns(1)
+		}
+	}
+	return db, nil
+}

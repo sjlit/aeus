@@ -40,7 +40,6 @@ time=... level=INFO msg=started
 | `ADMIN_USER` | `admin` | Seed 创建的管理员用户名 |
 | `ADMIN_PASSWORD` | `Admin123` | Seed 创建的管理员密码 |
 | `AEUS_DB_PATH` | `./mock.db` | SQLite 文件路径；从仓库根目录运行时建议显式设置，避免在根目录生成 `mock.db` |
-| `AEUS_VUE_OUTPUT_DIR` | `../../web/src/views` | 自动生成 Vue 视图的目录（仅启用生成时使用） |
 
 dev 默认值写在 `scope.go` 的 `default*` 常量里,改名/换值直接改源码即可。
 
