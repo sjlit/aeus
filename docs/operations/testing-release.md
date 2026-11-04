@@ -86,6 +86,10 @@ git add -A && git commit -m "chore: sync go.sum after release"
 git push origin main
 ```
 
+> tag 指向 sync-sums 之前的提交，因为发布时新 tag 还不在远端。模块消费者不受影响
+> （他们使用自己的 `go.sum`）；从 tag checkout 本地开发时，先在该模块执行
+> `go mod tidy` 即可。
+
 然后验证：
 
 ```bash
