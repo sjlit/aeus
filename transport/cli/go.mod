@@ -6,7 +6,7 @@ require (
 	github.com/go-playground/form/v4 v4.3.0
 	github.com/mattn/go-runewidth v0.0.23
 	github.com/peterh/liner v1.2.2
-	github.com/sjlit/aeus v1.1.0
+	github.com/sjlit/aeus v1.1.1
 )
 
 require (
