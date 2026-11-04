@@ -288,11 +288,11 @@ go test ./...
 - `security_guards_test.go` — super 角色/用户的目标级保护、角色变更仅 super、UID/Username 跨字段唯一、单租户 REST 创建第二个 admin 后登录
 - `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/强制租户）
 - `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由默认**拒绝**（fail-closed）/ 自助路由放行 / 基础设施路由放行 / 显式 allowlist bypass / `WithCheckerFailOpen(true)` 兼容 / allowlist 通配段边界 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
-- `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table
+- `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table、Seed 后字段不重复、租户过滤
 - `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` + `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
 - `register_model_options_test.go` — `RegisterModel` per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）的覆盖语义、显式空 spec / 空 scenarios 的边界
 - `vue_gen_test.go` — `buildVueContent` / `vuePathForModel` / `generateVueFile` / `generateVueForResource`：模板占位符替换、路径遍历保护、已存在文件跳过、失败 warn 不中断
-- `seed_test.go` / `seed_tenant_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动、固定 resolver 下的授权租户、跨租户孤儿回填、per-tenant `sys_schemas` 克隆
+- `seed_test.go` / `seed_tenant_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动、固定 resolver 下的授权租户、跨租户孤儿回填、多租户 `sys_schemas` 克隆 / 单租户不克隆
 - `responder_test.go` — envelope 解包、wrapped error 链透传、`{code,message,data}` 形状
 - `models/menu_method_test.go` / `models/permission_method_test.go` / `models/role_method_test.go` / `models/tenant_test.go` / `models/user_test.go` / `models/loginlog_test.go` — `Menu.BuildTree` / `Role.BeforeUpdate` Key 同步 + 软删级联 / `Role.AfterDelete` 硬删级联 / `Permission.ListByType` / `Tenant.BeforeCreate` uuid 回填 / `User.ValidatePassword` / `LoginLog.BeforeCreate` token 哈希 等模型方法的单测
 - `dbcache/cacher_test.go` / `dbcache/depend_test.go` — 读穿透缓存命中 / miss / reload / 版本标记失配重载 / 宽限窗 / 共享 cache 后端
