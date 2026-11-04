@@ -172,16 +172,18 @@ func EnsureRolePermissionMenu(db *gorm.DB) error {
 //     healed; manual edits to a super role's grants are rejected at
 //     the API layer (RoleService.ReplaceRolePermissions), this heal is
 //     the safety net for anything that slips through.
-//   - per-tenant sys_schemas clones: every active row in sys_tenants
-//     gets its own copy of every schema template row — those written
-//     by rest/v3's schema.AutoMigrate with tenant_id left at the Go
-//     zero value (empty string).  The copy's tenant_id is set to the
-//     tenant id, primary key / timestamps reset so the database
-//     assigns fresh values, and the (module_name, table_name, column)
-//     triple is the per-tenant uniqueness key.  Runs LAST so any
-//     new schema templates registered by an application upgrade are
-//     picked up on the next Seed call and fanned out to every tenant
-//     in a single pass.
+//   - per-tenant sys_schemas clones (multi-tenant only): every active
+//     row in sys_tenants gets its own copy of every schema template
+//     row — those written by rest/v3's schema.AutoMigrate with
+//     tenant_id left at the Go zero value (empty string).  The copy's
+//     tenant_id is set to the tenant id, primary key / timestamps
+//     reset so the database assigns fresh values, and the
+//     (module_name, table_name, column) triple is the per-tenant
+//     uniqueness key.  Runs LAST so any new schema templates
+//     registered by an application upgrade are picked up on the next
+//     Seed call and fanned out to every tenant in a single pass.
+//     Single-tenant deployments skip this step: they read the global
+//     templates, so cloning would only duplicate every field.
 //
 // The grants reflect the catalogs as of the Seed call: run Setup (which
 // populates sys_menus / sys_permissions) before Seed so a fresh database
@@ -341,8 +343,15 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		// having no business competing for the same rows.  A failure
 		// here rolls back the entire transaction so the database never
 		// lands in a half-bootstrapped state.
-		if err := ensureTenantSchemas(tx); err != nil {
-			return err
+		//
+		// Single-tenant deployments keep the global templates only:
+		// there is no tenant-scoped reader to consume the clones, and
+		// returning templates plus clones duplicates every field in
+		// the schema API.
+		if tenantScopingEnabled(tx) {
+			if err := ensureTenantSchemas(tx); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -389,8 +398,12 @@ type schemaTuple struct {
 // with TenantID at its Go zero value during Setup — that produces
 // a single, global catalog the rest of the codebase queries
 // module-by-module — and this function is the bridge that gives
-// each tenant its own scoped copy so future per-tenant reads can
-// filter by tenant_id without losing the column catalog.
+// each tenant its own scoped copy so tenant-scoped reads can filter
+// by tenant_id without losing the column catalog.
+//
+// Seed only calls this when installTenantScope has registered its
+// query callback.  Without that callback nothing filters schema reads
+// by tenant, so cloning would make the global catalog ambiguous.
 //
 // Order of operations inside Seed matters: this runs AFTER
 // grantFullCatalog so the role/user/grants converge is already

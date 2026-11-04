@@ -94,13 +94,14 @@ func RegisterModelTiersEndpoint(s *Server) (http.HandlerFunc, error) {
 				"model not registered for module="+module+", table="+table, nil)
 			return
 		}
-		if err := requireSelectableColumns(r.Context(), s.opts.DB, module, table, parent, label, value); err != nil {
+		schemaTenant := schemaTenantID(s.opts, r.Context())
+		if err := requireSelectableColumns(r.Context(), s.opts.DB, module, table, schemaTenant, parent, label, value); err != nil {
 			writeEnvelope(w, int(errs.CodeInvalid), err.Error(), nil)
 			return
 		}
 		var tenant string
-		if s.opts.MultiTenant && s.opts.TenantResolver != nil && modelHasTenantIDColumn(s.opts.DB, model) {
-			tenant = s.opts.TenantResolver(r.Context())
+		if modelHasTenantIDColumn(s.opts.DB, model) {
+			tenant = schemaTenant
 		}
 		items, err := queryModelTiers(r.Context(), s.opts.DB, model, tenant, parent, label, value, valueType)
 		if err != nil {

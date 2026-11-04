@@ -71,6 +71,71 @@ func TestSeed_FixedResolverKeepsGrantsOnRoleTenant(t *testing.T) {
 	}
 }
 
+// TestSeed_SingleTenantSkipsSchemaClones pins the single-tenant half
+// of the duplicate-field regression: without tenant scoping there is no
+// reader that filters by tenant_id, so Seed must keep the global schema
+// templates only.
+func TestSeed_SingleTenantSkipsSchemaClones(t *testing.T) {
+	db := newTestDB(t)
+	tmpl := &schema.Schema{ModuleName: "m", TableName: "t", Column: "id", Position: 1}
+	if err := db.Create(tmpl).Error; err != nil {
+		t.Fatalf("create schema template: %v", err)
+	}
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	var clones int64
+	if err := db.Model(&schema.Schema{}).
+		Where("tenant_id <> ?", "").Count(&clones).Error; err != nil {
+		t.Fatalf("count schema clones: %v", err)
+	}
+	if clones != 0 {
+		t.Errorf("schema clones = %d, want 0 in single-tenant mode", clones)
+	}
+}
+
+// TestSeed_MultiTenantClonesSchemaTemplates is the counterpart: when
+// tenant scoping is active, every tenant needs its own schema rows.
+func TestSeed_MultiTenantClonesSchemaTemplates(t *testing.T) {
+	db := newTestDB(t)
+	installTenantScope(db, func(context.Context) string { return "tenant-a" })
+	if !tenantScopingEnabled(db) {
+		t.Fatal("tenant scope callback not detected")
+	}
+	tmpl := &schema.Schema{ModuleName: "m", TableName: "t", Column: "id", Position: 1}
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(tmpl).Error; err != nil {
+		t.Fatalf("create schema template: %v", err)
+	}
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	ctx := WithoutTenant(context.Background())
+	var clone schema.Schema
+	if err := db.WithContext(ctx).
+		Where("tenant_id = ? AND module_name = ? AND table_name = ? AND `column` = ?",
+			models.DefaultTenantID, "m", "t", "id").First(&clone).Error; err != nil {
+		t.Fatalf("tenant schema clone not found: %v", err)
+	}
+
+	// A second Seed must not add another copy.
+	var before int64
+	if err := db.WithContext(ctx).Model(&schema.Schema{}).Count(&before).Error; err != nil {
+		t.Fatalf("count schemas: %v", err)
+	}
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("second Seed: %v", err)
+	}
+	var after int64
+	if err := db.WithContext(ctx).Model(&schema.Schema{}).Count(&after).Error; err != nil {
+		t.Fatalf("count schemas: %v", err)
+	}
+	if after != before {
+		t.Errorf("schema rows after second Seed = %d, want %d", after, before)
+	}
+}
+
 func TestSeed_CreatesAdminRoleAndUser(t *testing.T) {
 	db := newTestDB(t)
 	if err := Seed(db, "admin", "admin123"); err != nil {

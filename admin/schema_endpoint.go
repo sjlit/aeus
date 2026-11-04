@@ -58,7 +58,7 @@ func RegisterSchemaEndpoint(opts *Options) (http.HandlerFunc, error) {
 			writeEnvelope(w, int(errs.CodeInvalid), "module and table required", nil)
 			return
 		}
-		items, err := querySchemas(r.Context(), db, module, table)
+		items, err := querySchemas(r.Context(), db, module, table, schemaTenantID(opts, r.Context()))
 		if err != nil {
 			writeEnvelope(w, int(errs.CodeInvalid), err.Error(), nil)
 			return
@@ -93,16 +93,43 @@ func parseSchemaPath(p string) (module, table string, ok bool) {
 	return parts[1], parts[2], true
 }
 
-// querySchemas pulls the full rest/v3 schema row set for a
-// (module, table) pair. Returns an empty slice (not an error) when the
-// table is unknown; the handler decides whether to surface that as a
-// 4004.
+// schemaTenantID returns the tenant whose sys_schemas rows back the
+// schema metadata endpoint. Single-tenant deployments read the global
+// template rows (tenant_id = ""), because Seed fans those templates out
+// to every tenant as well; reading both sets would duplicate every
+// column in the frontend.
+func schemaTenantID(opts *Options, ctx context.Context) string {
+	if opts == nil || !opts.MultiTenant || opts.TenantResolver == nil {
+		return ""
+	}
+	return opts.TenantResolver(ctx)
+}
+
+// querySchemas pulls the rest/v3 schema row set for a (module, table,
+// tenant) triple. Returns an empty slice (not an error) when the table
+// is unknown; the handler decides whether to surface that as a 4004.
 //
 // We use schema.GetSchemas (not GetVisibleSchemas) because the
 // frontend needs every column regardless of scenario — each row carries
 // its own scenarios/visible/readonly/disable metadata, which the
 // renderer evaluates per-scenario at use time.
-func querySchemas(ctx context.Context, db *gorm.DB, module, table string) ([]schema.Schema, error) {
-	tx := db.Unscoped()
-	return schema.GetSchemas(ctx, tx, module, table)
+//
+// The tenant filter is explicit and bypasses the GORM tenant callback:
+// the schema table carries tenant_id for every deployment, while the
+// callback is only installed when MultiTenant is enabled. Filtering in
+// SQL alone would also be skipped by rest/v3's schema cache (keyed by
+// module/table only), so the rows are filtered once more in memory.
+func querySchemas(ctx context.Context, db *gorm.DB, module, table, tenantID string) ([]schema.Schema, error) {
+	tx := db.Unscoped().Where("tenant_id = ?", tenantID)
+	rows, err := schema.GetSchemas(WithoutTenant(ctx), tx, module, table)
+	if err != nil {
+		return nil, err
+	}
+	out := rows[:0]
+	for _, row := range rows {
+		if row.TenantID == tenantID {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }

@@ -39,6 +39,16 @@ func tenantBypassed(ctx context.Context) bool {
 // the hot path becomes a single Load.
 var __tenantSchemaCache sync.Map // map[*schema.Schema]bool
 
+// Callback names are part of the package's internal contract: Seed uses
+// the query callback's presence to decide whether per-tenant schema
+// clones are needed.
+const (
+	tenantQueryCallback  = "aeus:tenant:query"
+	tenantUpdateCallback = "aeus:tenant:update"
+	tenantDeleteCallback = "aeus:tenant:delete"
+	tenantCreateCallback = "aeus:tenant:create"
+)
+
 // installTenantScope wires GORM callbacks so every read/update/delete on
 // a model that carries the `tenant_id` column is automatically scoped
 // to the tenant id produced by the resolver, and every create on such a
@@ -69,22 +79,22 @@ func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 	}
 
 	query := db.Callback().Query()
-	query.Before("gorm:query").Register("aeus:tenant:query", func(tx *gorm.DB) {
+	query.Before("gorm:query").Register(tenantQueryCallback, func(tx *gorm.DB) {
 		applyTenantScope(tx, resolver)
 	})
 
 	update := db.Callback().Update()
-	update.Before("gorm:update").Register("aeus:tenant:update", func(tx *gorm.DB) {
+	update.Before("gorm:update").Register(tenantUpdateCallback, func(tx *gorm.DB) {
 		applyTenantScope(tx, resolver)
 	})
 
 	delete := db.Callback().Delete()
-	delete.Before("gorm:delete").Register("aeus:tenant:delete", func(tx *gorm.DB) {
+	delete.Before("gorm:delete").Register(tenantDeleteCallback, func(tx *gorm.DB) {
 		applyTenantScope(tx, resolver)
 	})
 
 	create := db.Callback().Create()
-	create.Before("gorm:create").Register("aeus:tenant:create", func(tx *gorm.DB) {
+	create.Before("gorm:create").Register(tenantCreateCallback, func(tx *gorm.DB) {
 		if !hasTenantIDColumn(tx.Statement.Schema) || tenantBypassed(tx.Statement.Context) {
 			return
 		}
@@ -94,6 +104,14 @@ func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 		}
 		setTenantID(tx.Statement.ReflectValue, tid)
 	})
+}
+
+// tenantScopingEnabled reports whether installTenantScope has registered
+// its query callback on db. Single-tenant deployments skip it, and Seed
+// uses the same signal to avoid cloning schema metadata that no reader
+// will ever filter by tenant.
+func tenantScopingEnabled(db *gorm.DB) bool {
+	return db != nil && db.Callback().Query().Get(tenantQueryCallback) != nil
 }
 
 // applyTenantScope is shared by Query / Update / Delete: it calls

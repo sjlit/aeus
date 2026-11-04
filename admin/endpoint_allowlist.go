@@ -38,8 +38,8 @@ var _readScenarios = []string{
 // The lookup fails closed: when sys_schemas has no rows for the pair
 // (metadata missing or table never registered), an empty set with an
 // explanatory error is returned instead of an implicit allow-all.
-func selectableColumnsDB(ctx context.Context, db *gorm.DB, module, table string) (map[string]struct{}, error) {
-	rows, err := querySchemas(ctx, db, module, table)
+func selectableColumnsDB(ctx context.Context, db *gorm.DB, module, table, tenantID string) (map[string]struct{}, error) {
+	rows, err := querySchemas(ctx, db, module, table, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("load sys_schemas for %s/%s: %w", module, table, err)
 	}
@@ -65,8 +65,8 @@ func selectableColumnsDB(ctx context.Context, db *gorm.DB, module, table string)
 // the selectable allowlist for (module, table).  Returns a
 // client-facing error naming the first offending column so the handler
 // can surface it as 1001 Invalid.
-func requireSelectableColumns(ctx context.Context, db *gorm.DB, module, table string, cols ...string) error {
-	allowed, err := selectableColumnsDB(ctx, db, module, table)
+func requireSelectableColumns(ctx context.Context, db *gorm.DB, module, table, tenantID string, cols ...string) error {
+	allowed, err := selectableColumnsDB(ctx, db, module, table, tenantID)
 	if err != nil {
 		return err
 	}

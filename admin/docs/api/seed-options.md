@@ -71,6 +71,10 @@ Seed(db, ...) // 再以调用时刻的目录为准,补全超管授权
 
 颠倒顺序的后果:新目录这次不会授权,下次启动才会补齐。应用升级注册新模型后,同样靠下一次启动的 Seed 补齐。
 
+**多租户 schema 克隆**:启用多租户时(`Setup` 已安装租户回调),Seed 还会把
+全局 `sys_schemas` 模板行按 `(module, table, column)` 克隆到每个 active tenant。
+单租户部署不执行克隆——它读取全局模板,克隆只会让 schema 接口返回两套字段。
+
 ## 11.3 AuthServiceOptions
 
 ```go

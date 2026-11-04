@@ -145,6 +145,89 @@ func TestSchemaEndpoint_HappyPath(t *testing.T) {
 	}
 }
 
+// TestSchemaEndpoint_NoDuplicateColumnsAfterSeed pins the regression
+// where Seed fans the global schema templates out to the default
+// tenant, and the endpoint returned both the templates and the clones.
+// Single-tenant deployments must read only the templates.
+func TestSchemaEndpoint_NoDuplicateColumnsAfterSeed(t *testing.T) {
+	db, httpSrv := setupSchemaDB(t)
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	rec := callEndpoint(t, httpSrv, "/schema/system/sys_users")
+
+	var env struct {
+		Code int             `json:"code"`
+		Data []schema.Schema `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	if env.Code != 0 {
+		t.Fatalf("env.Code = %d; body=%s", env.Code, rec.Body.String())
+	}
+
+	seen := make(map[string]int, len(env.Data))
+	for _, row := range env.Data {
+		seen[row.Column]++
+		if row.TenantID != "" {
+			t.Errorf("column %q came from tenant %q; single-tenant reads must use global templates",
+				row.Column, row.TenantID)
+		}
+	}
+	for column, count := range seen {
+		if count != 1 {
+			t.Errorf("column %q appears %d times, want 1", column, count)
+		}
+	}
+	if len(env.Data) == 0 {
+		t.Fatal("schema data is empty")
+	}
+}
+
+func TestSchemaTenantID(t *testing.T) {
+	ctx := context.Background()
+	if got := schemaTenantID(&Options{}, ctx); got != "" {
+		t.Errorf("single-tenant schemaTenantID = %q, want empty", got)
+	}
+	opts := &Options{
+		MultiTenant:    true,
+		TenantResolver: func(context.Context) string { return "tenant-a" },
+	}
+	if got := schemaTenantID(opts, ctx); got != "tenant-a" {
+		t.Errorf("multi-tenant schemaTenantID = %q, want tenant-a", got)
+	}
+}
+
+func TestQuerySchemas_FiltersTenant(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.AutoMigrate(&schema.Schema{}); err != nil {
+		t.Fatalf("migrate schema: %v", err)
+	}
+	rows := []schema.Schema{
+		{ModuleName: "m", TableName: "t", Column: "id", Position: 1},
+		{ModuleName: "m", TableName: "t", Column: "id", Position: 1, TenantID: "tenant-a"},
+		{ModuleName: "m", TableName: "t", Column: "id", Position: 1, TenantID: "tenant-b"},
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		t.Fatalf("seed schemas: %v", err)
+	}
+
+	got, err := querySchemas(context.Background(), db, "m", "t", "tenant-a")
+	if err != nil {
+		t.Fatalf("querySchemas: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d rows, want 1; rows=%+v", len(got), got)
+	}
+	if got[0].TenantID != "tenant-a" {
+		t.Errorf("TenantID = %q, want tenant-a", got[0].TenantID)
+	}
+}
+
 func TestSchemaEndpoint_UnknownModuleTable(t *testing.T) {
 	_, httpSrv := setupSchemaDB(t)
 	rec := callEndpoint(t, httpSrv, "/schema/system/nonexistent_table")

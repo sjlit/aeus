@@ -172,7 +172,7 @@ log.Fatal(httpSrv.Start(context.Background()))
 4. **孤儿租户回填**：若超管角色的 `tenant_id` 不等于默认 uuid，再 `FirstOrCreate` 一条 `Name="默认租户"`、`Status="enabled"` 的同名租户，修复历史孤儿 uuid（早于 tenant 模型存在的库）；
 5. **超管用户**：`FirstOrCreate` 写入 `UID="admin"`、`Username=user`、`RoleKey="admin"`、`Password=pass`（`BeforeCreate` bcrypt），落到默认租户；
 6. **超管角色全量授权**：找到所有 `is_super=true` 的角色，按 `sys_menus.component` 与 `sys_permissions.data` 的差集补齐 `sys_role_permissions`（**add-only**，已存在的 / 已被运维手动删的会自愈，不删除现存的）；
-7. **per-tenant `sys_schemas` 克隆**：`rest/v3` 在 `Setup` 阶段写 `sys_schemas` 时 `tenant_id` 留空（模板态），Seed 把模板按 `(module, table, column)` 去重克隆到每个 active tenant，**add-only**（模板消失时保留旧副本；模板变更不覆盖现有副本）。
+7. **per-tenant `sys_schemas` 克隆（仅多租户）**：`rest/v3` 在 `Setup` 阶段写 `sys_schemas` 时 `tenant_id` 留空（模板态）；启用多租户（`Setup` 已安装租户回调）时，Seed 把模板按 `(module, table, column)` 去重克隆到每个 active tenant，**add-only**（模板消失时保留旧副本；模板变更不覆盖现有副本）。单租户部署只保留全局模板，避免 schema 接口同时返回模板与副本导致字段重复。
 
 > **不要在 `Setup` 之前调 `Seed`**：分区容器（步骤 1）走的是 `db.Create(&models.Menu{})`，需要 `Setup` 先 `AutoMigrate(&models.Menu{})`；授权补齐（步骤 6）需要 Setup 先建好 `sys_menus` 与 `sys_permissions`。否则步骤 1 失败，事务回滚；步骤 6 退化为空（无菜单可授）。
 >

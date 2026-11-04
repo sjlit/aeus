@@ -136,6 +136,8 @@ GET /schema/:module/:table
 - 必须挂在 JWT 之后,无 allowlist 短路。
 - 路径参数 `:module`、`:table` 必须非空,否则 `1001 Invalid`。
 - 表名未注册 → `4004 NotFound`。
+- **租户选择**:单租户返回全局模板行(`tenant_id=""`);多租户返回当前 JWT
+  租户的行。Seed 会把模板克隆到每个租户,但接口不会同时返回两套字段。
 - 由 admin responder 处理的业务响应 HTTP 状态为 `200`,业务码由 `body.code` 决定;JWT/限流/404 等传输层错误使用标准状态码(见 [overview.md](./overview.md))。
 
 注册入口(`schema_endpoint.go`):
@@ -154,15 +156,18 @@ func RegisterSchemaEndpoint(opts *Options) (http.HandlerFunc, error)
 | 方法 | 路径 | 必填 query | 可选 query | 说明 |
 |------|------|-----------|-----------|------|
 | `GET` | `/schema/:module/:table` | — | — | 返回该表的全量列元数据（`[]schema.Schema`） |
-| `GET` | `/rest/model-types/:module/:table` | `label`, `value` | `valueType`（默认 `string`；支持 `int`/`int64`/`uint`/`uint64`）、`tenant` | 扁平选项列表 `[{label, value}, ...]` |
-| `GET` | `/rest/model-tiers/:module/:table` | `parent`, `label`, `value` | `valueType`、`tenant` | 层级树 `[{label, value, children:[...]}, ...]` |
+| `GET` | `/rest/model-types/:module/:table` | `label`, `value` | `valueType`（默认 `string`；支持 `int`/`int64`/`uint`/`uint64`） | 扁平选项列表 `[{label, value}, ...]` |
+| `GET` | `/rest/model-tiers/:module/:table` | `parent`, `label`, `value` | `valueType` | 层级树 `[{label, value, children:[...]}, ...]` |
 
 实现细节：
 
 - **模型查找**：路径参数通过 `Server.modelsByModuleTable["<module>/<table>"]` 反查；
   未注册的 `(module, table)` 返回 `4004 NotFound`。
-- **租户隔离**：`tenant` query 优先，否则走 `s.opts.TenantResolver(r.Context())`；
-  传 `""` 表示跨租户。`Menu` / `Permission` / `Tenant` 等全局模型传 `""`。
+- **租户隔离**：不接受 `tenant` query 覆盖。已启用多租户时，租户来自
+  `s.opts.TenantResolver(r.Context())`；`Menu` / `Permission` / `Tenant`
+  等没有 `tenant_id` 列的全局模型保持跨租户查询。
+- **Schema 元数据**：单租户读取全局模板行（`tenant_id=""`）；多租户按
+  JWT 租户读取该租户的克隆行，避免同时返回模板与副本导致字段重复。
 - **valueType 分发**：按 `valueType` 路由到 `rest.ModelTypes[T]` / `rest.ModelTiers[T]`
   泛型实例，`uint` 等字段直接以 JSON 数字回传。
 - **响应与认证**：统一 admin envelope；必须挂在 JWT 中间件之后，与 CRUD 端点一致。
