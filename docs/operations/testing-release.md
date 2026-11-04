@@ -38,62 +38,66 @@ go test -race ./...
 
 标签格式：根模块 `v1.0.3`，子模块 `transport/http/v1.0.3`。
 
-### 发布步骤
+### 推荐：分阶段发布
+
+跨模块依赖变更时，用两阶段发布让每个子模块 tag 自带完整 `go.sum`：
 
 ```bash
-# 1. 工作区必须干净（release 会拒绝脏工作区）
-git status   # 确保无未提交改动
+# 1. 准备发布提交 + 根模块 tag（子模块暂不打 tag）
+make release-staged VERSION=v1.2.0 \
+  MODULES="admin=v1.2.0 transport/http=v1.2.0"
 
-# 2. 自动检测变更模块，patch+1 并打 tag
+# 2. 推送发布提交和根 tag
+git push origin main
+git push origin v1.2.0
+
+# 3. 推送子模块、同步 go.sum、打子模块 tag 并推送
+make release-publish
+```
+
+`release-staged` 会：
+
+- 检测变更模块并写 `cmd/aeus/versions.json`；
+- 对齐子模块对根模块 / `transport/http` 的 `require`；
+- 提交发布改动并只给根模块打 tag；
+- 在 `.git/aeus-release-state` 写入待发布子模块。
+
+`release-publish` 会按依赖顺序（`admin` 最后）执行：
+
+- 推送 `main` 和根 tag；
+- 在每个子模块运行 `GOWORK=off go mod tidy`；
+- 提交 `go.sum` 变化；
+- 在同步后的提交上打子模块 tag 并推送。
+
+若自上次发布以来没有模块内容变更，`release-staged` 会中止并打印
+`nothing to release: 自上次发布以来没有模块内容变更`。
+
+### 简单发布（兼容路径）
+
+只发布不涉及跨模块依赖的模块时，仍可使用：
+
+```bash
 make release
-
-# 可选参数
-make release DRY_RUN=1                        # 只打印将发布的模块和版本，不执行
-make release VERSION=v1.1.0                   # 根模块升到指定版本
-make release MODULES="transport/http=v1.2.0"  # 指定子模块版本
-
-# 3. 推送
 git push origin main
 git push origin --tags
 ```
 
-若自上次发布以来没有模块内容变更，`make release` 会中止并打印 `nothing to release: 自上次发布以来没有模块内容变更`。
-
-`scripts/release.sh` 还会自动同步本次发布的子模块对根模块的 `require`（即便根模块没发布，也会对齐当前最新根 tag），避免子模块引用过期根版本。
-
-`cmd/aeus/versions.json` 保存脚手架生成的模块版本，发布时需与本次 tag 对齐；否则生成的项目会引用旧版本。
-
-本次脚手架/传输层变更包含新增公开 API 与 MCP/CORS 调整，建议：
+这条路径的子模块 tag 指向 `go.sum` 同步之前的提交，需要额外执行：
 
 ```bash
-make release VERSION=v1.1.0 \
-  MODULES="admin=v1.1.0 transport/http=v1.1.0 transport/cli=v1.0.1 infra/telemetry/prometheus=v1.0.1"
-```
-
-> **发布后验证**：在干净工作区、`GOWORK=off` 下对受影响模块执行 `go build ./...`。子模块新增了根模块包（例如 `pkg/response`）时，根模块必须与 `transport/http`、`admin` 在同一次发布中打 tag；否则子模块会指向不含该包的旧根版本。
-
-#### 同步 go.sum
-
-`release.sh` 只更新模块间的 `require`，无法为尚未推送到远端的 tag 计算 `go.sum`。
-推送 tags 后执行：
-
-```bash
-git push origin main
-git push origin --tags
-
 make sync-sums MODULES="admin transport/http transport/cli infra/telemetry/prometheus"
 git add -A && git commit -m "chore: sync go.sum after release"
 git push origin main
 ```
 
-> tag 指向 sync-sums 之前的提交，因为发布时新 tag 还不在远端。模块消费者不受影响
-> （他们使用自己的 `go.sum`）；从 tag checkout 本地开发时，先在该模块执行
-> `go mod tidy` 即可。
+### 发布后验证
 
-然后验证：
+在干净工作区、`GOWORK=off` 下对受影响模块执行 `go build ./...`。子模块新增了根模块包
+（例如 `pkg/response`）时，根模块必须与 `transport/http`、`admin` 在同一次发布中打 tag；
+否则子模块会指向不含该包的旧根版本。
 
 ```bash
-go install github.com/sjlit/aeus/cmd/aeus@v1.1.0
+go install github.com/sjlit/aeus/cmd/aeus@v1.2.0
 aeus new /tmp/aeus-minimal
 aeus new /tmp/aeus-admin --template=admin
 ```

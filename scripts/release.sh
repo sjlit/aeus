@@ -6,6 +6,11 @@
 #   make release VERSION=v1.1.0                   # 根模块升到指定版本
 #   make release MODULES="transport/http=v1.2.0"  # 指定子模块版本
 #   make release DRY_RUN=1                        # 只打印,不执行
+#   make release-staged                           # 分阶段发布 (推荐)
+#
+# STAGED=1 只提交发布改动并给根模块打 tag，子模块 tag 由
+# release-publish.sh 在根/传输层 tag 推送并同步 go.sum 之后再打，
+# 使每个子模块 tag 都自带完整 go.sum。
 #
 # 兼容性:仅使用 bash 3.2 语法(macOS 自带 /bin/bash),不用关联数组(declare -A)
 # 与 readarray(均为 bash 4+ 特性);模块→版本映射用 "mod=ver" 多行文本 + awk 实现。
@@ -17,6 +22,8 @@ cd "$ROOT"
 VERSION="${VERSION:-}"
 MODULES="${MODULES:-}"
 DRY_RUN="${DRY_RUN:-0}"
+STAGED="${STAGED:-0}"
+STATE_FILE="$ROOT/.git/aeus-release-state"
 
 # 严格 semver:仅 vX.Y.Z(与 semver-bump.sh 的 patch+1 规则一致)
 SEMVER_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
@@ -38,6 +45,9 @@ fi
 branch="$(git branch --show-current)"
 if [ -z "$branch" ]; then
   fail "当前处于 detached HEAD,请在分支上执行发布"
+fi
+if [ "$STAGED" = "1" ] && [ -f "$STATE_FILE" ]; then
+  fail "存在未完成的 staged release: $STATE_FILE (先执行 make release-publish 或删除它)"
 fi
 
 # --- 已知模块列表(与 detect-changed-modules.sh 的归属规则一致) ---
@@ -149,6 +159,7 @@ cleanup() {
   if [ "${#CREATED_TAGS[@]}" -gt 0 ]; then
     git tag -d "${CREATED_TAGS[@]}" >/dev/null 2>&1 || true
   fi
+  rm -f "$STATE_FILE" || true
   exit "$code"
 }
 trap cleanup ERR
@@ -228,22 +239,50 @@ if [ -n "$(git diff --cached --name-only)" ]; then
   COMMITTED=1
 fi
 
-for k in "${keys[@]}"; do
-  ver="$(ver_of "$k" "$RELEASE")"
-  if [ "$k" = "." ]; then
-    git tag "$ver"
-    CREATED_TAGS+=("$ver")
-    echo "tagged: $ver"
-  else
-    git tag "$k/$ver"
-    CREATED_TAGS+=("$k/$ver")
-    echo "tagged: $k/$ver"
+if [ "$STAGED" = "1" ]; then
+  {
+    echo "root=${root_ver}"
+    for k in "${keys[@]}"; do
+      [ "$k" = "." ] && continue
+      echo "$k=$(ver_of "$k" "$RELEASE")"
+    done
+  } > "$STATE_FILE"
+
+  # 根模块先打 tag，子模块留到 release-publish.sh：等根/传输层 tag
+  # 推到远端后，go mod tidy 才能拿到正确的 go.sum 条目。
+  if [ -n "$root_ver" ]; then
+    git tag "$root_ver"
+    CREATED_TAGS+=("$root_ver")
+    echo "tagged: $root_ver"
   fi
-done
+else
+  for k in "${keys[@]}"; do
+    ver="$(ver_of "$k" "$RELEASE")"
+    if [ "$k" = "." ]; then
+      git tag "$ver"
+      CREATED_TAGS+=("$ver")
+      echo "tagged: $ver"
+    else
+      git tag "$k/$ver"
+      CREATED_TAGS+=("$k/$ver")
+      echo "tagged: $k/$ver"
+    fi
+  done
+fi
 
 trap - ERR
-echo "Done. 推送: git push origin ${branch} && git push origin --tags"
-if [ "${#submods[@]}" -gt 0 ]; then
-  echo "推送 tags 后同步 go.sum:"
-  echo "  make sync-sums MODULES=\"${submods[*]}\""
+if [ "$STAGED" = "1" ]; then
+  echo "Staged release prepared: ${STATE_FILE#$ROOT/}"
+  echo "Next:"
+  echo "  git push origin ${branch}"
+  if [ -n "$root_ver" ]; then
+    echo "  git push origin ${root_ver}"
+  fi
+  echo "  make release-publish"
+else
+  echo "Done. 推送: git push origin ${branch} && git push origin --tags"
+  if [ "${#submods[@]}" -gt 0 ]; then
+    echo "推送 tags 后同步 go.sum:"
+    echo "  make sync-sums MODULES=\"${submods[*]}\""
+  fi
 fi
