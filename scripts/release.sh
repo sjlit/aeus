@@ -243,3 +243,7 @@ done
 
 trap - ERR
 echo "Done. 推送: git push origin ${branch} && git push origin --tags"
+if [ "${#submods[@]}" -gt 0 ]; then
+  echo "推送 tags 后同步 go.sum:"
+  echo "  make sync-sums MODULES=\"${submods[*]}\""
+fi

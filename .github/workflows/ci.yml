@@ -116,6 +116,12 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: cmd/aeus/templates/admin/web/package-lock.json
+      - name: check docs links
+        run: python3 scripts/check_docs_links.py
+      - name: verify admin web template is generated
+        run: |
+          go generate ./cmd/aeus
+          git diff --exit-code -- cmd/aeus/templates/admin/web
       - name: minimal template
         run: |
           rm -rf /tmp/aeus-min
@@ -123,6 +129,10 @@ jobs:
           cd /tmp/aeus-min
           go test ./...
           go build ./...
+          if go list -deps ./... | grep -q 'github.com/modelcontextprotocol'; then
+            echo "minimal template pulled the MCP SDK" >&2
+            exit 1
+          fi
       - name: admin template (backend)
         run: |
           rm -rf /tmp/aeus-admin

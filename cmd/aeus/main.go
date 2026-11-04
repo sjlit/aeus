@@ -3,6 +3,8 @@
 // Usage:
 //
 //	aeus new <name> [--template=minimal|admin] [--module=path] [--local=/path/to/aeus] [--force]
+//
+//go:generate go run ./internal/syncweb
 package main
 
 import (

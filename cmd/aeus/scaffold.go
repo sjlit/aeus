@@ -21,6 +21,17 @@ var templateFS embed.FS
 //go:embed versions.json
 var versionsJSON []byte
 
+// ignoredTemplateDirs keeps local build artifacts out of generated
+// projects. They are git-ignored, but `go run ./cmd/aeus` embeds the
+// working tree, so a developer who ran npm install in the template would
+// otherwise copy node_modules into every generated project.
+var ignoredTemplateDirs = map[string]bool{
+	"node_modules": true,
+	"dist":         true,
+	".git":         true,
+	".mimocode":    true,
+}
+
 func loadVersions() (map[string]string, error) {
 	var versions map[string]string
 	if err := json.Unmarshal(versionsJSON, &versions); err != nil {
@@ -57,6 +68,9 @@ func renderTemplate(templateName, target string, replacements map[string]string)
 		destRel := strings.TrimSuffix(path, ".tmpl")
 		dest := filepath.Join(target, filepath.FromSlash(destRel))
 		if entry.IsDir() {
+			if ignoredTemplateDirs[entry.Name()] {
+				return filepath.SkipDir
+			}
 			return os.MkdirAll(dest, 0o755)
 		}
 		data, err := fs.ReadFile(root, path)

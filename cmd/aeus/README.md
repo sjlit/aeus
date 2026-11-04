@@ -30,6 +30,16 @@ are written without that suffix (notably `go.mod` and the Go sources,
 so the Go toolchain does not treat the template tree as part of the
 root module).
 
+The admin web console is generated from `admin/web` with:
+
+```bash
+make sync-web   # equivalent to: go generate ./cmd/aeus
+```
+
+Template-owned files (`README.md`, `.gitignore`, the smoke test and
+`src/components.d.ts`) are preserved; everything else is copied with the
+scaffold placeholders applied. CI runs the generator and fails on drift.
+
 ## Releases
 
 `versions.json` holds the versions embedded into generated `go.mod`
