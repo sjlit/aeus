@@ -46,7 +46,7 @@ type fakeGroupModel struct {
 	Name string `gorm:"size:64"`
 }
 
-func (fakeGroupModel) TableName() string { return "fake_groups" }
+func (fakeGroupModel) TableName() string  { return "fake_groups" }
 func (fakeGroupModel) ModuleName() string { return "system" }
 func (fakeGroupModel) MenuEntry() models.MenuSpec {
 	return models.MenuSpec{Name: "测试分组", Sort: 1}
@@ -60,7 +60,7 @@ type fakeGroupBackfill struct {
 	Name string `gorm:"size:64"`
 }
 
-func (fakeGroupBackfill) TableName() string { return "fake_group_fills" }
+func (fakeGroupBackfill) TableName() string  { return "fake_group_fills" }
 func (fakeGroupBackfill) ModuleName() string { return "system" }
 func (fakeGroupBackfill) MenuEntry() models.MenuSpec {
 	return models.MenuSpec{Name: "测试分组", Sort: 1}

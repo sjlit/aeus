@@ -27,6 +27,15 @@ const (
 	RolePermissionTypePermission = "permission"
 )
 
+// BeforeCreate pins grants created without an explicit tenant to the
+// default tenant. RoleService.ReplaceRolePermissions also passes the
+// role's tenant explicitly; this fallback covers direct model writes
+// and single-tenant deployments where no tenant callback runs.
+func (m *RolePermission) BeforeCreate(_ *gorm.DB) error {
+	m.TenantModel.ApplyDefaultTenant()
+	return nil
+}
+
 // TableName returns the physical table name (gorm.Tabler).
 func (m *RolePermission) TableName() string {
 	return "sys_role_permissions"

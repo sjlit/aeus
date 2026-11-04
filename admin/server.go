@@ -2,12 +2,14 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/sjlit/aeus/admin/models"
+	"github.com/sjlit/aeus/pkg/errs"
 	"github.com/sjlit/rest/v3"
 	"github.com/sjlit/rest/v3/formats"
 	"github.com/sjlit/rest/v3/schema"
@@ -49,9 +51,82 @@ type Server struct {
 // New builds a Server from the supplied options.
 func New(opts ...Option) *Server {
 	return &Server{
-		opts:                 newOptions(opts...),
-		modelsByModuleTable:  make(map[string]any),
+		opts:                newOptions(opts...),
+		modelsByModuleTable: make(map[string]any),
 	}
+}
+
+// readOnlyResource reports whether model is a security or audit table
+// whose contents are owned by admin (Setup/Seed/authorization services).
+// Such tables must not be writable through the generic REST CRUD surface:
+// allowing writes would bypass the service-layer guards that keep RBAC
+// metadata consistent and non-escalatable.
+func readOnlyResource(model any) bool {
+	switch model.(type) {
+	case *models.Permission, *models.RolePermission, *models.Audit, *models.LoginLog:
+		return true
+	default:
+		return false
+	}
+}
+
+// hardenResource installs write-time guards that the generic REST layer
+// cannot express through struct tags. Tag-level scenarios control field
+// visibility on Update, but rest/v3's Create path decodes the raw JSON
+// and persists it, so a privileged field such as Role.IsSuper must be
+// force-cleared in a local before-create hook. Hooks are local to this
+// rest.Model and run only for REST calls, not for Seed's direct GORM
+// writes.
+func hardenResource(resource *rest.Resource, model any) {
+	if resource == nil {
+		return
+	}
+	if _, ok := model.(*models.Role); ok {
+		resource.ModelValue().RegisterBeforeCreate(func(_ context.Context, _ *gorm.DB, value any) error {
+			if role, ok := value.(*models.Role); ok {
+				role.IsSuper = false
+				role.Builtin = false
+			}
+			return nil
+		})
+	}
+	if _, ok := model.(*models.User); ok {
+		resource.ModelValue().RegisterBeforeCreate(func(ctx context.Context, db *gorm.DB, value any) error {
+			user, ok := value.(*models.User)
+			if !ok {
+				return nil
+			}
+			if user.RoleKey == "" {
+				return errs.Newf(errs.CodeInvalid, "role_key is required")
+			}
+			if err := ensureLoginIdentityUnique(ctx, db, user.UID, user.Username, 0); err != nil {
+				return err
+			}
+			return ensureCallerMayAssignRole(ctx, db, user.RoleKey)
+		})
+	}
+}
+
+// ensureCallerMayAssignRole prevents a user with user-management
+// permission from creating a user whose role is a super role. It reads
+// the caller from rest.RuntimeScope (populated by UserResolve / JWT
+// claims) and re-checks the caller's role in the DB, so a demotion takes
+// effect immediately rather than waiting for the token to expire.
+func ensureCallerMayAssignRole(ctx context.Context, db *gorm.DB, roleKey string) error {
+	var target models.Role
+	if err := freshDB(ctx, db).Where("`key` = ?", roleKey).First(&target).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errs.Newf(errs.CodeInvalid, "role not found: %s", roleKey)
+		}
+		return err
+	}
+	if !target.IsSuper {
+		return nil
+	}
+	if !callerIsSuper(ctx, db) {
+		return errs.ErrPermissionDenied
+	}
+	return nil
 }
 
 func (s *Server) getModels() []any {
@@ -170,19 +245,32 @@ func (s *Server) registerModel(model any, resourceDB *gorm.DB, opts ...RegisterM
 	if s.opts.UserResolve != nil {
 		cfg.UserResolve = s.opts.UserResolve
 	}
-	if s.opts.TenantResolver != nil && modelHasTenantIDColumn(resourceDB, model) {
+	if s.opts.MultiTenant && s.opts.TenantResolver != nil && modelHasTenantIDColumn(resourceDB, model) {
 		resolver := s.opts.TenantResolver
 		cfg.TenantResolve = func(ctx context.Context, _ *http.Request) (string, error) {
 			return resolver(ctx), nil
 		}
 	}
-	resource, err := rest.NewResourceWithOptions(model, cfg,
+	resourceOpts := []rest.Option{
 		rest.WithDB(resourceDB),
 		rest.WithOpenAPI(s.opts.EnabledOpenAPI),
-	)
+	}
+	// Security/audit tables are managed by admin itself. Mounting them
+	// read-only removes the generic write paths that would otherwise let
+	// a role manager edit the permission catalog, grant itself rows, or
+	// flip role.is_super — all bypasses of the service-layer invariants.
+	if readOnlyResource(model) {
+		resourceOpts = append(resourceOpts, rest.WithScenarios(
+			schema.ScenarioSearch,
+			schema.ScenarioDetail,
+			schema.ScenarioExport,
+		))
+	}
+	resource, err := rest.NewResourceWithOptions(model, cfg, resourceOpts...)
 	if err != nil {
 		return err
 	}
+	hardenResource(resource, model)
 	// Index this model by (module, table) so the ModelTypes / ModelTiers
 	// endpoints can resolve an instance from path params.  We use the
 	// canonical Naming rest/v3 just resolved (via ModuleNamer +
@@ -315,7 +403,19 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// the Create/Query/Update/Delete callback chains — it issues raw
 	// DDL — so order is irrelevant to the schema, only to the first
 	// CRUD call.
-	installTenantScope(s.opts.DB, s.opts.TenantResolver)
+	//
+	// Tenant scoping is opt-in: the default single-tenant deployment
+	// skips the callback entirely. This keeps new projects simple and
+	// avoids the historical failure mode where a missing claims ctx
+	// silently turned into cross-tenant access.
+	if s.opts.MultiTenant {
+		installTenantScope(s.opts.DB, s.opts.TenantResolver)
+	}
+	// Target-level guards for generic REST writes: super users/roles can
+	// only be modified by a super caller, and UID/username share one
+	// login namespace. Register after the tenant callback so guard
+	// lookups are tenant-scoped too.
+	installSecurityGuards(s.opts.DB)
 	// Operation audit (audit.go): register the global rest/v3
 	// after-hooks BEFORE the getModels() loop. rest/v3 snapshots the
 	// global hook list when each resource is constructed, so hooks

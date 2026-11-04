@@ -4,11 +4,11 @@
 
 admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https://github.com/sjlit/rest) + GORM，为应用提供即开即用的系统管理能力：
 
-- **通用 REST CRUD**：用户、角色、部门、菜单、权限、角色-权限中间表、审计日志、登录日志、租户 9 个模型自动注册为 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；
+- **通用 REST CRUD**：用户、角色、部门、菜单、租户 5 个业务模型自动注册为可写 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；权限目录、角色-权限中间表、审计日志、登录日志 4 个安全/审计模型只读挂载——它们由 `Setup`/`Seed`/service/审计钩子管理，避免通用写路径绕过业务不变量；
 - **JWT 认证**：登录 / 刷新 / 登出（`AuthService`），支持 Token 吊销与登录前后钩子；
-- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，**未收录路由默认放行（fail-open）**——拒绝路径只覆盖目录里有 `data` 记录但当前角色无授权的情况；想收紧的子树用 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）；
+- **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，**未收录路由默认拒绝（fail-closed）**；自助路由（profile / menu / password 等）由内置公开清单放行；`WithCheckerAllowlist` 是额外的显式 bypass 清单，不是“更严格”的开关（详见[接口权限校验](#接口权限校验rbac)）；
 - **用户业务 RPC**（`UserService`）：个人资料、改密、管理员重置密码、头像、可见菜单、权限码；
-- **租户隔离**：通过 GORM 回调自动为所有租户模型追加 `tenant_id` 过滤与回填，业务代码零侵入。
+- **租户隔离（可选）**：显式 `WithMultiTenant(true)` / `WithTenantResolver(...)` 后，通过 GORM 回调为所有租户模型追加 `tenant_id` 过滤，并在创建时强制写入 resolver 的租户 ID；默认单租户不安装回调。
 
 ## 特性
 
@@ -20,8 +20,8 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 - **可选的 OpenAPI**：`WithOpenAPI(true)` 后每个资源暴露 `openapi.json`
 - **可插拔认证**：`AuthService` 始终由应用自行 `pb.RegisterAuthServiceRouter(...)` 注册，secret 必须来自运行时通道（见[设计约定](#设计约定)）
 - **自动菜单注册**：模型实现 `MenuProvider` 时，`Setup` / `RegisterModel` 会按 `MenuEntry()` 自动生成 `sys_menus` 行（`Component` / `Uri` / `ViewPath` 在缺失时由模块名 + 表名推导，可显式覆盖）。三个分区容器菜单（`SystemUserCenter` / `SystemLogs` / `SystemSettings`）由 `EnsureSectionMenus` 在 `Seed` 阶段写入，业务菜单 `Parent` 都引用这三个 Component。`Setup` 末尾 `validateMenuParentsRef` 会扫所有 `sys_menus`，若发现 `Parent` 指向不存在的 Component 只打 `Warn` 而**不**中断启动——`Menu.BuildTree` 会把孤儿行降级为根，导航树仍可工作；运维应通过 `/system/sys_menu` 修正
-- **自动权限目录**：每个挂载模型按 `rest.ScenarioProvider` 声明的场景集生成 `sys_permissions` 行（`Data` 形如 `"<METHOD> <URI>"`），重复启动幂等
-- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-open**——未收录路由直接放行，目录里有但当前角色无授权才拒绝；想强制目录全覆盖的子树用 `WithCheckerAllowlist` 显式放行（详见[接口权限校验](#接口权限校验rbac)）
+- **自动权限目录**：每个挂载模型按实际挂载的场景集生成 `sys_permissions` 行（可写模型 6 个 CRUD 场景；安全/审计模型只读 search/detail/export；`Data` 形如 `"<METHOD> <URI>"`），重复启动幂等
+- **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-closed**——未收录路由直接拒绝，自助路由走内置公开清单，目录里有但当前角色无授权同样拒绝；`WithCheckerAllowlist` 用于显式 bypass（详见[接口权限校验](#接口权限校验rbac)）
 - **读穿透缓存**：权限目录与角色授权都走 `admin/dbcache` 的 SqlDependency 版本标记缓存，写授权后下一个请求就生效，无需应用显式失效
 - **公开 `RegisterModel`**：应用自定义模型可与内置模型走同一条迁移+菜单+权限注册路径；per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）按需覆盖
 - **Vue 视图自动生成**：`WithVueOutputDir` 启用后，每个模型按 `(module, singular)` 自动创建 `Index.vue`（SchemaViewer 占位），已存在的文件跳过不覆盖手写修改
@@ -68,7 +68,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 1. 装配 admin Server：租户回调 + 9 个 CRUD 资源
+	// 1. 装配 admin Server：5 个可写 CRUD 资源 + 4 个只读安全/审计资源
 	httpSrv := ghttp.New()
 	s := admin.New(
 		admin.WithDB(db),
@@ -85,7 +85,9 @@ func main() {
 		mwauth.WithValidate(service.NewRevocationValidator(tokenStore, secret)), // 吊销 + token_type 门禁
 		// 对 sys_permissions 已收录的 HTTP 路由执行角色权限校验
 		mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
-		mwauth.WithAllow("/auth/login", "/auth/refresh-token"),
+		// logout 也必须放行：expired access token 无法通过 JWT，
+		// 但 handler 会自行校验 body 中的 token 并吊销 refresh token。
+		mwauth.WithAllow("/auth/login", "/auth/refresh-token", "/auth/logout"),
 	))
 
 	// 3. 注册 CRUD 资源
@@ -114,7 +116,7 @@ func main() {
 
 - 认证：`POST /auth/login`（`{"username":"alice","password":"..."}`）返回 `access_token` / `refresh_token`；
 - 用返回的 access token 访问其余接口（`Authorization: Bearer <token>`）；
-- 默认租户隔离即已生效：JWT 中间件写入 `claims.TenantID`，GORM 回调自动按该租户过滤。
+- 默认是**单租户**模式：不会安装 GORM 租户回调，适合快速起步。需要多租户时显式 `admin.WithMultiTenant(true)`（或 `WithTenantResolver(...)`）；启用后 JWT 中间件写入的 `claims.TenantID` 才会驱动 GORM 回调。
 
 ## P0 一键集成(搭配 dashboard/web)
 
@@ -133,8 +135,8 @@ import (
 )
 
 // 1. admin.Server 通过 WithRouter 接管 HTTP server(任何 rest.Router 都行,
-//    不必是 *transport/http.Server),Setup 内部完成 schema 迁移与 9 个
-//    CRUD 资源注册。
+//    不必是 *transport/http.Server),Setup 内部完成 schema 迁移与 5 个
+//    可写 CRUD + 4 个只读资源的注册。
 httpSrv := ghttp.New()
 s := admin.New(
     admin.WithDB(db),
@@ -158,7 +160,7 @@ log.Fatal(httpSrv.Start(context.Background()))
 
 > **Seed 与 Setup 的时序约定**：授权补齐以 Seed 调用时刻的全局目录（`sys_menus` + `sys_permissions`）为准，因此必须先 `Setup`（建目录）后 `Seed`（授全量）。若先调 `Seed`，目录尚空，本次只确保角色 + 用户，授权会留到下一次启动补齐；应用升级注册新模型后，同样靠下一次启动的 Seed 补齐。
 >
-> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。PermissionChecker 默认 **fail-open**——未收录路由自动放行；想强制目录全覆盖（fail-closed）的子树通过 `WithCheckerAllowlist` 显式登记，把每个 bypass 暴露在 code review 里。
+> **接口鉴权依赖 JWT 中间件**：P0 捷径省略了中间件装配（token 校验与权限执行都在 `mwauth.JWT` 内完成），生产装配请按[快速开始](#快速开始)补上 `mwauth.JWT(...)`，其中 `WithPermissionChecker(admin.NewPermissionChecker(db))` 是 RBAC 生效的前提。PermissionChecker 默认 **fail-closed**——未收录路由自动拒绝；`WithCheckerAllowlist` 是显式 bypass（不是更严格），每个 bypass 都会在 code review 里可见。需要历史 fail-open 行为时用 `WithCheckerFailOpen(true)` 临时过渡。
 
 ### Seed 的收敛契约
 
@@ -194,16 +196,18 @@ log.Fatal(httpSrv.Start(context.Background()))
 }
 ```
 
-业务码分流(前端按 `body.code`,不依赖 HTTP status):
+业务码分流(前端以 `body.code` 为主;401 同时触发静默 refresh,其余传输层状态码只做兜底提示):
 
 | Code | HTTP | 语义 | 前端处理 |
 |------|------|------|---------|
 | 0 | 200 | OK | 成功 |
 | 4002 | 401 | TokenExpired | refresh + 重试 |
-| 4003 | 403 | PermissionDenied | 提示无权限（角色未授权该接口）/ 跳登录页 |
+| 4003 | 403 | PermissionDenied | toast 无权限（角色未授权该接口） |
 | 4004 | 404 | NotFound | 业务提示 |
-| 4005 | 403 | AccessDenied | 跳登录页 |
+| 4005 | 403 | AccessDenied | 传输层（HTTP 403）视为会话失效；业务错误（HTTP 200，如旧密码错）只 toast |
 | 1001 | 400 | Invalid | toast 后端 message |
+
+> `HTTP` 列是 `errs.Error.HTTPStatus()` 的传输层映射；由 admin responder 处理的业务错误实际仍写 HTTP 200，前端以 `body.code` 为主。
 
 ## 认证与会话
 
@@ -273,14 +277,14 @@ httpSrv.Use(mwauth.JWT(keyfunc,
     mwauth.WithClaims(auth.Claims{}),
     mwauth.WithValidate(service.NewRevocationValidator(store, secret)), // 吊销 + token_type 门禁
     mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
-    mwauth.WithAllow("/auth/login", "/auth/refresh-token"),
+    mwauth.WithAllow("/auth/login", "/auth/refresh-token", "/auth/logout"),
 ))
 ```
 
 - 无法解析的 token（坏签名 / 过期）在 validator 处**放行透传**，由中间件自己的 parse 给出精确错误码；旧 token（无 jti / token_type claim）跳过检查保持兼容；
 - 默认内存黑名单容量 65536 条、到期惰性清理；多实例部署务必注入共享 store。
 
-> **登录限流**：`admin/cmd/mock` 默认已在 `/auth/login` 前挂 `middleware/auth.RateLimit`（token bucket，IP+账号 双 key，5 次突发 / 60 秒补 1 个），命中返回 `4010 TooManyAttempts`（HTTP 429）+ `Retry-After` header。详见 [`docs/api/auth.md` §3.7](docs/api/auth.md)。**未实现**：`User.LockedUntil` 字段（失败 N 次锁账号）—— 与 token bucket 正交，需叠加在 `AuthService.Login` 状态检查之后。
+> **登录限流**：`admin/cmd/mock` 默认已在 `/auth/login` 前挂 `middleware/auth.RateLimit`（token bucket，按客户端 IP，5 次突发 / 60 秒补 1 个），命中返回 `4010 TooManyAttempts`（HTTP 429）+ `Retry-After` header。登录前的 `{user}` 占位符解析不到 claims，因此不要在这里做 per-account 限流；账号维度应放到登录 handler 内或 JWT 之后的已认证路由。详见 [`docs/api/auth.md` §3.7](docs/api/auth.md)。**未实现**：`User.LockedUntil` 字段（失败 N 次锁账号）—— 与 token bucket 正交，需叠加在 `AuthService.Login` 状态检查之后。
 
 ### UserService
 
@@ -308,29 +312,33 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 | 步骤 | 条件 | 结果 |
 |------|------|------|
 | 1. 接线保护 | claims 不是 `*auth.Claims` | **拒绝**：`4005 AccessDenied` |
-| 2. 显式放行 | `WithCheckerAllowlist` 命中 | **放行** |
-| 3. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 4；查无此行（**未收录即放行**，fail-open） |
+| 2. 公开路由 | 命中内置自助清单或 `WithCheckerAllowlist` | **放行** |
+| 3. 目录查询 | `sys_permissions` 存在 `type=api` 且 `data` 匹配的行 | 进入步骤 4；查无此行默认**拒绝**（fail-closed）；`WithCheckerFailOpen(true)` 时放行 |
 | 4. 授权查询 | `sys_role_permissions` 存在 `role_key + tenant_id + type=permission + data` 匹配的行 | **放行** |
 | 5. 否则 | 目录内但角色无授权 | **拒绝**：业务码 `4003 PermissionDenied` |
 
 **设计要点**：
 
-- **fail-open 默认放行**：未收录路由（业务 RPC：`/user/menus`、`/role/options`、`/tenant/options` 等）一律放行；想强制目录全覆盖（fail-closed）的子树通过 `WithCheckerAllowlist` 显式声明，把每个 bypass 暴露在 code review 里——未在 allowlist 上的目录收录路由依然按角色授权生效；
+- **fail-closed 默认拒绝**：未收录路由（包括新加的业务 RPC）默认拒绝；自助路由（`/user/profile`、`/user/menus`、`/menu/tree` 等）由 `defaultCheckerAllowlist` 放行；admin 的 CRUD 与业务 RPC 在 `derive.go` 中写入 `sys_permissions`，由 `Seed` 授给超管、由运维按角色授权；
+- **目标级守卫**：通用 REST 的角色变更、super 角色/用户的 status 更新和删除都要求调用者自身是 super；仅靠路由级 `sys_permissions` 不够，否则拥有用户管理权限的非 super 角色可以禁用/删除超管；
+- **`WithCheckerAllowlist` 是 bypass**：命中即跳过目录与角色校验。它不会让检查更严格；新增 bypass 必须能说明“该路由由其他机制保护或本就公开”；
+- **基础设施路由**：NoRoute/静态文件（`FullPath` 为空）、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json` 不属于业务 API，checker 直接放行，仍由 JWT 负责认证；否则 fail-closed 会把静态资源/404 误报成 403；
 - **租户隔离显式化**：授权查询显式过滤 `tenant_id`——checker 运行时 claims 尚未进入 ctx，GORM 租户回调不会自动过滤，不显式传会导致跨租户串权；
-- **fail-closed 接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
-- **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker；
+- **接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
+- **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker（`/auth/logout` 也应加入该列表，见下方会话说明）；
 - **超管授权窗口**：角色授权由 `admin.Seed` 每次启动补齐（以调用时刻的全局目录为准），新模型注册后需先 `Setup` 后 `Seed`，见[P0 一键集成](#p0-一键集成搭配-dashboardweb)的时序约定。
 
 **选项**：
 
 | 选项 | 说明 |
 |------|------|
-| `WithCheckerAllowlist(entries ...string)` | 短路跳过 catalog 匹配的命中规则，每条 `"<METHOD> <pattern>"`（`METHOD` 为 `*` 或空表示任意方法；`pattern` 支持精确、`*` 通配、`<prefix>*` 段边界前缀）。默认 fail-open 下，**目录已收录但希望绕过角色授权**的子树才需要登记（如内部监控）；业务 RPC 不再强制放行，因为未收录路由本身就是放行的 |
+| `WithCheckerAllowlist(entries ...string)` | 显式 **bypass** 清单：命中后跳过 catalog 与角色授权检查。每条 `"<METHOD> <pattern>"`（`METHOD` 为 `*` 或空表示任意方法；`pattern` 支持精确、`*` 通配、`<prefix>*` 段边界前缀）。仅用于“由其他机制保护或本就公开”的路由 |
+| `WithCheckerFailOpen(true)` | 临时恢复历史 fail-open 行为：未收录路由放行。只应在迁移期使用，最终目标是全部路由进入 catalog 或显式 allowlist |
 | `WithCheckerCache(cache.Cache)` | 注入共享缓存后端，覆盖默认内存后端（默认 `infra/cache/memory`，单进程）。多实例部署换成 Redis 等共享后端，避免每个进程的 catalog 独立陈旧 |
 
 **缓存**：api 目录与每个 `(tenant, role)` 的授权集合都通过 `admin/dbcache` 的读穿透 cacher 加载；catalog 用 `MAX(updated_at)` 作版本标记（无 TTL），grants 用 `SUM(id)` + 1 分钟 TTL（吸收标记盲区）。`dbcache` 的 1 秒宽限窗 + 版本标记组合让授权变更在下一个请求就生效，无需应用显式失效。
 
-测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由**放行**（fail-open）/ 显式 allowlist 放行 / allowlist 通配段边界 / 跨目录命中不影响未收录路由 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中。
+测试覆盖见 `permission_test.go`：已授权放行 / 未授权 4003 / 未收录路由默认**拒绝**（fail-closed）/ 自助路由放行 / 基础设施路由放行 / 显式 allowlist bypass / `WithCheckerFailOpen(true)` 兼容 / allowlist 通配段边界 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中。
 
 ## dbcache 读穿透缓存
 
@@ -381,10 +389,11 @@ set, err := dbcache.Try(c, ctx, "perm:grant:tenant1:admin",
 
 ### 机制
 
-`admin.Server.Setup` 在启动时通过 `installTenantScope` 安装 4 个 GORM 回调（注册名 `aeus:tenant:*`）：
+`admin.Server.Setup` 在 `MultiTenant=true` 时通过 `installTenantScope` 安装 4 个 GORM 回调（注册名 `aeus:tenant:*`）；默认单租户模式不安装：
 
 - **Query / Update / Delete**：在 SQL 生成前追加 `WHERE tenant_id = ?`，与业务 WHERE 合入同一条语句；
-- **Create**：在业务 `BeforeCreate` 钩子**之后**执行，为空白的 `TenantID` 回填 resolver 返回的租户 ID（显式设置的值优先）。
+- **Create**：在业务 `BeforeCreate` 钩子**之后**执行，把 `TenantID` **强制写成** resolver 返回的租户 ID（请求体不能指定别的租户）。
+- 未开启多租户时，`User` / `Role` / `RolePermission` / `Department` 的 `BeforeCreate` 会把空 `TenantID` 落到默认租户 `00000000-...`，保证 REST 新建的用户/角色与 `Seed` 的授权在同一个租户命名空间。
 
 回调按**列名**（`tenant_id`）而非 struct 嵌入判断，因此不依赖 admin 的 `models` 包——应用自建的租户模型同样自动生效。是否带 `tenant_id` 列的结果按 `*schema.Schema` 缓存，热路径上只有一次 map Load。
 
@@ -392,14 +401,15 @@ set, err := dbcache.Try(c, ctx, "perm:grant:tenant1:admin",
 
 `middleware.Resolver` 是 `func(ctx context.Context) string`，每次 DB 操作调用一次：
 
-- 返回**非空**租户 ID：读写删除自动限定该租户，创建自动回填；
-- 返回 **""**：完全不做租户过滤（跨租户工具、后台任务、`AuthService.Login` 的出口）。
+- 返回**非空**租户 ID：读写删除自动限定该租户，创建时 `tenant_id` 会被**强制写成 resolver 的值**（请求体不能指定别的租户）；
+- 返回 **""**：完全不做租户过滤（跨租户工具、后台任务、`AuthService.Login` 的出口）；
+- 需要显式跨租户操作时用 `admin.WithoutTenant(ctx)`，不要依赖“请求体里写 tenant_id”来绕过。
 
 Resolver **必须廉价且不可 panic**——JWT 缺失时返回 `""` 即可，认证决策由中间件负责。
 
 ### 默认值与覆盖
 
-默认 resolver 是 `middleware.FromClaimsResolver`：直接读取 `auth.Claims.TenantID`（由 JWT 中间件写入 ctx），因此开箱即用的装配（`admin.New` + JWT 中间件 + `Setup`）即实现端到端租户隔离，**无需额外中间件**。
+租户隔离默认**关闭**（单租户）。调用 `admin.WithMultiTenant(true)` 或 `admin.WithTenantResolver(...)` 后才会安装 GORM 回调；启用且未提供自定义 resolver 时，默认 resolver 是 `middleware.FromClaimsResolver`，直接读取 `auth.Claims.TenantID`（由 JWT 中间件写入 ctx），无需额外中间件。
 
 覆盖示例（优先信任 `X-Tenant-Id` 请求头，兜底 JWT 租户，适用于超管工具）：
 
@@ -461,8 +471,8 @@ s := admin.New(
 | 模型 | 表名 | 租户 | 说明 |
 |------|------|------|------|
 | `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）、`created_at` / `updated_at`。全局可见，无 `tenant_id` 列 |
-| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一）、`username`、`role_key`、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description` |
-| `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`）、`status`（`enabled` / `disabled`）、`builtin`、`is_super`（超管：授权由 Seed 自动管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限并将 `sys_users.role_key` 置空 |
+| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一，更新只读）、`username`（与 `uid` 共用登录命名空间；Login 没有租户选择器，因此跨租户也全局唯一）、`role_key`（创建/更新可写，但**任何角色变更都要求 super 调用者**）、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description`。更新/删除当前角色为 super 的用户同样要求 super 调用者 |
+| `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`，更新只读）、`status`（`enabled` / `disabled`；super 角色的状态变更要求 super 调用者）、`builtin`（REST 只读）、`is_super`（REST 只读；由 Seed 管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限并将 `sys_users.role_key` 置空；super 角色的删除要求 super 调用者 |
 | `Menu` | `sys_menus` | ❌ | 菜单树：`parent`（父级菜单 Component，全局共享）、`name`（唯一，标题）、`component`（唯一，标识，路由 keep-alive 用）、`uri`、`view_path`（自动生成的 Vue 路径 `@/views/<module>/<singular>/Index.vue`）、`icon`、`hidden` / `public`、`sort`、`description`。删除自动清理 `sys_role_permissions` 中 `type=menu` 的行 |
 | `Department` | `sys_departments` | ✅ | 部门树：`parent_id`、`name`、`description` |
 | `Permission` | `sys_permissions` | ❌ | 全局权限目录：`type`（`api` 接口 / `button` 按钮 / `data_scope` 数据范围）+ `data`（权限标识，全租户共享，形如 `"<METHOD> <URI>"`）+ `description` |
@@ -649,17 +659,17 @@ admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `
 
 全部资源一览：
 
-| 资源 | 创建 / 详情 / 更新 / 删除 / 导出 | 列表 / 搜索 |
+| 资源 | 写 (create/update/delete) | 读 (detail/list/export) |
 |------|------|------|
-| `User` | `/system/sys_user` | `/system/sys_users` |
-| `Role` | `/system/sys_role` | `/system/sys_roles` |
-| `Menu` | `/system/sys_menu` | `/system/sys_menuses` |
-| `Department` | `/system/sys_department` | `/system/sys_departments` |
-| `Permission` | `/system/sys_permission` | `/system/sys_permissions` |
-| `RolePermission` | `/system/sys_role_permission` | `/system/sys_role_permissions` |
-| `Audit` | `/system/sys_audit` | `/system/sys_audits` |
-| `LoginLog` | `/system/sys_login_log` | `/system/sys_login_logs` |
-| `Tenant` | `/system/sys_tenant` | `/system/sys_tenants` |
+| `User` | ✅ `/system/sys_user` | `/system/sys_users` |
+| `Role` | ✅ `/system/sys_role` | `/system/sys_roles` |
+| `Menu` | ✅ `/system/sys_menu` | `/system/sys_menuses` |
+| `Department` | ✅ `/system/sys_department` | `/system/sys_departments` |
+| `Tenant` | ✅ `/system/sys_tenant` | `/system/sys_tenants` |
+| `Permission` | ❌ 只读（Setup/Seed 管理） | `/system/sys_permission` |
+| `RolePermission` | ❌ 只读（走 `/role/permissions`） | `/system/sys_role_permission` |
+| `Audit` | ❌ 只读（审计钩子写入） | `/system/sys_audit` |
+| `LoginLog` | ❌ 只读（登录流程写入） | `/system/sys_login_log` |
 
 > 注意 `Menu` 的复数是 `sys_menuses`：复数是 rest/v3 对表名的机械转换（`inflector.Pluralize`），不做语义化处理。
 
@@ -678,7 +688,7 @@ admin 模块所有业务 RPC（`AuthService` / `UserService` / `RoleService` / `
 - **模型查找**：路径参数 `(module, table)` 通过 `Server.modelsByModuleTable["<module>/<table>"]` 反查模型实例，索引在 `registerModel` 时统一建立——`Setup` 内置循环与外部 `RegisterModel` 两种路径都会自动覆盖。未注册的 `(module, table)` 返回 `4004 NotFound`，方便前端区分 URL 拼写错误与真实 DB 错误。
 - **租户隔离**：与 `rest/v3` 通用 CRUD 一致——`tenant` query 参数优先，否则走 `s.opts.TenantResolver(r.Context())`，传 `""` 表示跨租户（与 `rest.ModelTypes` 自身行为对齐）。`Menu` / `Permission` / `Tenant` 等无 `tenant_id` 列的全局模型传 `""` 即可。
 - **valueType 分发**：`model-types` / `model-tiers` 端点按 `valueType` 路由到对应的 `rest.ModelTypes[T]` / `rest.ModelTiers[T]` 泛型实例，使前端无需在拼装 payload 时做类型转换（`uint` 字段直接以 JSON 数字形式回传，不会被强制转字符串）。
-- **响应格式**：统一走 admin envelope `{"code":0,"message":"","data":[...]}`；HTTP 状态恒为 200，业务码分流（`1001 Invalid` / `4004 NotFound`）由前端按 `body.code` 处理，与 CRUD 端点一致。
+- **响应格式**：统一走 admin envelope `{"code":0,"message":"","data":[...]}`；admin responder 处理时 HTTP 状态为 200，业务码分流（`1001 Invalid` / `4004 NotFound`）由前端按 `body.code` 处理，与 CRUD 端点一致。
 - **认证**：必须挂在 JWT 中间件之后（同 CRUD 端点）。`Setup` 不引入新的鉴权层，三个端点的可见性与路由前缀由应用网关决定。
 
 **典型调用**（菜单管理页的"父级菜单"下拉）：
@@ -767,7 +777,7 @@ pb.RegisterTenantServiceRouter(httpSrv, service.NewTenantService(service.WithTen
 
 租户 CRUD 走 rest/v3 通用路径 `/system/sys_tenants`（同 User/Role 形态）。
 
-> **⚠️ 访问控制（应用方必须处理）**：`Tenant` 模型**没有 `tenant_id` 列**，租户隔离回调对其天然跳过，因此 `/system/sys_tenants` 与 `/tenant/*` 对**任意通过 JWT 中间件的用户可见**。admin 模块不做鉴权决策，请应用方给这些路由挂 super-admin 专属中间件，例如（IsSuper 检查与 `UserService.ResetPassword` 同款，见 `service/user.go`）：
+> **⚠️ 访问控制（应用方必须确认）**：`Tenant` 模型**没有 `tenant_id` 列**，租户隔离回调对其天然跳过。`/system/sys_tenant*` 与 `/tenant/*` 已写入 `sys_permissions` 目录，默认 fail-closed 下需要角色授权（超管由 `Seed` 自动获得）；如果应用省略 `PermissionChecker` 或把租户路由授给非超管角色，它们仍会暴露给普通 JWT 用户。建议额外挂 super-admin 专属中间件，例如（IsSuper 检查与 `UserService.ResetPassword` 同款，见 `service/user.go`）：
 >
 > ```go
 > // 按路径前缀拦截租户管理路由,仅允许 IsSuper 角色访问
@@ -810,9 +820,9 @@ pb.RegisterTenantServiceRouter(httpSrv, service.NewTenantService(service.WithTen
 {"code": 4003, "message": "permission denied"}
 ```
 
-业务码定义见 [`pkg/errs/const.go`](pkg/errs/const.go)（`OK/Invalid/NotFound/PermissionDenied/AccessDenied/TokenExpired` …）。前端拦截器按 `body.code` 分流（不依赖 HTTP status），分流表见下方"业务码分流"。可通过 `admin.WithResponder(...)` 替换为应用自己的 responder。
+业务码定义见 [`pkg/errs/const.go`](pkg/errs/const.go)（`OK/Invalid/NotFound/PermissionDenied/AccessDenied/TokenExpired` …）。前端拦截器以 `body.code` 为主，同时对 HTTP 401 触发 refresh；分流表见下方"业务码分流"。可通过 `admin.WithResponder(...)` 替换为应用自己的 responder。
 
-> HTTP 状态码约定：成功路径固定 `200`；失败路径由 `transport/http` 的 error interceptor 根据 `*errors.Error.HTTPStatus()` 映射为 `400/401/403/404/500/504/503`，**业务码才是客户端分流的依据**，HTTP status 仅用于网关/浏览器层。
+> HTTP 状态码约定：admin responder 处理的业务成功/失败固定 HTTP `200`；由 `transport/http` 的 error interceptor 处理的中间件错误（JWT、限流、404、panic）按 `*errs.Error.HTTPStatus()` 映射为 `400/401/403/404/429/500/503/504`。两条路径共用同一个 `{code,message,data}` envelope；**业务码才是客户端分流的依据**，HTTP status 供网关/浏览器层使用。
 
 ## 设计约定
 
@@ -890,13 +900,14 @@ go test ./...
 测试覆盖：
 
 - `setup_test.go` / `user_test.go` / `tenant_server_test.go` — `Server.Setup` 资源注册、迁移回调、Responder 集成、端到端 HTTP 调用（登录 + JWT 中间件 + CRUD 资源）
-- `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/回填）
-- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由**放行**（fail-open）/ 显式 allowlist 放行 / allowlist 通配段边界 / 跨目录命中不影响未收录路由 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
+- `security_guards_test.go` — super 角色/用户的目标级保护、角色变更仅 super、UID/Username 跨字段唯一、单租户 REST 创建第二个 admin 后登录
+- `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/强制租户）
+- `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由默认**拒绝**（fail-closed）/ 自助路由放行 / 基础设施路由放行 / 显式 allowlist bypass / `WithCheckerFailOpen(true)` 兼容 / allowlist 通配段边界 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
 - `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table
 - `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` + `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
 - `register_model_options_test.go` — `RegisterModel` per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）的覆盖语义、显式空 spec / 空 scenarios 的边界
 - `vue_gen_test.go` — `buildVueContent` / `vuePathForModel` / `generateVueFile` / `generateVueForResource`：模板占位符替换、路径遍历保护、已存在文件跳过、失败 warn 不中断
-- `seed_test.go` / `seed_tenant_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动、跨租户孤儿回填、per-tenant `sys_schemas` 克隆
+- `seed_test.go` / `seed_tenant_test.go` — `admin.Seed` 幂等性、全量授权、启动补齐/自愈、参数校验、Seed+Login 联动、固定 resolver 下的授权租户、跨租户孤儿回填、per-tenant `sys_schemas` 克隆
 - `responder_test.go` — envelope 解包、wrapped error 链透传、`{code,message,data}` 形状
 - `models/menu_method_test.go` / `models/permission_method_test.go` / `models/role_method_test.go` / `models/tenant_test.go` / `models/user_test.go` / `models/loginlog_test.go` — `Menu.BuildTree` / `Role.BeforeUpdate` Key 同步 + 软删级联 / `Role.AfterDelete` 硬删级联 / `Permission.ListByType` / `Tenant.BeforeCreate` uuid 回填 / `User.ValidatePassword` / `LoginLog.BeforeCreate` token 哈希 等模型方法的单测
 - `dbcache/cacher_test.go` / `dbcache/depend_test.go` — 读穿透缓存命中 / miss / reload / 版本标记失配重载 / 宽限窗 / 共享 cache 后端

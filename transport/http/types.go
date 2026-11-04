@@ -69,6 +69,17 @@ type (
 		enableCORS    bool
 		enableHealth  bool
 		enableMetrics bool
+
+		// Server timeouts. ReadHeaderTimeout is the Slowloris guard and
+		// is always on by default; read/write timeouts stay 0 (disabled)
+		// because MCP / streamable HTTP and file downloads may legitimately
+		// run longer than a normal request. Callers can opt into stricter
+		// values via WithReadTimeout / WithWriteTimeout.
+		readHeaderTimeout time.Duration
+		readTimeout       time.Duration
+		writeTimeout      time.Duration
+		idleTimeout       time.Duration
+		maxHeaderBytes    int
 	}
 
 	HandleFunc func(ctx *Context) (err error)
@@ -212,10 +223,9 @@ func WithDebug(debug bool) Option {
 // leaks internal types — both are dangerous to leave on a public port.
 //
 // When WithDebug(true) is set and WithDebugAddr is left empty, pprof is
-// silently skipped (Start logs a warning) so an over-eager AEUS_DEBUG
-// environment variable does not expose the process. To opt back into
-// the legacy "pprof on the main listener" behaviour, pass the empty
-// string explicitly with WithDebugAddr("").
+// skipped (Start logs a warning) so an over-eager AEUS_DEBUG environment
+// variable does not expose the process. pprof is never mounted on the
+// main listener; provide a loopback address here to enable it.
 func WithDebugAddr(addr string) Option {
 	return func(o *options) {
 		o.debugAddr = addr
@@ -286,6 +296,46 @@ func WithEnableHealth(enable bool) Option {
 func WithEnableMetrics(enable bool) Option {
 	return func(o *options) {
 		o.enableMetrics = enable
+	}
+}
+
+// WithReadHeaderTimeout sets the http.Server ReadHeaderTimeout. The default
+// is 10s, which blocks Slowloris-style header trickling without affecting
+// normal requests.
+func WithReadHeaderTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.readHeaderTimeout = d
+	}
+}
+
+// WithReadTimeout sets the http.Server ReadTimeout. The default is 0
+// (disabled) so large uploads and streaming requests are not cut off.
+func WithReadTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.readTimeout = d
+	}
+}
+
+// WithWriteTimeout sets the http.Server WriteTimeout. The default is 0
+// (disabled) so MCP streamable HTTP and file downloads are not cut off.
+func WithWriteTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.writeTimeout = d
+	}
+}
+
+// WithIdleTimeout sets the http.Server IdleTimeout. The default is 120s.
+func WithIdleTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.idleTimeout = d
+	}
+}
+
+// WithMaxHeaderBytes sets the http.Server MaxHeaderBytes. The default is
+// 1 MiB.
+func WithMaxHeaderBytes(n int) Option {
+	return func(o *options) {
+		o.maxHeaderBytes = n
 	}
 }
 

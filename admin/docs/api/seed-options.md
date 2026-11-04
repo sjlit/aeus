@@ -20,7 +20,8 @@ s := admin.New(
 | `WithRouter(router)` | `rest.Router` | nil | 必填。Setup / RegisterModel 缺则返回 `ErrHTTPRequired` |
 | `WithOpenAPI(enabled)` | bool | false | 每个资源暴露 `/system/<table>/openapi.json` |
 | `WithResponder(r)` | `rest.Responder` | `newResponder()` | 替换为应用自定义 envelope writer |
-| `WithTenantResolver(r)` | `middleware.Resolver` | `FromClaimsResolver` | 见 [tenant-scope.md](./tenant-scope.md) |
+| `WithMultiTenant(enabled)` | bool | false | 显式开启/关闭租户回调；默认单租户 |
+| `WithTenantResolver(r)` | `middleware.Resolver` | 仅 `MultiTenant=true` 时为 `FromClaimsResolver` | 传入 resolver 会自动开启多租户，见 [tenant-scope.md](./tenant-scope.md) |
 
 ### 返回的 Server
 
@@ -31,7 +32,7 @@ func New(opts ...Option) *Server
 ```
 
 - `New(...)`:构造,不触发任何迁移/注册。
-- `Server.Setup(ctx) error`:核心入口——安装租户回调、迁移 `schema.Schema` 元数据表、注册 8 个内置模型、校验孤儿 Parent、挂载 `/schema/:module/:table`。
+- `Server.Setup(ctx) error`:核心入口——在 `MultiTenant=true` 时安装租户回调、迁移 `schema.Schema` 元数据表、注册 5 个可写 + 4 个只读内置模型、校验孤儿 Parent、挂载 `/schema/:module/:table`。
 - `Server.RegisterModel(model) error`:挂载应用自定义模型(Setup 之后调用);同样触发自动菜单 / 自动权限目录。
 
 ## 11.2 Seed

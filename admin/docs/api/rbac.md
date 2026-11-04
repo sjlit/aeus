@@ -54,24 +54,25 @@ httpSrv.Use(mwauth.JWT(
 
 | 步骤 | 条件 | 结果 |
 |---|---|---|
-| 1 | **Allowlist 短路**:`(method, path)` 命中 `WithCheckerAllowlist` 任一项 | **放行**(无需查目录) |
-| 2 | **目录查询**:`sys_permissions.type=api` 中存在 `data = "<METHOD> <URI>"` 的行 | 进入步骤 3;**查无**则**放行**(默认 fail-open,目录未收录即视为该路由不受 catalog 约束,allowlist 用于短路 catalog 命中) |
+| 1 | **公开路由**:`(method, path)` 命中内置自助清单或 `WithCheckerAllowlist` 任一项 | **放行**(无需查目录) |
+| 2 | **目录查询**:`sys_permissions.type=api` 中存在 `data = "<METHOD> <URI>"` 的行 | 进入步骤 3;**查无**则默认**拒绝**;`WithCheckerFailOpen(true)` 时放行 |
 | 3 | **授权查询**:`sys_role_permissions` 中存在 `role_key + type = "permission" + tenant_id` 匹配当前调用者 且 `data = code` 的行 | **放行** |
 | 4 | 否则 | **拒绝**:`4003 PermissionDenied` |
 
 补充规则:
 
 - 非 HTTP 协议 → 步骤 0 提前放行,所有步骤跳过。
+- 基础设施路由(`FullPath` 为空、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json`)→ 直接放行,不查 catalog;JWT 仍负责认证。否则 fail-closed 会把静态资源/404 误报为 403。
 - claims 不是 `*auth.Claims` → 直接 `4005 AccessDenied`(接线错误直接暴露在请求上,避免静默放行)。
 - `type=button` / `type=data_scope` 不参与接口鉴权——只走角色编辑页的分配。
 
-## 9.5 默认策略:fail-open
+## 9.5 默认策略:fail-closed
 
-未收录路由(目录里没有 `data` 匹配行)→ **直接放行**,不进入角色授权判断。
+未收录路由(目录里没有 `data` 匹配行)→ **默认拒绝**,不进入角色授权判断。自助路由(profile / menu / password / avatar)由 `defaultCheckerAllowlist` 放行;admin 的 CRUD 与业务 RPC 由 `derive.go` 写入 catalog,再由 `Seed` 授给超管、由运维按角色授权。
 
-拒绝路径只覆盖**目录已收录且当前角色无授权**的情况(业务码 `4003`)。`WithCheckerAllowlist` 是短路 catalog 命中后立即放行的开关,用于"目录里登记了但希望绕过角色授权"的子树(如内部监控端点)。
+拒绝路径覆盖**目录未收录**和**目录已收录但当前角色无授权**两种情况(业务码 `4003`)。`WithCheckerAllowlist` 是显式 bypass,不是更严格的开关;`WithCheckerFailOpen(true)` 仅用于迁移期恢复历史行为。
 
-> 历史变更:2026-08-13 曾临时调整为 fail-closed,随后回滚为 fail-open——`derive.go` 已经把 rest/v3 的 8 张 CRUD 资源写入 catalog,业务 RPC 本身就走不到这条路径;fail-closed 会让所有未在 catalog 的内部端点都被挡掉,运维成本高于安全收益。
+> 安全取舍:fail-closed 会让未 catalog 的内部端点被挡掉。这正是目的——新路由不能因为“忘了登记”而默认对外开放。新增路由时应同时补 `sys_permissions` 或显式 allowlist。
 
 ## 9.6 缓存
 
@@ -91,12 +92,12 @@ httpSrv.Use(mwauth.JWT(
 ```go
 admin.NewPermissionChecker(db,
     admin.WithCheckerAllowlist(
-        "GET  /user/menus",
-        "GET  /role/options",
-        "*    /internal/*",
+        "*    /internal/*", // 由上游网关或 handler 自行鉴权
     ),
 )
 ```
+
+自助路由（`/user/profile`、`/user/menus`、`/menu/tree` 等）已内置在公开清单，不需要在这里重复登记。
 
 条目语法:`"<METHOD> <pattern>"`(中间一个空格)。
 
@@ -112,7 +113,7 @@ pattern 匹配语义镜像 `middleware/auth.jwt.isAllowed`:
 - `"<prefix>*"` → 前缀匹配,但**只在段边界**(`prefix` 以 `/` 结尾,或 `path` 后续第一个字符是 `/`)。
   例:`"/internal/*"` 不匹配 `"/internal-rogue/foo"`。
 
-**适用场景**:fail-open 下,业务 RPC 本身无需登记——目录未收录就直接放行。`WithCheckerAllowlist` 用于"目录里已登记,但希望绕过角色授权判断"的子树(典型如内部监控端点):`/auth/login` / `/auth/refresh-token` 这类登录前调用依然由 JWT `WithAllow` 短路,根本不进 checker。其余鉴权责任(例如 `/user/reset-password` 的 super-admin 检查)由各自 handler 内的应用方守卫承担。
+**适用场景**:`WithCheckerAllowlist` 是**显式 bypass**——命中后既不查目录也不查角色授权。示例中的 `/internal/*` 必须由上游网关或 handler 自己承担鉴权。`/auth/login` / `/auth/refresh-token` / `/auth/logout` 这类登录前调用由 JWT `WithAllow` 短路,根本不进 checker。其余鉴权责任(例如 `/user/reset-password` 的 super-admin 检查)由各自 handler 内的应用方守卫承担。
 
 ## 9.8 缓存配置
 
@@ -130,7 +131,8 @@ admin.NewPermissionChecker(db,
 |---|---|
 | 未授权(目录收录但角色无授权) | `4003 PermissionDenied` |
 | claims 类型不符(`*auth.Claims` 缺失) | `4005 AccessDenied` |
-| 目录未收录且不在 allowlist(fail-open 放行) | (无错误) |
+| 目录未收录且不在公开清单 | `4003 PermissionDenied`(fail-closed 默认) |
+| 目录未收录且 `WithCheckerFailOpen(true)` | (无错误,迁移期兼容) |
 
 ## 9.10 Super 角色自动授权
 

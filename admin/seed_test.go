@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -16,6 +17,9 @@ func newTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
+	}
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
 	}
 	if err := db.AutoMigrate(
 		&models.Role{},
@@ -33,6 +37,38 @@ func newTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("migrate: %v", err)
 	}
 	return db
+}
+
+func TestSeed_FixedResolverKeepsGrantsOnRoleTenant(t *testing.T) {
+	db := newTestDB(t)
+	// A fixed resolver is a common single-tenant/custom wiring. Seed
+	// must still write the super role, user, and grants into one tenant;
+	// losing the WithoutTenant marker inside grantFullCatalog would put
+	// the grants under tenant-a while the role lives on the default one.
+	installTenantScope(db, func(context.Context) string { return "tenant-a" })
+
+	if err := Seed(db, "admin", "admin123"); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+
+	ctx := WithoutTenant(context.Background())
+	var role models.Role
+	if err := db.WithContext(ctx).Where("`key` = ?", "admin").First(&role).Error; err != nil {
+		t.Fatalf("load admin role: %v", err)
+	}
+	if role.TenantID != models.DefaultTenantID {
+		t.Fatalf("admin role tenant = %q, want %q", role.TenantID, models.DefaultTenantID)
+	}
+
+	var grants int64
+	if err := db.WithContext(ctx).Model(&models.RolePermission{}).
+		Where("role_key = ? AND tenant_id = ?", "admin", role.TenantID).
+		Count(&grants).Error; err != nil {
+		t.Fatalf("count admin grants: %v", err)
+	}
+	if grants == 0 {
+		t.Fatalf("admin grants missing on role tenant %q (fixed resolver leaked them)", role.TenantID)
+	}
 }
 
 func TestSeed_CreatesAdminRoleAndUser(t *testing.T) {

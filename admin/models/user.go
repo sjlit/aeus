@@ -79,6 +79,7 @@ func hashToken(token string) string {
 // BeforeCreate runs the password policy on any new plaintext password
 // and then hashes it so plaintext never reaches the database.
 func (m *User) BeforeCreate(tx *gorm.DB) error {
+	m.TenantModel.ApplyDefaultTenant()
 	if err := m.checkPlaintextPasswordPolicy(); err != nil {
 		return err
 	}
@@ -129,10 +130,14 @@ func (m *LoginLog) BeforeCreate(tx *gorm.DB) error {
 // the BeforeCreate / BeforeUpdate hooks.
 type User struct {
 	TenantModel
-	UID      string `json:"uid" yaml:"uid" xml:"uid" gorm:"index;size:20;column:uid" comment:"用户工号" props:"readonly:update" rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`
-	Username string `json:"username" yaml:"username" xml:"username" gorm:"size:20;column:username" comment:"用户名" rule:"required"`
+	UID      string `json:"uid" yaml:"uid" xml:"uid" gorm:"index;size:20;column:uid" comment:"用户工号" scenarios:"create;list;view;search;export" props:"readonly:update" rule:"required;unique;regexp:^[a-zA-Z0-9]{3,8}$"`
+	Username string `json:"username" yaml:"username" xml:"username" gorm:"index;size:20;column:username" comment:"用户名" rule:"required;unique"`
 	// RoleKey holds Role.Key (machine identifier); size:30 matches Role.Key.
-	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"用户角色" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
+	// RoleKey is editable through the update scenario, but the admin
+	// security guard requires a super caller for every actual role
+	// change. Requiredness is enforced by the create hook instead of a
+	// rule tag, so partial updates that omit role_key remain valid.
+	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"用户角色" scenarios:"create;update;list;view;search;export" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
 	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:normal;column:status" comment:"状态" scenarios:"create;update;list;search" enum:"normal:正常;disabled:禁用"`
 	DeptID      int64  `json:"dept_id" yaml:"deptId" xml:"deptId" gorm:"not null;column:dept_id" comment:"所属部门" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_departments?label=name&value=id&valueType=int64"`
 	Password    string `json:"password" yaml:"password" xml:"password" gorm:"size:120;column:password" comment:"用户密码" scenarios:"create" rule:"required;regexp:^[A-Za-z0-9]{8,32}$"`

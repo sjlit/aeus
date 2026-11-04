@@ -5,9 +5,11 @@
 // injects the tenant into ctx; the GORM callbacks installed in
 // admin.Server.Setup invoke the resolver directly against the
 // operation's ctx on every DB call, so no middleware in the chain
-// is required to wire up tenant isolation. The caller only has to
-// provide a Resolver that knows how to derive the tenant id from a
-// request context.
+// is required to wire up tenant isolation. Tenant scoping itself is
+// opt-in: enable it with admin.WithMultiTenant(true) (or
+// admin.WithTenantResolver(...)) before relying on the callbacks.
+// The caller then only has to provide a Resolver that knows how to
+// derive the tenant id from a request context.
 package middleware
 
 import (
@@ -19,8 +21,8 @@ import (
 // Resolver derives the current tenant id from a request context.
 //
 // Returning a non-empty value scopes every TenantModel read/update/
-// delete to that tenant, and backfills the TenantID field on
-// TenantModel creates. Returning "" opts out of scoping entirely:
+// delete to that tenant, and forces the TenantID field on TenantModel
+// creates. Returning "" opts out of scoping entirely:
 // the operation sees rows from every tenant. Use "" for:
 //
 //   - super-admin / cross-tenant tooling,

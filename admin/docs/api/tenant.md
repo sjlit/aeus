@@ -2,7 +2,7 @@
 
 租户域的读端点。租户的写操作走 REST CRUD `/system/sys_tenant`。
 
-> ⚠️ **访问控制必须由应用方处理**:`Tenant` 模型**没有 `tenant_id` 列**(它是所有 tenant_id 列的源头,无法自指),所以 GORM 租户回调对其天然不生效——`/system/sys_tenants` 与 `/tenant/*` 对任意通过 JWT 中间件的用户可见。admin 模块不做鉴权决策,应用必须自行挂超管专属中间件。详见 §8.4。
+> ⚠️ **访问控制必须由应用方确认**:`Tenant` 模型**没有 `tenant_id` 列**(它是所有 tenant_id 列的源头,无法自指),GORM 租户回调对其天然不生效。`/system/sys_tenant*` 与 `/tenant/*` 已写入 `sys_permissions` 目录,默认 fail-closed 下需要角色授权(超管由 `Seed` 自动获得);但如果应用省略 `PermissionChecker` 或把租户路由授给非超管角色,它们仍会暴露给普通 JWT 用户。建议额外挂超管专属中间件。详见 §8.4。
 
 ## 8.1 注册方式
 
@@ -129,21 +129,9 @@ httpSrv.Use(
 )
 ```
 
-也可通过 `NewPermissionChecker` 的 `WithCheckerAllowlist` 把租户路由从执行器短路:
+租户路由（`/tenant/*` 与 `/system/sys_tenant*`）已经写入 `sys_permissions` 目录，默认 fail-closed：超管角色由 `Seed` 自动获得授权，其他角色必须显式授权。**不要**用 `WithCheckerAllowlist` 绕过它们，除非上游已经挂了上面的 `superAdminOnly` 守卫；allowlist 是 bypass，不是更严格的检查。
 
-```go
-mwauth.WithPermissionChecker(
-    admin.NewPermissionChecker(db,
-        admin.WithCheckerAllowlist(
-            "GET /tenant/options",
-            "GET /tenant/detail",
-            // CRUD 路由按 catalog 自动放行(IsSuper 角色自动拥有全目录授权)
-        ),
-    ),
-)
-```
-
-但**仅靠 allowlist 不够**——allowlist 只是绕过权限执行器,不会真正鉴权;`superAdminOnly` 这类显式守卫才是真正的访问控制层。
+**不要用 allowlist 代替访问控制**——allowlist 只是绕过权限执行器,不会真正鉴权;`superAdminOnly` 这类显式守卫才是真正的访问控制层。
 
 ## 8.5 登录时的租户状态校验
 

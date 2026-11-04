@@ -60,27 +60,25 @@ const grantsMarker = "SUM(id)"
 // "PUT /system/sys_user/:id"), which matches the "<METHOD> <URI>"
 // format derive.go writes into sys_permissions.
 //
-// # Default policy: fail-open
+// # Default policy: fail-closed
 //
 // A request is allowed when at least one of the following holds:
 //
-//   - the request code is NOT in the sys_permissions catalog (default
-//     allow for uncatalogued routes — see note below);
-//   - the request code appears in the catalog AND the caller's role
-//     holds a matching grant on the caller's tenant;
-//   - the request path appears in the checker allowlist (see
-//     WithCheckerAllowlist) — used for catalogued routes where the
-//     caller has decided to bypass the granular grant check.
+//   - the request is an infrastructure route (NoRoute/static, probes,
+//     /metrics, /mcp, or generated openapi.json) — JWT still
+//     authenticates it, but it has no catalog entry;
+//   - the request path+method is on the checker's public allowlist
+//     (self-service routes such as /user/profile and /user/menus);
+//   - the request code appears in the sys_permissions catalog AND the
+//     caller's role holds a matching grant on the caller's tenant.
 //
-// The deny path is reserved for catalogued routes where the caller's
-// role lacks the grant. The fail-open default is the original
-// behavior: a route that has not been brought into the catalog is
-// treated as unrestricted; routes brought into the catalog are
-// gated by the role's grant set. Operators that want fail-closed
-// semantics for a subtree can wire `WithCheckerAllowlist` with a
-// narrow prefix and leave the catalog covering the rest — the
-// allowlist is the place to opt into stricter checks, mirroring the
-// JWT middleware's `WithAllow` in spirit.
+// A request whose route is NOT in the catalog is denied by default.
+// That is the safe default for an admin module: a newly added route
+// cannot silently become available to every authenticated user just
+// because nobody remembered to catalog it. Applications that still need
+// the historical fail-open behavior can opt in with
+// WithCheckerFailOpen(true), but this should be treated as a temporary
+// migration escape hatch.
 //
 // # Caching
 //
@@ -105,6 +103,15 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 		panic("admin: NewPermissionChecker requires a non-nil *gorm.DB")
 	}
 	cfg := &checkerConfig{}
+	// Built-in public routes: every authenticated user needs these to
+	// render their own session (profile, menu tree, permission codes).
+	// Keeping them in the allowlist means a normal user does not need an
+	// explicit grant for self-service, while every admin route remains
+	// catalogued and fail-closed.
+	for _, entry := range defaultCheckerAllowlist {
+		method, pattern := splitAllowEntry(entry)
+		cfg.allowlist = append(cfg.allowlist, allowEntry{method: method, pattern: pattern})
+	}
 	for _, o := range opts {
 		o(cfg)
 	}
@@ -153,6 +160,17 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 		method, _ := metadata.Get(ctx, metadata.RequestMethod)
 		path, _ := metadata.Get(ctx, metadata.RequestPath)
 
+		// Infrastructure routes are not business APIs and have no
+		// catalog entries. Let them through: JWT still authenticates
+		// them, but a permission row cannot be granted for routes such
+		// as the SPA's static files (NoRoute has an empty FullPath),
+		// /health, /metrics, /mcp, or the generated openapi.json docs.
+		// Without this bypass the fail-closed default turns a 404 or a
+		// static asset into a misleading 403.
+		if isInfrastructurePath(path) {
+			return nil
+		}
+
 		// Allowlist check runs first: an allowlisted path is bypassed
 		// before the catalog lookup, so business RPCs that don't fit
 		// the catalog format don't pay the cache miss on the hot path.
@@ -162,9 +180,8 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 
 		code := method + " " + path
 
-		// Catalog set first: an empty catalog means every catalogued
-		// request is denied, and uncatalogued routes are also denied
-		// (no allowlist match above).
+		// Catalog set first: an empty catalog means every non-public
+		// request is denied by the fail-closed default.
 		catalogSet, err := dbcache.Try(apiCatalog, ctx, "perm:catalog", func(tx *gorm.DB) (map[string]struct{}, error) {
 			var datas []string
 			if err := tx.Model(&models.Permission{}).
@@ -182,12 +199,14 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 			return err
 		}
 		if _, ok := catalogSet[code]; !ok {
-			// Uncatalogued route: default-allow (fail-open). The deny
-			// path is reserved for catalogued routes where the caller's
-			// role lacks the grant. Operators that want fail-closed
-			// semantics for a subtree opt in via WithCheckerAllowlist
-			// (see NewPermissionChecker doc).
-			return nil
+			// Uncatalogued route: deny by default so a newly added route
+			// cannot silently become public. The explicit opt-out is
+			// WithCheckerFailOpen(true) for applications migrating from
+			// the historical behavior.
+			if cfg.failOpen {
+				return nil
+			}
+			return errs.ErrPermissionDenied
 		}
 
 		// Catalogued: the role must hold the matching grant on the
@@ -226,15 +245,40 @@ type CheckerOption func(*checkerConfig)
 type checkerConfig struct {
 	cache     cache.Cache
 	allowlist pathMatcher
+	failOpen  bool
 }
 
-// WithAllowlist registers routes that bypass the catalog-based
-// permission check. Each entry is "<METHOD> <path-pattern>", e.g.
+// defaultCheckerAllowlist contains the self-service routes every signed-in
+// user must be able to call: own profile, own menu tree, own permission
+// codes, password/avatar changes, and the navigation breadcrumb. These
+// routes do not grant any administrative capability.
+var defaultCheckerAllowlist = []string{
+	"GET /user/profile",
+	"PATCH /user/profile",
+	"POST /user/change-password",
+	"POST /user/set-avatar",
+	"GET /user/menus",
+	"GET /user/permissions",
+	"GET /menu/tree",
+	"GET /menu/breadcrumb",
+}
+
+// WithCheckerFailOpen restores the historical fail-open behavior for
+// uncatalogued routes. Prefer cataloging the route (or adding it to the
+// explicit allowlist) instead; this option exists for staged migrations.
+func WithCheckerFailOpen(failOpen bool) CheckerOption {
+	return func(c *checkerConfig) {
+		c.failOpen = failOpen
+	}
+}
+
+// WithCheckerAllowlist registers routes that BYPASS the catalog-based
+// permission check. The historical name is kept for compatibility; the
+// semantics are a public/bypass list, not an extra enforcement layer.
+// Each entry is "<METHOD> <path-pattern>", e.g.
 //
-//	WithAllowlist(
-//	    "GET  /user/menus",
-//	    "GET  /role/options",
-//	    "*    /internal/*",
+//	WithCheckerAllowlist(
+//	    "*    /internal/*", // protected by an upstream gateway / handler
 //	)
 //
 // The path-pattern syntax mirrors middleware/auth.jwt's isAllowed:
@@ -247,12 +291,10 @@ type checkerConfig struct {
 //
 // Use it sparingly — every entry is a route whose authorization is
 // enforced by some other mechanism (JWT allowlist, an upstream
-// gateway, an application-level guard), AND the catalog has a row
-// that would otherwise demand a role grant check. Under fail-open
-// the allowlist is not needed for plain bypass; it is needed when
-// the route IS catalogued and you want to skip the role check, so
-// each entry makes an opt-out from catalog enforcement visible in
-// code review.
+// gateway, an application-level guard) or is genuinely public. Each
+// entry makes a bypass visible in code review. The self-service routes
+// (profile/menu/password) are already public by default; this option is
+// for additional application-specific routes.
 func WithCheckerAllowlist(entries ...string) CheckerOption {
 	return func(c *checkerConfig) {
 		for _, e := range entries {
@@ -296,6 +338,25 @@ func (m pathMatcher) match(method, path string) bool {
 		}
 	}
 	return wildcardHit
+}
+
+// isInfrastructurePath reports routes that are not part of the RBAC
+// catalog: the router's NoRoute/static handler (empty FullPath), probes,
+// infrastructure endpoints, and generated OpenAPI JSON. These are still
+// protected by the JWT middleware; the permission checker only decides
+// whether a role may call a business API.
+func isInfrastructurePath(path string) bool {
+	if path == "" {
+		return true
+	}
+	switch path {
+	case "/health", "/ready", "/metrics", "/mcp":
+		return true
+	}
+	if strings.HasPrefix(path, "/mcp/") {
+		return true
+	}
+	return strings.HasSuffix(path, "/openapi.json")
 }
 
 // splitAllowEntry parses "<METHOD> <pattern>"; METHOD is "*" or empty

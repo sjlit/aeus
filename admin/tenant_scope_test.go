@@ -26,6 +26,9 @@ func withTenantDB(t *testing.T, ms ...any) (*gorm.DB, func(string) context.Conte
 	if err != nil {
 		t.Fatal(err)
 	}
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
 	if len(ms) > 0 {
 		if err := db.AutoMigrate(ms...); err != nil {
 			t.Fatal(err)
@@ -167,9 +170,10 @@ func TestTenantScope_Create_BackfillsBlankTenantID(t *testing.T) {
 	}
 }
 
-func TestTenantScope_Create_PreservesExplicitTenantID(t *testing.T) {
+func TestTenantScope_Create_OverridesExplicitTenantID(t *testing.T) {
 	db, ctx := withTenantDB(t, &models.Role{})
-	// Caller sets TenantID explicitly; callback must NOT overwrite it.
+	// The resolver is authoritative: a request body that tries to set a
+	// different tenant_id must not be able to write into that tenant.
 	if err := db.WithContext(ctx("acme")).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "manual"}, Key: "owner", Name: "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +181,8 @@ func TestTenantScope_Create_PreservesExplicitTenantID(t *testing.T) {
 	if err := db.Where("`key` = ?", "owner").First(&got).Error; err != nil {
 		t.Fatal(err)
 	}
-	if got.TenantID != "manual" {
-		t.Fatalf("explicit tenant overwritten = %q, want manual", got.TenantID)
+	if got.TenantID != "acme" {
+		t.Fatalf("explicit tenant not overridden = %q, want acme", got.TenantID)
 	}
 }
 
@@ -285,6 +289,9 @@ func withClaimsDB(t *testing.T, ms ...any) (*gorm.DB, func(*auth.Claims) context
 	if err != nil {
 		t.Fatal(err)
 	}
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
 	if len(ms) > 0 {
 		if err := db.AutoMigrate(ms...); err != nil {
 			t.Fatal(err)
@@ -350,8 +357,8 @@ func TestTenantScope_ClaimsResolver_NoClaims_BypassesScope(t *testing.T) {
 	}
 }
 
-func TestTenantScope_ClaimsResolver_BackfillsCreate(t *testing.T) {
-	// Confirms the Create backfill reads FromClaimsResolver, not
+func TestTenantScope_ClaimsResolver_ScopesCreate(t *testing.T) {
+	// Confirms the Create callback reads FromClaimsResolver, not
 	// the StoreOnContext path. Without an explicit TenantID on the
 	// model, the row must land in the claims' tenant.
 	db, ctx := withClaimsDB(t, &models.Role{})

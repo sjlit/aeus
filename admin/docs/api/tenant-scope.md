@@ -4,20 +4,22 @@ admin 模块通过 GORM 回调层实现租户隔离,**不是 HTTP 中间件**—
 
 ## 10.1 机制
 
-`admin.Server.Setup` 在启动时通过 `installTenantScope` 安装 4 个 GORM 回调(注册名 `aeus:tenant:*`):
+`admin.Server.Setup` 在 **`MultiTenant=true`** 时通过 `installTenantScope` 安装 4 个 GORM 回调(注册名 `aeus:tenant:*`);默认单租户模式不安装:
 
 | 回调 | 触发时机 | 行为 |
 |---|---|---|
 | Query | SELECT 生成前 | 在 WHERE 子句追加 `tenant_id = ?`,与业务 WHERE 合入同一条 SQL |
 | Update | UPDATE 生成前 | 同上 |
 | Delete | DELETE 生成前 | 同上 |
-| Create | 业务 `BeforeCreate` 钩子之后 | 为空白的 `TenantID` 字段回填 resolver 返回的租户 ID(显式设置的值优先) |
+| Create | 业务 `BeforeCreate` 钩子之后 | 把 `TenantID` **强制写成** resolver 返回的租户 ID(请求体不能指定别的租户) |
+
+未开启多租户时,`User` / `Role` / `RolePermission` / `Department` 的 `BeforeCreate` 会把空 `TenantID` 落到默认租户 `00000000-0000-0000-0000-000000000000`,保证 REST 新建的用户/角色与 `Seed` 的授权处于同一租户。
 
 回调按**列名**(`tenant_id`)而非 struct 嵌入判断,因此:
 
 - 不依赖 admin 的 `models` 包,应用自建的租户模型同样自动生效;
 - 是否带 `tenant_id` 列的结果按 `*schema.Schema` 缓存,热路径上只有一次 map Load;
-- rest/v3 的 `ResourceConfig.TenantResolve` 也会被注入(仅限于带 `tenant_id` 列的模型),Search / Export 查询路径自动带 `tenant_id` 过滤——**全局模型**(Menu/Permission/Tenant)不带此注入,避免无效 SQL。
+- `ResourceConfig.TenantResolve` 仅在 `MultiTenant=true` 且模型带 `tenant_id` 列时注入,Search / Export 查询路径自动带 `tenant_id` 过滤——**全局模型**(Menu/Permission/Tenant)不带此注入,避免无效 SQL。
 
 ## 10.2 Resolver 契约
 
@@ -30,12 +32,14 @@ type Resolver func(ctx context.Context) string
 **返回非空租户 ID**:
 
 - 读 / 改 / 删自动限定该租户;
-- 创建时若 `TenantID` 留空,自动回填该 ID。
+- 创建时 `TenantID` 会被**强制写成该 ID**——请求体里指定其他租户无效,避免跨租户写入。
 
 **返回 `""`(空字符串)**:
 
 - 完全不做租户过滤——操作看到所有租户的行。
 - 适用场景:超管 / 跨租户工具 / 后台任务 / `AuthService.Login`(登录前不知道)。
+
+需要显式跨租户操作时,用 `admin.WithoutTenant(ctx)` 包一层,而不是在请求体里伪造 `tenant_id`。`Seed` 内部已经使用该 bypass,保证引导数据不会被自定义 resolver 收敛到单个租户。
 
 **必须满足**:
 
@@ -53,9 +57,7 @@ func FromClaimsResolver(ctx context.Context) string {
 }
 ```
 
-读取 `*auth.Claims.TenantID`(由 JWT 中间件写入 ctx)。**开箱即用的装配**(`admin.New` + JWT 中间件 + `Setup`)即实现端到端租户隔离,**无需额外中间件**。
-
-未配置 `WithTenantResolver` 时,`newOptions` 把 `TenantResolver` 设为 `FromClaimsResolver`(见 `admin/options.go:39-41`)。
+读取 `*auth.Claims.TenantID`(由 JWT 中间件写入 ctx)。租户隔离默认**关闭**(单租户):只有显式 `admin.WithMultiTenant(true)` 或 `admin.WithTenantResolver(...)` 才会安装 GORM 回调。启用多租户且未配置自定义 resolver 时,`newOptions` 才把 `TenantResolver` 设为 `FromClaimsResolver`。
 
 ## 10.4 自定义 Resolver
 
@@ -82,7 +84,7 @@ admin.WithTenantResolver(func(ctx context.Context) string {
 | `Permission` | 权限目录全局共享,所有租户共用一份 |
 | `Tenant` | 租户表是租户 ID 的源头,无法自指 |
 
-回调会自动跳过这些模型——它们既不会被加 `tenant_id = ?` 过滤,也不会被 `BeforeCreate` 回填。
+回调会自动跳过这些模型——它们既不会被加 `tenant_id = ?` 过滤,也不会被 Create 回调强制写入租户 ID。
 
 ### 级联清理不回绕回租户回调
 
@@ -146,5 +148,5 @@ db.Find(&rows)
 | 数据"消失" | 检查 `WithTenantResolver` 是否返回了非预期值;确认 `*auth.Claims.TenantID` 与表中 `tenant_id` 一致 |
 | 跨租户看到数据 | 检查中间件是否把 JWT claims 写入 ctx;检查 resolver 是否错误返回 `""` |
 | 全局模型报错 "no column tenant_id" | rest/v3 旧版本无条件追加;升级 admin 确保 `modelHasTenantIDColumn` 守卫生效 |
-| 创建时 `tenant_id` 空 | resolver 返回了空字符串;Create 回调不会回填(空 = 不限租户 = 不回填) |
+| 创建时 `tenant_id` 空 | resolver 返回了空字符串;Create 回调不会强制写入(空 = 不限租户 ≠ 默认租户) |
 | 删除时出现递归 | `purgeRolePermissions` 必须用 `NewDB + SkipHooks` 会话 |

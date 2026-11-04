@@ -213,10 +213,10 @@ func TestBuildVueContent_Placeholders(t *testing.T) {
 // to a follow-up t.Run for the no-server-default case.
 func TestRegisterModelConfig_ResolveVueOutputDir(t *testing.T) {
 	cases := []struct {
-		name           string
-		cfg            *registerModelConfig
-		serverDefault  string
-		want           string
+		name          string
+		cfg           *registerModelConfig
+		serverDefault string
+		want          string
 	}{
 		{
 			name:          "nil cfg falls back to server default",

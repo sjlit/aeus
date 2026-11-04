@@ -9,8 +9,8 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"github.com/sjlit/aeus/admin/models"
-	"github.com/sjlit/rest/v3/schema"
 	ghttp "github.com/sjlit/aeus/transport/http"
+	"github.com/sjlit/rest/v3/schema"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +26,7 @@ type testAppModel struct {
 	Title    string `gorm:"column:title;size:120"`
 }
 
-func (m *testAppModel) TableName() string { return "demo_notes" }
+func (m *testAppModel) TableName() string  { return "demo_notes" }
 func (m *testAppModel) ModuleName() string { return "demo" }
 
 // testAppModel intentionally does NOT implement MenuProvider; the

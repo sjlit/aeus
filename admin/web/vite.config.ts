@@ -7,7 +7,10 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 // REST_UI_LOCAL=1 时,@sjlit/rest-ui 走本地源码 (/mobe/js/rest-ui/src),
 // 改源码即时 HMR;不设置则走 node_modules 里的发布版本。
 const restUiLocal = !!process.env.REST_UI_LOCAL
-const restUiRoot = '/mobe/js/rest-ui'
+// REST_UI_ROOT lets each developer point at their own checkout of the
+// rest-ui source tree; the previous hard-coded /mobe path only worked on
+// one machine.
+const restUiRoot = process.env.REST_UI_ROOT || '/mobe/js/rest-ui'
 
 export default defineConfig({
   plugins: [

@@ -1,28 +1,28 @@
 # 2. REST 通用 CRUD
 
-由 `rest/v3` 根据注册的 GORM 模型自动生成。每个模型固定暴露 7 个端点(列表 / 详情 / 创建 / 更新 / 删除 / 导出 / OpenAPI),加上 1 个独立的 schema 元数据端点。
+由 `rest/v3` 根据注册的 GORM 模型自动生成。可写模型的暴露 7 个端点(列表 / 详情 / 创建 / 更新 / 删除 / 导出 / OpenAPI);安全/审计模型(`Permission` / `RolePermission` / `Audit` / `LoginLog`)只暴露读端点(detail / list / export)和 OpenAPI。另有 1 个独立的 schema 元数据端点。
 
 ## 2.1 资源路径
 
 所有资源统一以模块名 `system` 挂载。资源单复数由 rest/v3 自动从表名派生。
 
-| 资源 | 表 | 创建 / 详情 / 更新 / 删除 / 导出 | 列表 / 搜索 | OpenAPI |
+| 资源 | 表 | 写 | 读 | OpenAPI |
 |---|---|---|---|---|
-| `User` | `sys_users` | `/system/sys_user` | `/system/sys_users` | `/system/sys_user/openapi.json` |
-| `Role` | `sys_roles` | `/system/sys_role` | `/system/sys_roles` | `/system/sys_role/openapi.json` |
-| `Menu` | `sys_menus` | `/system/sys_menu` | `/system/sys_menuses` | `/system/sys_menu/openapi.json` |
-| `Department` | `sys_departments` | `/system/sys_department` | `/system/sys_departments` | `/system/sys_department/openapi.json` |
-| `Permission` | `sys_permissions` | `/system/sys_permission` | `/system/sys_permissions` | `/system/sys_permission/openapi.json` |
-| `RolePermission` | `sys_role_permissions` | `/system/sys_role_permission` | `/system/sys_role_permissions` | `/system/sys_role_permission/openapi.json` |
-| `Audit` | `sys_audits` | `/system/sys_audit` | `/system/sys_audits` | `/system/sys_audit/openapi.json` |
-| `LoginLog` | `sys_login_logs` | `/system/sys_login_log` | `/system/sys_login_logs` | `/system/sys_login_log/openapi.json` |
-| `Tenant` | `sys_tenants` | `/system/sys_tenant` | `/system/sys_tenants` | `/system/sys_tenant/openapi.json` |
+| `User` | `sys_users` | ✅ `/system/sys_user` | `/system/sys_users` | `/system/sys_user/openapi.json` |
+| `Role` | `sys_roles` | ✅ `/system/sys_role` | `/system/sys_roles` | `/system/sys_role/openapi.json` |
+| `Menu` | `sys_menus` | ✅ `/system/sys_menu` | `/system/sys_menuses` | `/system/sys_menu/openapi.json` |
+| `Department` | `sys_departments` | ✅ `/system/sys_department` | `/system/sys_departments` | `/system/sys_department/openapi.json` |
+| `Tenant` | `sys_tenants` | ✅ `/system/sys_tenant` | `/system/sys_tenants` | `/system/sys_tenant/openapi.json` |
+| `Permission` | `sys_permissions` | ❌ 只读 | `/system/sys_permissions` | `/system/sys_permission/openapi.json` |
+| `RolePermission` | `sys_role_permissions` | ❌ 只读 | `/system/sys_role_permissions` | `/system/sys_role_permission/openapi.json` |
+| `Audit` | `sys_audits` | ❌ 只读 | `/system/sys_audits` | `/system/sys_audit/openapi.json` |
+| `LoginLog` | `sys_login_logs` | ❌ 只读 | `/system/sys_login_logs` | `/system/sys_login_log/openapi.json` |
 
 > `Menu` 的复数是 `sys_menuses`(机械转换,非语义化)。
 
 ## 2.2 端点模板
 
-以 `User`(表 `sys_users`)为例,所有资源统一遵循:
+以 `User`(表 `sys_users`)为例,可写资源统一遵循:
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -136,7 +136,7 @@ GET /schema/:module/:table
 - 必须挂在 JWT 之后,无 allowlist 短路。
 - 路径参数 `:module`、`:table` 必须非空,否则 `1001 Invalid`。
 - 表名未注册 → `4004 NotFound`。
-- HTTP 状态始终 `200`,业务码由 `body.code` 决定。
+- 由 admin responder 处理的业务响应 HTTP 状态为 `200`,业务码由 `body.code` 决定;JWT/限流/404 等传输层错误使用标准状态码(见 [overview.md](./overview.md))。
 
 注册入口(`schema_endpoint.go`):
 

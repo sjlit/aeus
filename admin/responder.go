@@ -1,23 +1,13 @@
 package admin
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
 	"github.com/sjlit/aeus/pkg/errs"
+	responsepkg "github.com/sjlit/aeus/pkg/response"
 	"github.com/sjlit/rest/v3"
 )
-
-// envelope is the wire shape admin emits on every endpoint: a flat
-// {code, message, data} object.  The business outcome travels in code
-// (0 = OK) while the HTTP status stays 200 on all business paths; see
-// writeEnvelope.
-type envelope struct {
-	Code    int    `json:"code" xml:"code" yaml:"code"`
-	Message string `json:"message" xml:"message" yaml:"message"`
-	Data    any    `json:"data,omitempty" xml:"data,omitempty" yaml:"data,omitempty"`
-}
 
 // responderFunc adapts respond to rest.Responder, so newOptions can
 // hand the stateless respond function straight to rest/v3 without a
@@ -70,25 +60,13 @@ func respond(w http.ResponseWriter, r *http.Request, data any) {
 }
 
 // writeEnvelope serializes a single {code, message, data} body and
-// writes it with HTTP 200.  admin's convention keeps the HTTP status
-// at 200 across all success and business-error paths; the envelope's
-// code field carries the business outcome.
+// writes it with HTTP 200. admin's convention keeps the HTTP status at
+// 200 across all success and business-error paths; the envelope's code
+// field carries the business outcome.
+//
+// The writer itself lives in pkg/response so transport-level errors
+// (JWT, rate limiting, not-found) and admin business responses share one
+// envelope implementation and cannot drift.
 func writeEnvelope(w http.ResponseWriter, code int, message string, data any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	// json.Marshal + w.Write is cheaper than json.NewEncoder+Encode on
-	// the login hot path: NewEncoder allocates an *Encoder plus an
-	// internal 4 KiB bufio.Writer and flushes per call, which dwarfs
-	// the work of marshaling a 3-field envelope.
-	body, err := json.Marshal(envelope{Code: code, Message: message, Data: data})
-	if err != nil {
-		// Marshal only fails if data holds an unmarshalable value
-		// (channels, funcs, cyclic data).  Fall back to a minimal error
-		// envelope instead of dropping the response.
-		body, _ = json.Marshal(envelope{
-			Code:    int(errs.CodeInvalid),
-			Message: "marshal failure: " + err.Error(),
-		})
-	}
-	_, _ = w.Write(body)
+	_ = responsepkg.Write(w, http.StatusOK, responsepkg.New(code, message, data))
 }

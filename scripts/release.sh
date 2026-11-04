@@ -172,6 +172,20 @@ if [ "${#submods[@]}" -gt 0 ]; then
   fi
 fi
 
+# admin 还依赖兄弟模块 transport/http；bump-version.sh 只处理根模块，
+# 单独把这条依赖对齐到本次发布版本（或当前最新 tag），避免 admin 发布后
+# 仍然引用旧 transport/http。
+if [ -f admin/go.mod ]; then
+  transport_http_version="$(ver_of "transport/http" "$RELEASE")"
+  if [ -z "$transport_http_version" ]; then
+    transport_http_tag="$(git tag -l 'transport/http/v[0-9]*' | sort -V | tail -1)"
+    transport_http_version="${transport_http_tag##*/}"
+  fi
+  if [ -n "$transport_http_version" ]; then
+    (cd admin && go mod edit -require="github.com/sjlit/aeus/transport/http@${transport_http_version}")
+  fi
+fi
+
 # --- 提交并打标签(无文件改动时跳过提交,直接对 HEAD 打标签) ---
 git add -A
 if [ -n "$(git diff --cached --name-only)" ]; then

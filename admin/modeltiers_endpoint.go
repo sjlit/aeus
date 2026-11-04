@@ -47,6 +47,7 @@ import (
 //	sys_permissions row, so RBAC applies like any cataloged API.
 //
 // Returns: 200 with {code:0, message:"", data:[{label,value,parent,
+//
 //	children: [...]}, ...]} on success; 200 with
 //	{code:4001|4004, message:"...", data:null} on the matching
 //	error path. HTTP status stays 200 in every case — the
@@ -98,7 +99,7 @@ func RegisterModelTiersEndpoint(s *Server) (http.HandlerFunc, error) {
 			return
 		}
 		var tenant string
-		if s.opts.TenantResolver != nil && modelHasTenantIDColumn(s.opts.DB, model) {
+		if s.opts.MultiTenant && s.opts.TenantResolver != nil && modelHasTenantIDColumn(s.opts.DB, model) {
 			tenant = s.opts.TenantResolver(r.Context())
 		}
 		items, err := queryModelTiers(r.Context(), s.opts.DB, model, tenant, parent, label, value, valueType)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/sjlit/aeus/middleware"
 	"github.com/sjlit/aeus/pkg/errs"
 	"github.com/sjlit/aeus/pkg/netutil"
+	responsepkg "github.com/sjlit/aeus/pkg/response"
 )
 
 type Server struct {
@@ -250,6 +252,40 @@ func (s *Server) CORSInterceptor() gin.HandlerFunc {
 	}
 }
 
+// abortWithEnvelope writes one shared {code, message, data} envelope and
+// aborts the Gin chain. It is used for every transport-level error so the
+// admin responder and the HTTP transport cannot drift on wire shape.
+func abortWithEnvelope(c *gin.Context, status, code int, message string) {
+	_ = responsepkg.Write(c.Writer, status, responsepkg.New(code, message, nil))
+	c.Abort()
+}
+
+// recoveryInterceptor turns a handler panic into the same error envelope
+// as any other 500 and keeps the process serving. gin.New() does not
+// install gin.Recovery(), so without this a panic would escape the
+// framework's error/metrics/trace path and be handled only by net/http.
+func (s *Server) recoveryInterceptor() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				lg := s.Logger
+				if lg == nil {
+					lg = logger.Default()
+				}
+				lg.Errorf(c.Request.Context(), "http handler panic: %v\n%s", r, debug.Stack())
+				if !c.Writer.Written() {
+					abortWithEnvelope(c, http.StatusInternalServerError, int(errs.CodeInternal), "internal server error")
+					return
+				}
+				// The handler already wrote a response; do not append a
+				// second envelope to the body.
+				c.Abort()
+			}
+		}()
+		c.Next()
+	}
+}
+
 func (s *Server) requestInterceptor() gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		start := time.Now()
@@ -315,18 +351,22 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 				case middleware.IsAbort(err):
 					var ae *errs.Error
 					if errors.As(err, &ae) {
-						ginCtx.AbortWithStatusJSON(ae.HTTPStatus(), newResponse(int(ae.Code), ae.Message, nil))
+						abortWithEnvelope(ginCtx, ae.HTTPStatus(), int(ae.Code), ae.Message)
 					} else {
-						ginCtx.AbortWithStatusJSON(http.StatusOK, newResponse(int(errs.CodeOK), "", nil))
+						abortWithEnvelope(ginCtx, http.StatusOK, int(errs.CodeOK), "")
 					}
 				default:
 					var se *errs.Error
 					// errors.As unwraps wrapped errors (fmt.Errorf("%w", ...)),
 					// preserving the business code instead of degrading to 500.
 					if errors.As(err, &se) {
-						ginCtx.AbortWithStatusJSON(se.HTTPStatus(), newResponse(int(se.Code), se.Message, nil))
+						abortWithEnvelope(ginCtx, se.HTTPStatus(), int(se.Code), se.Message)
 					} else {
-						ginCtx.AbortWithStatusJSON(http.StatusInternalServerError, newResponse(int(errs.CodeUnavailable), err.Error(), nil))
+						// Do not echo raw internal errors (SQL, paths,
+						// wrapped driver messages) to the client; log the
+						// detail server-side and return a stable envelope.
+						s.Logger.Errorf(ctx, "unhandled http handler error: %v", err)
+						abortWithEnvelope(ginCtx, http.StatusInternalServerError, int(errs.CodeUnavailable), "internal server error")
 					}
 				}
 			} else {
@@ -401,9 +441,28 @@ func (s *Server) mountMcp() {
 }
 
 func (s *Server) Start(ctx context.Context) (err error) {
+	handler := http.Handler(s.engine)
+	if s.opts.handler != nil {
+		handler = s.opts.handler
+	}
+	baseCtx := s.opts.context
+	if baseCtx == nil {
+		baseCtx = ctx
+	}
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
 	s.serve = &http.Server{
-		Addr:    s.opts.address,
-		Handler: s.engine,
+		Addr:              s.opts.address,
+		Handler:           handler,
+		ReadHeaderTimeout: s.opts.readHeaderTimeout,
+		ReadTimeout:       s.opts.readTimeout,
+		WriteTimeout:      s.opts.writeTimeout,
+		IdleTimeout:       s.opts.idleTimeout,
+		MaxHeaderBytes:    s.opts.maxHeaderBytes,
+		BaseContext: func(net.Listener) context.Context {
+			return baseCtx
+		},
 	}
 	if s.opts.logger != nil {
 		s.Logger = s.opts.logger
@@ -496,7 +555,12 @@ func (s *Server) startPprof(ctx context.Context) error {
 	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 	s.pprofListener = ln
-	s.pprofServe = &http.Server{Handler: mux}
+	s.pprofServe = &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 	s.Logger.Infof(ctx, "pprof server listen on: %s", ln.Addr().String())
 	go func() {
 		if err := s.pprofServe.Serve(ln); err != nil && !errs.Is(err, http.ErrServerClosed) {
@@ -510,7 +574,10 @@ func New(cbs ...Option) *Server {
 	svr := &Server{
 		uri: &url.URL{Scheme: "http"},
 		opts: &options{
-			network: "tcp",
+			network:           "tcp",
+			readHeaderTimeout: 10 * time.Second,
+			idleTimeout:       120 * time.Second,
+			maxHeaderBytes:    1 << 20,
 		},
 	}
 	portStr := os.Getenv("HTTP_PORT")
@@ -522,6 +589,15 @@ func New(cbs ...Option) *Server {
 	for _, cb := range cbs {
 		cb(svr.opts)
 	}
+	// Initialize the logger at construction time as well as in Start:
+	// tests and embedders can drive Engine().ServeHTTP directly, and the
+	// request interceptor logs on error paths.
+	if svr.opts.logger != nil {
+		svr.Logger = svr.opts.logger
+	}
+	if svr.Logger == nil {
+		svr.Logger = logger.Default()
+	}
 	if !svr.opts.debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -529,6 +605,12 @@ func New(cbs ...Option) *Server {
 	if svr.opts.enableCORS {
 		svr.engine.Use(svr.CORSInterceptor())
 	}
+	// gin.New() has no recovery middleware. The outer instance catches
+	// panics from the request interceptor itself; the inner instance is
+	// installed AFTER requestInterceptor so a handler panic is recovered
+	// before requestInterceptor's tail runs, allowing its metrics and
+	// tracing code to observe the 500 status.
+	svr.engine.Use(svr.recoveryInterceptor())
 	if svr.opts.mcpEnabled {
 		if svr.opts.mcpServer != nil {
 			svr.mcpServer = svr.opts.mcpServer
@@ -537,5 +619,7 @@ func New(cbs ...Option) *Server {
 		}
 	}
 	svr.engine.Use(svr.requestInterceptor())
+	// Inner recovery for handler panics (see the comment above).
+	svr.engine.Use(svr.recoveryInterceptor())
 	return svr
 }

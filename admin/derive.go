@@ -204,9 +204,11 @@ func (s *Server) validateMenuParentsRef(db *gorm.DB) error {
 //
 // "openapi" is a rest/v3 internal literal (not part of the schema.*
 // constant set), used only by the OpenAPI JSON endpoint.  It is not an
-// authorizable API, so it is excluded here too — if an application
-// declares it explicitly via ScenarioProvider, a permission row is
-// generated from the literal (also the intended behavior).
+// authorizable business API, so it is excluded here — PermissionChecker
+// treats `*/openapi.json` as infrastructure and lets JWT-authenticated
+// users read it. If an application declares it explicitly via
+// ScenarioProvider, a permission row is generated from the literal
+// (also the intended behavior).
 var _canonicalPermissionScenarios = []string{
 	schema.ScenarioCreate,
 	schema.ScenarioUpdate,
@@ -259,12 +261,22 @@ func permissionScenarios(resource *rest.Resource) []string {
 	if resource == nil {
 		return nil
 	}
-	model := resource.ModelValue().ModelType()
-	if sp, ok := reflect.New(model).Interface().(rest.ScenarioProvider); ok {
+	// A model that declares its own ScenarioProvider keeps ownership of
+	// the list (including custom scenario literals). Otherwise ask the
+	// resolved rest.Model which canonical scenarios it actually mounted;
+	// this is what respects the read-only WithScenarios(...) override
+	// applied for security/audit tables, so we never create write
+	// permission rows for routes that are not mounted.
+	modelType := resource.ModelValue().ModelType()
+	if sp, ok := reflect.New(modelType).Interface().(rest.ScenarioProvider); ok {
 		return sp.Scenarios()
 	}
-	out := make([]string, len(_canonicalPermissionScenarios))
-	copy(out, _canonicalPermissionScenarios)
+	out := make([]string, 0, len(_canonicalPermissionScenarios))
+	for _, scenario := range _canonicalPermissionScenarios {
+		if resource.ModelValue().HasScenario(scenario) {
+			out = append(out, scenario)
+		}
+	}
 	return out
 }
 
@@ -336,11 +348,11 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 		label
 }
 
-// _endpointPermissionCodes registers the metadata endpoints in the
-// permission catalog so they are RBAC-enforced like any other API.
-// Without catalog rows the PermissionChecker's default fail-open would
-// wave every authenticated user through — including the arbitrary
-// (module, table) enumeration surface these endpoints expose.
+// _endpointPermissionCodes registers the metadata/business RPC endpoints
+// in the permission catalog so they are RBAC-enforced like any other API.
+// With the checker's fail-closed default, an uncatalogued route is denied;
+// cataloging these rows is what lets Seed grant them to super roles and
+// lets operators grant them to other roles deliberately.
 //
 // Data matches the gin route TEMPLATE exactly: transport/http writes
 // RequestPath as gin's FullPath, and the checker compares
@@ -351,8 +363,28 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 var _endpointPermissionCodes = []struct {
 	data, description, group string
 }{
+	// Model metadata endpoints.
 	{"GET /rest/model-types/:module/:table", "选项查询 元数据下拉", "系统"},
 	{"GET /rest/model-tiers/:module/:table", "层级查询 树形选择", "系统"},
+	{"GET /schema/:module/:table", "Schema 元数据", "系统"},
+
+	// Business RPCs. Self-service reads/writes (profile, menu, password,
+	// avatar) are also in the checker's built-in allowlist; cataloging
+	// them keeps the super-role grant set complete and makes the
+	// fail-closed behavior explicit for non-super roles.
+	{"GET /role/options", "选项查询 角色下拉", "角色"},
+	{"GET /role/permissions", "查询 角色授权", "角色"},
+	{"PUT /role/permissions", "更新 角色授权", "角色"},
+	{"GET /role/menus", "查询 角色菜单", "角色"},
+	{"GET /permission/catalog", "查询 权限目录", "权限"},
+	{"GET /permission/list", "查询 权限列表", "权限"},
+	{"GET /menu/tree", "查询 菜单树", "菜单"},
+	{"GET /menu/all", "查询 全部菜单", "菜单"},
+	{"GET /menu/options", "查询 菜单选项", "菜单"},
+	{"GET /menu/breadcrumb", "查询 面包屑", "菜单"},
+	{"GET /tenant/options", "选项查询 租户下拉", "租户"},
+	{"GET /tenant/detail", "查询 租户详情", "租户"},
+	{"POST /user/reset-password", "重置 用户密码", "用户"},
 }
 
 // ensureEndpointPermissions idempotently inserts one sys_permissions

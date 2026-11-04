@@ -222,7 +222,7 @@ func (s *RoleService) ReplaceRolePermissions(ctx context.Context, req *pb.Replac
 		if len(missing) > 0 {
 			return errs.Newf(errs.CodeInvalid, "missing permission datas %v", missing)
 		}
-		return (&models.Role{}).ReplacePermissions(tx, ctx, req.Role, req.Menus, req.Apis)
+		return (&models.Role{}).ReplacePermissions(tx, ctx, req.Role, req.Menus, req.Apis, role.TenantID)
 	})
 	if err != nil {
 		return nil, err

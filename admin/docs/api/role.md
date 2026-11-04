@@ -48,6 +48,8 @@ pb.RegisterRoleServiceRouter(httpSrv, service.NewRoleService(
 | `value` | `Role.Key`(机器标识,前端原样回填 `User.RoleKey`) |
 | `label` | `Role.Name`(显示名) |
 
+> `User.RoleKey` 在创建和更新场景都可见,但**任何角色变更都要求调用者自身是 super**;普通用户管理角色可以改 email/status,但不能改角色。见 `admin/security_guards.go`。
+
 ### GET /role/permissions
 
 读取某角色的授权(菜单 Component 列表 + API 权限码列表)。

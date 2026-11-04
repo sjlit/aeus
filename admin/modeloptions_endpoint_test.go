@@ -429,7 +429,10 @@ func TestModelTypesEndpoint_ResolverScopedTenantModel(t *testing.T) {
 	for i, tid := range []string{"tenant-a", "tenant-b"} {
 		u := &models.User{UID: fmt.Sprintf("u%d", i+1), Username: "user-" + tid, RoleKey: "admin"}
 		u.TenantID = tid
-		if err := db.Create(u).Error; err != nil {
+		// Fixture seeding spans tenants; use the explicit bypass so
+		// the resolver (which deliberately always returns tenant-a in
+		// this test) does not collapse both rows into one tenant.
+		if err := db.WithContext(WithoutTenant(context.Background())).Create(u).Error; err != nil {
 			t.Fatalf("seed user %s: %v", tid, err)
 		}
 	}

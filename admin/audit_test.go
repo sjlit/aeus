@@ -45,6 +45,12 @@ func newAuditServer(t *testing.T, opts ...Option) (*gorm.DB, *ghttp.Server) {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	// A single connection keeps every query in this in-memory database
+	// on the same database instance; multiple pooled connections would
+	// each see a separate empty SQLite database.
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(1)
+	}
 	log, _ := captureLogger()
 	httpSrv := ghttp.New()
 	base := []Option{WithDB(db), WithRouter(httpSrv), WithLogger(log),
@@ -219,17 +225,20 @@ func TestAudit_DisabledByDefault(t *testing.T) {
 //     WithLoginLogger pipeline.
 func TestAudit_BuiltinExcludes(t *testing.T) {
 	db, srv := newAuditServer(t, WithAudit(true))
+	// Security/audit tables are mounted read-only now: there is no
+	// generic POST route through which a caller could create an audit
+	// row (and thereby recurse through the audit hook).
 	body := `{"uid":"u0001","action":"create","module":"m","table":"t","data":"payload"}`
 	rec := doReq(t, srv, http.MethodPost, "/system/sys_audit", body)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("manual sys_audit create status = %d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("read-only sys_audit create status = %d body=%s, want 404", rec.Code, rec.Body.String())
 	}
 	var n int64
 	if err := db.Model(&models.Audit{}).Count(&n).Error; err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Errorf("sys_audits rows = %d, want exactly the 1 manual row (hook must not re-audit)", n)
+	if n != 0 {
+		t.Errorf("sys_audits rows = %d, want 0", n)
 	}
 }
 

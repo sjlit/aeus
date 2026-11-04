@@ -163,15 +163,15 @@ func TestSetup_Seed_LinksChildrenToSections(t *testing.T) {
 	}
 
 	wantParent := map[string]string{
-		"SystemSysUsers":            "SystemUserCenter",
-		"SystemSysRoles":            "SystemUserCenter",
-		"SystemSysRolePermissions":  "SystemUserCenter",
-		"SystemSysDepartments":      "SystemUserCenter",
-		"SystemSysAudits":           "SystemLogs",
-		"SystemSysLoginLogs":        "SystemLogs",
-		"SystemSysTenants":          "SystemSettings",
-		"SystemSysMenus":            "SystemSettings",
-		"SystemSysPermissions":      "SystemSettings",
+		"SystemSysUsers":           "SystemUserCenter",
+		"SystemSysRoles":           "SystemUserCenter",
+		"SystemSysRolePermissions": "SystemUserCenter",
+		"SystemSysDepartments":     "SystemUserCenter",
+		"SystemSysAudits":          "SystemLogs",
+		"SystemSysLoginLogs":       "SystemLogs",
+		"SystemSysTenants":         "SystemSettings",
+		"SystemSysMenus":           "SystemSettings",
+		"SystemSysPermissions":     "SystemSettings",
 	}
 	for child, parent := range wantParent {
 		var row models.Menu
@@ -220,18 +220,18 @@ func TestSetup_Seed_SortWithinSections(t *testing.T) {
 	}
 
 	wantSort := map[string]int64{
-		"SystemUserCenter":  10,
-		"SystemLogs":        20,
-		"SystemSettings":    30,
-		"SystemSysUsers":            10,
-		"SystemSysRoles":            20,
-		"SystemSysRolePermissions":  30,
-		"SystemSysDepartments":      40,
-		"SystemSysAudits":           10,
-		"SystemSysLoginLogs":        20,
-		"SystemSysTenants":          10,
-		"SystemSysMenus":            20,
-		"SystemSysPermissions":      30,
+		"SystemUserCenter":         10,
+		"SystemLogs":               20,
+		"SystemSettings":           30,
+		"SystemSysUsers":           10,
+		"SystemSysRoles":           20,
+		"SystemSysRolePermissions": 30,
+		"SystemSysDepartments":     40,
+		"SystemSysAudits":          10,
+		"SystemSysLoginLogs":       20,
+		"SystemSysTenants":         10,
+		"SystemSysMenus":           20,
+		"SystemSysPermissions":     30,
 	}
 	for component, want := range wantSort {
 		var row models.Menu

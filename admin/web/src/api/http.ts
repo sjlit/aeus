@@ -120,11 +120,43 @@ http.interceptors.response.use(
       ElMessage.error('Network unreachable')
       return Promise.reject(error)
     }
-    // 后端对 CodeTokenExpired/CodeUnauthorized/CodeTokenInvalid 映射 HTTP 401
-    // (pkg/errs/error.go HTTPStatus):同样走静默刷新 → 重试路径,
-    // 否则 token 过期时不会自动跳登录页。
-    if (error.response.status === 401) {
+
+    const body = error.response.data
+    const code = envelopeCode(body)
+    const message = envelopeMessage(body)
+
+    // 传输层错误(JWT/限流/权限)也携带同一个 envelope。认证类错误
+    // 优先尝试静默 refresh；其余错误至少把后端 message toast 出来,
+    // 避免 axios 把 403/429 当异常后前端毫无提示。
+    //
+    // 4005 只在 HTTP 非 2xx 时视为会话失效:admin responder 也会用
+    // 4005 表示"旧密码错误/非超管重置密码",那些响应是 HTTP 200,
+    // 走成功拦截器,不应触发 refresh/logout。
+    if (
+      error.response.status === 401 ||
+      (error.response.status === 403 && code === 4005) ||
+      isAuthFailureCode(code)
+    ) {
       return refreshAndRetry(error.config)
+    }
+    // 5xx 不把后端原始 message(可能含 SQL/内部路径)直接展示给用户。
+    if (error.response.status >= 500) {
+      ElMessage.error('internal server error')
+      return Promise.reject(error)
+    }
+    if (error.response.status === 429) {
+      const retryAfter = error.response.headers?.['retry-after']
+      ElMessage.error(
+        message || (retryAfter
+          ? `too many attempts, retry after ${retryAfter}s`
+          : 'too many attempts'),
+      )
+      return Promise.reject(error)
+    }
+    if (message) {
+      ElMessage.error(message)
+    } else {
+      ElMessage.error(`HTTP ${error.response.status}`)
     }
     return Promise.reject(error)
   },

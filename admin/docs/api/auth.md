@@ -43,9 +43,11 @@ type TokenStore interface {
 
 **中间件接线(必需)**:黑名单由 `service.NewRevocationValidator(store, secret)` 消费——挂到 `mwauth.WithValidate(...)`,它拒绝 refresh token 调 API(`4005`)与已吊销 jti(含 store 故障,fail-closed)。未接线时 logout 只是删一条无人读取的记录。
 
+`/auth/logout` 必须加入 JWT `WithAllow` 清单:access token 过期后 JWT 会先拒绝请求,但 Logout handler 会自行校验 body 中的 access/refresh token 并吊销 refresh token,否则过期会话无法登出。
+
 ### RefreshToken 轮换
 
-每次刷新返回**全新** refresh token(新 jti),旧 jti 进黑名单直至自然过期——旧 token 重放即被拒(`4005 AccessDenied`)。前端必须持久化响应中的新 `refresh_token`(`admin/web` 已同步)。access token 从 DB 最新行签发,角色变更后旧 refresh token 换不出旧权限。
+每次刷新返回**全新** refresh token(新 jti),旧 jti 进黑名单直至自然过期——旧 token 重放即被拒(`4005 AccessDenied`)。前端必须持久化响应中的新 `refresh_token`;`admin/web` 已写入 localStorage(`aeus.refresh`),刷新页面后仍可静默续期。对 XSS 更敏感的场景应改为 HttpOnly refresh cookie。access token 从 DB 最新行签发,角色变更后旧 refresh token 换不出旧权限。
 
 ### LoginLogFunc 回调载荷
 
@@ -133,7 +135,7 @@ type LoginLogFunc func(ctx context.Context, info LoginLogInfo)
 }
 ```
 
-> refresh token **轮换**——响应中的 `refresh_token` 是全新签发的(新 `jti`),旧值已被吊销进黑名单。前端必须持久化新值。
+> refresh token **轮换**——响应中的 `refresh_token` 是全新签发的(新 `jti`),旧值已被吊销进黑名单。前端必须持久化新值(`admin/web` 使用 `aeus.refresh`)。
 
 **校验**:
 
@@ -228,8 +230,8 @@ admin 包**不**内置登录限流 — 但 `middleware/auth.RateLimit` 是为此
 - 算法:**token bucket**;冷启动 `Capacity` 个突发,稳态每秒补 `Refill` 个。
 - 命中:返回 `4010 TooManyAttempts`(HTTP 429)+ `Retry-After: <秒>` header。
 - 短路语义:多个 key 任一耗尽即拒(逻辑 AND),例如同时配置 `ip:{ip}` + `user:{user}` 时,IP 桶空就拒绝,user 桶不会被消费。
-- 占位符:`{ip}` `{user}` `{tenant}` `{path}`;`{user}` 在 JWT 中间件之前是空串(匿名桶),按账号限流必须把 `RateLimit` 放在 `JWT` **之后**。
-- 挂载顺序:**`RateLimit → JWT → handler`** — 在密码校验之前拦截,防止 bcrypt 慢路径被滥用。
+- 占位符:`{ip}` `{user}` `{tenant}` `{path}`;`{user}` 在 JWT 中间件之前是空串(匿名桶),按账号限流必须把 `RateLimit` 放在 `JWT` **之后**,或直接在登录 handler 里按 username 计数。
+- 挂载顺序:**`RateLimit(IP) → JWT → handler`** — 在密码校验之前拦截,防止 bcrypt 慢路径被滥用。登录路由在 JWT allowlist 上,所以登录前的限流只能按 IP。
 - 失败关闭:Limiter 自身报错时直接返回 `500`(不放行)。
 
 ### 默认配置(`admin/cmd/mock`)
@@ -237,18 +239,20 @@ admin 包**不**内置登录限流 — 但 `middleware/auth.RateLimit` 是为此
 ```go
 http.Use(mw.RateLimit(mw.RateLimitOpts{
     Path:     "/auth/login",
-    Keys:     []string{"login:ip:{ip}", "login:user:{user}"},
+    Keys:     []string{"login:ip:{ip}"},
     Capacity: 5,           // 突发 5 次
     Refill:   1.0 / 60,    // 60 秒补 1 个 = 稳态 1 次/分钟
 }))
 ```
+
+> 不要在登录前同时配 `login:user:{user}`:JWT 还没运行,`{user}` 恒为空,所有账号会共享一个全局桶。
 
 ### 覆盖范围
 
 | 攻击 | 防护 key |
 |---|---|
 | 同一 IP 撞库 | `login:ip:{ip}` |
-| 同一账号密码字典 | `login:user:{user}`(前提:RateLimit 放在 JWT 之后) |
+| 同一账号密码字典 | 需要登录 handler 内按 username 计数,或在 JWT 之后的已认证路由做 `{user}` 限流 |
 | 混合攻击 | 两个独立桶任一撞线即拒 |
 
 ### 与"账号锁定"的关系

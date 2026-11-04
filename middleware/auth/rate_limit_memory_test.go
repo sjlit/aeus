@@ -201,9 +201,9 @@ func TestMemoryLimiter_ConcurrentAccessIsSafe(t *testing.T) {
 
 func TestNewMemoryLimiter_PanicsOnBadArgs(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		cap      int
-		refill   float64
+		name      string
+		cap       int
+		refill    float64
 		wantPanic bool
 	}{
 		{"zero capacity", 0, 1, true},

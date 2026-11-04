@@ -16,5 +16,5 @@ const title = usePageTitle('sys_permissions')
   空模板等于把整张表藏掉。需要定制表格时,在插槽里给出完整实现。
 -->
 <template>
-  <SchemaViewer module="system" table="sys_permissions" :title="title" />
+  <SchemaViewer module="system" table="sys_permissions" :title="title" readonly />
 </template>

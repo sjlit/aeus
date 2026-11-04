@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"reflect"
 	"sync"
 
@@ -8,6 +9,28 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
+
+// tenantBypassKey marks operations that intentionally span tenants:
+// Seed/Setup bootstrapping, cross-tenant admin tools, and test fixtures.
+type tenantBypassKey struct{}
+
+// WithoutTenant returns a context that disables tenant scoping for the
+// DB operations using it. Use it only where cross-tenant access is the
+// explicit intent; ordinary request paths must never carry it.
+func WithoutTenant(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, tenantBypassKey{}, true)
+}
+
+func tenantBypassed(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(tenantBypassKey{}).(bool)
+	return v
+}
 
 // __tenantSchemaCache memoizes the tenant-column lookup against
 // *schema.Schema pointers. GORM interns a single *schema.Schema per
@@ -18,22 +41,21 @@ var __tenantSchemaCache sync.Map // map[*schema.Schema]bool
 
 // installTenantScope wires GORM callbacks so every read/update/delete on
 // a model that carries the `tenant_id` column is automatically scoped
-// to the tenant id produced by the resolver, and every create on such
-// a model has its `TenantID` field backfilled from the resolver when
-// the caller left it blank.
+// to the tenant id produced by the resolver, and every create on such a
+// model has its `TenantID` field forced to the resolver value.
 //
 // The callbacks run BEFORE the SQL is generated (Before("gorm:query"),
 // Before("gorm:update"), Before("gorm:delete")) so the WHERE clause is
 // merged into the same compiled statement. For Create, we run
 // Before("gorm:create") which fires after the per-model BeforeCreate
-// hooks, so explicit TenantID values set by application code win over
-// the resolver-supplied default.
+// hooks. The resolver wins over any tenant_id present in the request:
+// otherwise a caller could write into another tenant by supplying the
+// field in the JSON body.
 //
 // The resolver is invoked against the *operation's* ctx on every DB
 // call — there's no separate "store tenant on ctx" middleware to
-// install. This means the default wiring (admin.New + middleware/auth.JWT
-// + admin.Server.Setup) yields end-to-end isolation with no extra
-// boilerplate: JWT middleware writes claims on ctx, the callback's
+// install. Tenant scoping is opt-in (admin.WithMultiTenant(true)); when
+// enabled, the JWT middleware writes claims on ctx and the callback's
 // resolver reads TenantID off the claims.
 //
 // A model without a `tenant_id` column (e.g. Menu, which embeds the
@@ -63,14 +85,14 @@ func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 
 	create := db.Callback().Create()
 	create.Before("gorm:create").Register("aeus:tenant:create", func(tx *gorm.DB) {
-		if !hasTenantIDColumn(tx.Statement.Schema) {
+		if !hasTenantIDColumn(tx.Statement.Schema) || tenantBypassed(tx.Statement.Context) {
 			return
 		}
 		tid := resolver(tx.Statement.Context)
 		if tid == "" {
 			return
 		}
-		backfillTenantID(tx.Statement.ReflectValue, tid)
+		setTenantID(tx.Statement.ReflectValue, tid)
 	})
 }
 
@@ -82,7 +104,7 @@ func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 // operations whose resolver returns "" (the explicit opt-out for
 // super-admin tooling and the AuthService.Login RPC).
 func applyTenantScope(tx *gorm.DB, resolver middleware.Resolver) {
-	if !hasTenantIDColumn(tx.Statement.Schema) {
+	if !hasTenantIDColumn(tx.Statement.Schema) || tenantBypassed(tx.Statement.Context) {
 		return
 	}
 	tid := resolver(tx.Statement.Context)
@@ -130,35 +152,38 @@ func modelHasTenantIDColumn(db *gorm.DB, model any) bool {
 	return hasTenantIDColumn(stmt.Schema)
 }
 
-// backfillTenantID walks rv (which may be a struct, a pointer to
-// struct, or a slice of either) and sets every embedded TenantID
-// field that is still the zero value. Already-set values are left
-// alone so application code can override the resolver on demand.
-func backfillTenantID(rv reflect.Value, tid string) {
+// setTenantID walks rv (which may be a struct, a pointer to struct, or a
+// slice of either) and forces every embedded TenantID field to tid. The
+// resolver is the single source of truth for the active tenant: letting a
+// request body win would allow a caller to write into another tenant by
+// supplying a tenant_id that the generic REST decoder accepts. System
+// paths (Seed/Setup) opt out with WithoutTenant; Login opts out when the
+// resolver returns "" (the default claims resolver has no claims yet).
+func setTenantID(rv reflect.Value, tid string) {
 	if !rv.IsValid() {
 		return
 	}
 	switch rv.Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < rv.Len(); i++ {
-			backfillTenantID(rv.Index(i), tid)
+			setTenantID(rv.Index(i), tid)
 		}
 	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
 			return
 		}
-		backfillTenantID(rv.Elem(), tid)
+		setTenantID(rv.Elem(), tid)
 	case reflect.Struct:
 		t := rv.Type()
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if f.Anonymous {
-				backfillTenantID(rv.Field(i), tid)
+				setTenantID(rv.Field(i), tid)
 				continue
 			}
 			if f.Name == "TenantID" && f.Type.Kind() == reflect.String {
 				fv := rv.Field(i)
-				if fv.CanSet() && fv.String() == "" {
+				if fv.CanSet() {
 					fv.SetString(tid)
 				}
 			}

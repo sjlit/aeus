@@ -1,5 +1,14 @@
 package models
 
+import "gorm.io/gorm"
+
+// BeforeCreate pins a department created without an explicit tenant to
+// the default tenant in single-tenant mode.
+func (m *Department) BeforeCreate(_ *gorm.DB) error {
+	m.TenantModel.ApplyDefaultTenant()
+	return nil
+}
+
 // Department is a tenant-scoped organizational unit.  ParentID indexes
 // for subtree lookups.
 type Department struct {

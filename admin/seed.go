@@ -202,8 +202,13 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		return errs.New(errs.CodeInvalid, "admin: Seed requires non-empty adminUser and adminPassword")
 	}
 
+	// Seed intentionally writes rows for multiple tenants (the default
+	// tenant plus any tenant-schema clones). Bypass tenant scoping so a
+	// custom resolver cannot collapse the bootstrap data into one tenant.
+	db = db.WithContext(WithoutTenant(context.Background()))
+
 	tenantModel := &models.Tenant{
-		ID:     "00000000-0000-0000-0000-000000000000",
+		ID:     models.DefaultTenantID,
 		Name:   "默认租户",
 		Status: "enabled",
 	}
@@ -261,6 +266,17 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		if res.Error != nil {
 			return res.Error
 		}
+		if roleModel.TenantID == "" {
+			// Legacy rows created before tenant columns were enforced
+			// would otherwise be unreachable by Login's
+			// (key, user.tenant_id) role lookup.
+			if err := tx.Model(&models.Role{}).
+				Where("id = ?", roleModel.ID).
+				Update("tenant_id", tenantModel.ID).Error; err != nil {
+				return err
+			}
+			roleModel.TenantID = tenantModel.ID
+		}
 		if res.RowsAffected == 0 && roleModel.Builtin && !roleModel.IsSuper {
 			// Upgrade a pre-existing builtin admin role created before
 			// IsSuper existed so the converge pass below covers it.
@@ -287,10 +303,23 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 		}
 
 		// user was built against the fresh tenant before the role lookup;
-		// re-point it at the tenant the role actually lives on.
-		userModel.TenantID = tenantModel.ID
+		// re-point it at the tenant the role actually lives on. Login
+		// resolves the role by (key, user.tenant_id), so keeping these
+		// two in sync is required for the legacy-tenant convergence path.
+		userModel.TenantID = roleModel.TenantID
 		if err := tx.Where("uid = ?", userModel.UID).Attrs(*userModel).FirstOrCreate(userModel).Error; err != nil {
 			return err
+		}
+		if userModel.TenantID != roleModel.TenantID {
+			// Existing rows may come from a legacy tenant or from a
+			// manual insert that left tenant_id empty. Login resolves
+			// the role by (key, user.tenant_id), so converge them.
+			if err := tx.Model(&models.User{}).
+				Where("id = ?", userModel.ID).
+				Update("tenant_id", roleModel.TenantID).Error; err != nil {
+				return err
+			}
+			userModel.TenantID = roleModel.TenantID
 		}
 
 		// Top up the grants of every IsSuper role.  The freshly ensured
@@ -322,11 +351,15 @@ func Seed(db *gorm.DB, adminUser, adminPassword string) error {
 // grantFullCatalog reads the global catalogs and inserts the
 // sys_role_permissions rows the super role is still missing.  Menu and
 // Permission are tenant-less; the junction rows are tenant-scoped to
-// the role's tenant.  Seed runs without JWT claims, so the tenant
-// callbacks (query filters and create backfill) are inert here and
-// tenantID flows explicitly into GrantMissingPermissions.
+// the role's tenant. Seed uses WithoutTenant (including for this
+// helper's context) so a fixed resolver cannot override the explicit
+// tenantID passed into GrantMissingPermissions.
 func grantFullCatalog(tx *gorm.DB, role *models.Role) error {
-	ctx := context.Background()
+	// Re-apply the bypass here: WithContext replaces the ctx (and with
+	// it the WithoutTenant marker), so a fixed resolver would otherwise
+	// force every grant into its own tenant and leave the super role
+	// without grants on its actual tenant.
+	ctx := WithoutTenant(context.Background())
 
 	var menus []string
 	if err := tx.WithContext(ctx).Model(&models.Menu{}).Pluck("component", &menus).Error; err != nil {
@@ -382,10 +415,9 @@ type schemaTuple struct {
 // per-tenant customization, which we don't yet have a contract
 // for.
 //
-// Seed runs without JWT claims, so the tenant callbacks'
-// resolver returns "" and the create-callback bails out before
-// backfilling TenantID — explicit TenantID values on each copy
-// therefore win, as intended.
+// Seed installs WithoutTenant on its DB context, so the create callback
+// bails out before overwriting TenantID — explicit TenantID values on
+// each copy therefore win, as intended (even under a fixed resolver).
 func ensureTenantSchemas(tx *gorm.DB) error {
 	var tenants []models.Tenant
 	if err := tx.Find(&tenants).Error; err != nil {
@@ -422,7 +454,7 @@ func ensureTenantSchemas(tx *gorm.DB) error {
 				continue
 			}
 			cp := tmpl
-			cp.Id = 0        // let the DB assign a fresh primary key
+			cp.Id = 0 // let the DB assign a fresh primary key
 			cp.TenantID = tenant.ID
 			cp.CreatedAt = 0 // let autoCreateTime stamp the new row
 			cp.UpdatedAt = 0 // let autoUpdateTime stamp the new row

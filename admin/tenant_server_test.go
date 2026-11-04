@@ -110,7 +110,9 @@ func TestSetup_TenantScopedModelSearchStillFiltered(t *testing.T) {
 		{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "r1", Name: "t1 角色"},
 		{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "r2", Name: "t2 角色"},
 	} {
-		if err := db.Create(r).Error; err != nil {
+		// Fixture seeding spans tenants; bypass the resolver so both
+		// rows keep their explicit tenant ids.
+		if err := db.WithContext(WithoutTenant(context.Background())).Create(r).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -9,11 +9,15 @@ import { useMenuStore } from './menu'
 import type { LoginResponse, UserProfile } from '../types'
 
 const LS_ACCESS = 'aeus.access'
+// 轮换后的 refresh token 必须跨页面刷新保留,否则 access token 过期后
+// 无法静默续期。两个 token 都放在 localStorage:XSS 风险与现有 access
+// token 相同;对 XSS 更敏感的场景应改为 HttpOnly refresh cookie。
+const LS_REFRESH = 'aeus.refresh'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     accessToken: safeGetString(LS_ACCESS),
-    refreshToken: null as string | null,
+    refreshToken: safeGetString(LS_REFRESH),
     profile: null as LoginResponse | null,
     // 来自 GET /user/profile;刷新后用于恢复侧栏用户信息。
     // profile(LoginResponse)保留为登录瞬态数据,登录后会再次被覆盖。
@@ -40,6 +44,7 @@ export const useAuthStore = defineStore('auth', {
       this.refreshToken = resp.refresh_token
       this.profile = resp
       safeSetString(LS_ACCESS, resp.access_token)
+      safeSetString(LS_REFRESH, resp.refresh_token)
       // 换用户后菜单可能不同:清空菜单缓存,路由守卫会在首次导航时重新拉取
       useMenuStore().$reset()
     },
@@ -49,8 +54,11 @@ export const useAuthStore = defineStore('auth', {
       if (!this.refreshToken) return false
       const resp = await apiRefresh(this.refreshToken)
       this.accessToken = resp.access_token
-      if (resp.refresh_token) this.refreshToken = resp.refresh_token
       safeSetString(LS_ACCESS, resp.access_token)
+      if (resp.refresh_token) {
+        this.refreshToken = resp.refresh_token
+        safeSetString(LS_REFRESH, resp.refresh_token)
+      }
       return true
     },
     // 拉取当前用户资料。失败抛错(由调用方/http 拦截器处理);
@@ -73,17 +81,22 @@ export const useAuthStore = defineStore('auth', {
         return resp
     },
     async logout() {
-      try {
-        if (this.accessToken || this.refreshToken)
-          await apiLogout(this.accessToken ?? undefined, this.refreshToken ?? undefined)
-      } catch {
-        // 撤销失败(网络等)不阻塞本地登出
-      }
+      // 先清本地态再发网络请求:即使 logout 自身返回 401,响应拦截器
+      // 也不会再触发 refresh → handleSessionExpired → logout 的递归。
+      const accessToken = this.accessToken
+      const refreshToken = this.refreshToken
       this.accessToken = null
       this.refreshToken = null
       this.profile = null
       this.userProfile = null
       safeRemove(LS_ACCESS)
+      safeRemove(LS_REFRESH)
+      try {
+        if (accessToken || refreshToken)
+          await apiLogout(accessToken ?? undefined, refreshToken ?? undefined)
+      } catch {
+        // 撤销失败(网络等)不阻塞本地登出
+      }
     },
   },
 })

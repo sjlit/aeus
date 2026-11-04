@@ -264,11 +264,24 @@ func (s *AuthService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 			return nil, err
 		}
 	}
-	userModel := &models.User{}
-	if err := s.opts.DB.WithContext(ctx).Where("uid = ? OR username = ?", req.Username, req.Username).First(userModel).Error; err != nil {
+	// Login identity is a single namespace (uid or username). Resolve at
+	// most two candidates and reject ambiguity instead of letting First()
+	// pick an arbitrary tenant/row. Multi-tenant deployments that need
+	// duplicate identifiers must add an explicit tenant selector to the
+	// login request; the scaffold default is a single-tenant deployment.
+	var candidates []models.User
+	if err := s.opts.DB.WithContext(ctx).
+		Where("uid = ? OR username = ?", req.Username, req.Username).
+		Limit(2).
+		Find(&candidates).Error; err != nil {
+		s.recordLogin(ctx, req, false, nil, "")
+		return nil, err
+	}
+	if len(candidates) != 1 {
 		s.recordLogin(ctx, req, false, nil, "")
 		return nil, ErrInvalidPassword
 	}
+	userModel := &candidates[0]
 	if !userModel.ValidatePassword(req.Password) {
 		s.recordLogin(ctx, req, false, userModel, "")
 		return nil, ErrInvalidPassword

@@ -9,7 +9,8 @@ Vue 3 + Element Plus 管理后台骨架。侧边栏与业务路由完全由 admi
 
 ```bash
 # 1. 后端(mock, 固定 :8080, 种子账号 admin / Admin123)
-cd ../../cmd/mock && go run .
+#    注意:mock 位于 admin/cmd/mock,从 admin/web 进入是 ../cmd/mock
+cd ../cmd/mock && go run .
 
 # 2. 前端(dev, :5173, /api 代理到 :8080)
 npm install
@@ -29,9 +30,9 @@ npm run dev
 
 ## 约定
 
-- 信封:所有响应 `{code, message, data}`,HTTP 恒 200;只看 `code`。
-- 认证失败码 `4001/4002/4006` 触发静默刷新;`4003/4005` 只 toast。
-- `refresh()` 不覆盖 profile;refresh token 不轮换。
+- 信封:所有响应 `{code, message, data}`;业务响应 HTTP 200,中间件错误(401/403/404/429 等)使用标准状态码,前端同时按 `code` 和 401 处理。
+- 认证失败码 `4001/4002/4006` 触发静默刷新;传输层 HTTP 403 + `4005` 也按会话失效处理;HTTP 200 的业务 `4005`(如旧密码错)只 toast。
+- `refresh()` 不覆盖 profile;后端 refresh token **会轮换**,前端把 access/refresh 都持久化到 localStorage(`aeus.access` / `aeus.refresh`),刷新页面后仍可静默续期。对 XSS 更敏感的场景应改为 HttpOnly refresh cookie。
 - 路由:Hash 模式;业务路由从 MenuTree 动态注册,uri 即路径,view_path 决定视图文件。
 - 视觉:`src/styles/style.scss` 提供共享 token + 玻璃拟态工具类;
   `src/styles/app.scss` 桥接 Element Plus 主题并承载管理台布局。`app.scss` 顶部用 `@use './style'` 引入共享样式。
@@ -48,4 +49,4 @@ npm run dev
 | 角色授权编辑 | `/role/options` · `/role/permissions` · `/role/menus` · `/permission/catalog` · `/menu/tree` |
 | 租户切换（多租户模式下） | `/tenant/options` · `/tenant/detail` |
 
-> 完整列表与契约细节见主 README 的 [前端管理台（admin/web）](../README.md#前端管理台adminweb)。改动这五类端点的请求 / 响应形状前，先看一眼主 README 的 [接口权限校验（RBAC）](../README.md#接口权限校验rbac) 章节——`admin/web` 不在 PermissionChecker 目录里，**走 `WithCheckerAllowlist` 显式放行**；若新增端点忘了登记 allowlist，会被 fail-closed 默认拒绝。
+> 完整列表与契约细节见主 README 的 [前端管理台（admin/web）](../README.md#前端管理台adminweb)。改动这五类端点的请求 / 响应形状前，先看一眼主 README 的 [接口权限校验（RBAC）](../README.md#接口权限校验rbac) 章节——自助路由（profile / menu / password 等）由 checker 的内置公开清单放行；新增的管理端点默认 fail-closed，必须进入 `sys_permissions` 目录并由角色授权。`WithCheckerAllowlist` 只是显式 bypass，不是“登记后更严格”。

@@ -26,11 +26,18 @@ type (
 		DB             *gorm.DB
 		Responder      rest.Responder
 		EnabledOpenAPI bool
+		// MultiTenant enables tenant scoping. The default is false:
+		// new projects get a single-tenant deployment without the
+		// complexity (and the fail-open risk) of a GORM callback on
+		// every query. Multi-tenant deployments opt in explicitly with
+		// WithMultiTenant(true) or WithTenantResolver(...).
+		MultiTenant bool
+
 		// TenantResolver derives the tenant id that scopes every GORM
-		// operation on a TenantModel row. Server.Setup installs the
-		// callback once at boot time, then reads this field once per
-		// DB op. nil is normalized to middleware.FromClaimsResolver,
-		// which reads *auth.Claims.TenantID off the ctx written by
+		// operation on a TenantModel row. It is only used when
+		// MultiTenant is true. nil is normalized to
+		// middleware.FromClaimsResolver, which reads
+		// *auth.Claims.TenantID off the ctx written by
 		// middleware/auth.JWT.
 		TenantResolver middleware.Resolver
 
@@ -89,7 +96,7 @@ func newOptions(opts ...Option) *Options {
 	for _, o := range opts {
 		o(options)
 	}
-	if options.TenantResolver == nil {
+	if options.MultiTenant && options.TenantResolver == nil {
 		options.TenantResolver = middleware.FromClaimsResolver
 	}
 	if options.UserResolve == nil {
@@ -138,8 +145,8 @@ func WithDB(db *gorm.DB) Option {
 //
 //   - a non-empty tenant id, in which case every read/update/delete
 //     on a TenantModel row is automatically scoped to that id, and
-//     every create on such a model has its TenantID field backfilled
-//     from the resolver when the caller left it blank;
+//     every create on such a model has its TenantID field forced to
+//     the resolver value (a request body cannot override it);
 //   - "", in which case no scope is applied — the operation sees
 //     every tenant's rows. This is the opt-out path for super-admin
 //     tooling, cross-tenant reporting, and the AuthService.Login
@@ -152,10 +159,12 @@ func WithDB(db *gorm.DB) Option {
 //
 // # Default
 //
-// If WithTenantResolver is never called (or called with nil), the
-// resolver is middleware.FromClaimsResolver, which returns
-// *auth.Claims.TenantID. Operations invoked without JWT claims
-// therefore get "" and run un-scoped.
+// Tenant scoping is opt-in. Tenants are disabled by default; call
+// WithMultiTenant(true) or WithTenantResolver(...) to enable it. With
+// multi-tenant enabled and no custom resolver, the resolver is
+// middleware.FromClaimsResolver, which returns *auth.Claims.TenantID.
+// Operations invoked without JWT claims therefore get "" and run
+// un-scoped; use that only for system paths such as Login/Seed.
 //
 // # Typical override
 //
@@ -181,6 +190,20 @@ func WithDB(db *gorm.DB) Option {
 func WithTenantResolver(r middleware.Resolver) Option {
 	return func(o *Options) {
 		o.TenantResolver = r
+		// Supplying a resolver is an explicit request for tenant
+		// scoping; keeping the two options in sync avoids a silently
+		// single-tenant deployment when the caller thought isolation
+		// was active.
+		o.MultiTenant = true
+	}
+}
+
+// WithMultiTenant enables or disables tenant scoping. The default is
+// false (single-tenant) for new projects. When enabled without a custom
+// resolver, the default claims resolver (JWT tenant_id) is used.
+func WithMultiTenant(enabled bool) Option {
+	return func(o *Options) {
+		o.MultiTenant = enabled
 	}
 }
 

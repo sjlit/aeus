@@ -6,6 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// BeforeCreate pins a role created without an explicit tenant to the
+// default tenant so its tenant_id matches the users that reference it.
+// In multi-tenant mode the create callback overwrites this with the
+// resolver's tenant.
+func (m *Role) BeforeCreate(_ *gorm.DB) error {
+	m.TenantModel.ApplyDefaultTenant()
+	return nil
+}
+
 // BeforeUpdate synchronizes two cascade scenarios:
 //  1. When Key changes, re-point the references in sys_role_permissions
 //     / sys_users at the new Key.  Historically sys_users.role_key was
@@ -121,11 +130,11 @@ func (m *Role) AfterDelete(tx *gorm.DB) error {
 // scope.
 type Role struct {
 	TenantModel
-	Key         string `json:"key" yaml:"key" xml:"key" gorm:"size:30;column:key;index:idx_sys_roles_key" comment:"角色标识" props:"readonly:update" rule:"required;regexp:^[a-z][a-z0-9_]*$"`
+	Key         string `json:"key" yaml:"key" xml:"key" gorm:"size:30;column:key;index:idx_sys_roles_key" comment:"角色标识" scenarios:"create;list;view;search;export" props:"readonly:update" rule:"required;unique;regexp:^[a-z][a-z0-9_]*$"`
 	Name        string `json:"name" yaml:"name" xml:"name" gorm:"size:60;column:name;index:idx_role_tenant_name" comment:"角色名称" rule:"required"`
 	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:enabled;column:status" comment:"状态" scenarios:"create;update;list;export" enum:"enabled:启用;disabled:禁用"`
 	Builtin     bool   `json:"builtin" yaml:"builtin" xml:"builtin" gorm:"default:false;column:builtin" comment:"系统预置" scenarios:"list;view"`
-	IsSuper     bool   `json:"is_super" yaml:"isSuper" xml:"isSuper" gorm:"default:false;column:is_super" comment:"超级管理员" scenarios:"create;update;list;view"`
+	IsSuper     bool   `json:"is_super" yaml:"isSuper" xml:"isSuper" gorm:"default:false;column:is_super" comment:"超级管理员" scenarios:"list;view;export"`
 	DataScope   string `json:"data_scope" yaml:"dataScope" xml:"dataScope" gorm:"size:20;default:all;column:data_scope" comment:"数据范围" scenarios:"create;update;view" enum:"all:全部;dept:本部门;self:仅本人;custom:自定义"`
 	Sort        int64  `json:"sort" yaml:"sort" xml:"sort" gorm:"default:0;column:sort" comment:"排序" scenarios:"create;update;list"`
 	CreatedBy   string `json:"created_by" yaml:"createdBy" xml:"createdBy" gorm:"size:20;column:created_by" comment:"创建人" scenarios:"view"`
@@ -157,7 +166,17 @@ func (m *Role) MenuEntry() MenuSpec {
 // handle `tx` is supplied so the caller can roll the validation queries and
 // the write into a single atomic unit (see service/role.go
 // ReplaceRolePermissions).
-func (*Role) ReplacePermissions(tx *gorm.DB, ctx context.Context, roleKey string, menus, perms []string) error {
+//
+// tenantIDs is optional for source compatibility with older callers. When
+// supplied, the first value is used as the tenant of every new grant; the
+// service layer passes the target role's tenant so grants and the role
+// always agree, including in single-tenant mode where no create callback
+// backfills tenant_id.
+func (*Role) ReplacePermissions(tx *gorm.DB, ctx context.Context, roleKey string, menus, perms []string, tenantIDs ...string) error {
+	tenantID := ""
+	if len(tenantIDs) > 0 {
+		tenantID = tenantIDs[0]
+	}
 	if err := tx.WithContext(ctx).Where("role_key = ?", roleKey).Delete(&RolePermission{}).Error; err != nil {
 		return err
 	}
@@ -167,10 +186,20 @@ func (*Role) ReplacePermissions(tx *gorm.DB, ctx context.Context, roleKey string
 	}
 	rows := make([]RolePermission, 0, total)
 	for _, m := range menus {
-		rows = append(rows, RolePermission{RoleKey: roleKey, Type: RolePermissionTypeMenu, Data: m})
+		rows = append(rows, RolePermission{
+			TenantModel: TenantModel{TenantID: tenantID},
+			RoleKey:     roleKey,
+			Type:        RolePermissionTypeMenu,
+			Data:        m,
+		})
 	}
 	for _, p := range perms {
-		rows = append(rows, RolePermission{RoleKey: roleKey, Type: RolePermissionTypePermission, Data: p})
+		rows = append(rows, RolePermission{
+			TenantModel: TenantModel{TenantID: tenantID},
+			RoleKey:     roleKey,
+			Type:        RolePermissionTypePermission,
+			Data:        p,
+		})
 	}
 	return tx.WithContext(ctx).Create(&rows).Error
 }

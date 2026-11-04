@@ -51,6 +51,7 @@ describe('auth store', () => {
     expect(s.profile?.username).toBe('admin')
     expect(s.profile?.tenant_name).toBe('默认租户')
     expect(localStorage.getItem('aeus.access')).toBe('at-1')
+    expect(localStorage.getItem('aeus.refresh')).toBe('rt-1')
     expect(authApi.login).toHaveBeenCalledWith({ username: 'admin', password: 'Admin123' })
   })
 
@@ -70,6 +71,7 @@ describe('auth store', () => {
     expect(s.refreshToken).toBe('rt-2') // 轮换后的新 refresh token
     expect(s.profile?.username).toBe('admin') // profile 未被覆盖
     expect(localStorage.getItem('aeus.access')).toBe('at-2')
+    expect(localStorage.getItem('aeus.refresh')).toBe('rt-2')
   })
 
   it('refresh 响应缺 refresh_token 时保留旧值(向后兼容)', async () => {
@@ -79,6 +81,15 @@ describe('auth store', () => {
     vi.mocked(authApi.refresh).mockResolvedValue({ uid: 'admin', expires: 3600, access_token: 'at-2' })
     await s.refresh()
     expect(s.refreshToken).toBe('rt-1')
+    expect(localStorage.getItem('aeus.refresh')).toBe('rt-1')
+  })
+
+  it('store 初始化时从 localStorage 恢复两个 token', () => {
+    localStorage.setItem('aeus.access', 'at-restored')
+    localStorage.setItem('aeus.refresh', 'rt-restored')
+    const s = useAuthStore()
+    expect(s.accessToken).toBe('at-restored')
+    expect(s.refreshToken).toBe('rt-restored')
   })
 
   it('无 refreshToken 时 refresh 返回 false', async () => {
@@ -100,6 +111,7 @@ describe('auth store', () => {
     expect(s.profile).toBeNull()
     expect(s.userProfile).toBeNull()
     expect(localStorage.getItem('aeus.access')).toBeNull()
+    expect(localStorage.getItem('aeus.refresh')).toBeNull()
   })
 
   it('fetchProfile 拉取并存入 userProfile', async () => {

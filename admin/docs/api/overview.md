@@ -28,7 +28,7 @@
 
 **关键点**:
 
-- 成功路径与失败路径的 HTTP status **固定为 `200`**;业务结果由 `body.code` 决定,前端拦截器**不依赖 HTTP status**。
+- admin responder 处理的业务成功/失败固定 HTTP `200`;`transport/http` error interceptor 处理的中间件错误(JWT/限流/404/panic)使用 `400/401/403/404/429/500/503/504`。两条路径共用同一个 envelope,前端以 `body.code` 为主、同时兼容 401 刷新逻辑。
 - `data` 字段在失败路径上为 `null`(JSON `omitempty`)。
 - 错误信息通过 `errors.As(err, &e)` 沿 `Unwrap` 链找回 `*errs.Error`,保留真实业务码;普通 `error` 退化到 `1001 Invalid`。
 - 可通过 `admin.WithResponder(...)` 整体替换为应用自定义 responder。
@@ -42,12 +42,14 @@
 | `0` | `CodeOK` | 200 | 成功 | 成功 |
 | `1001` | `CodeInvalid` | 400 | 参数/业务校验失败 | toast 后端 `message` |
 | `4002` | `CodeTokenExpired` | 401 | Token 过期 | refresh + 重试原请求 |
-| `4003` | `CodePermissionDenied` | 403 | 无权限(角色未授权该接口) | 跳登录页 / 显示无权限 |
+| `4003` | `CodePermissionDenied` | 403 | 无权限(角色未授权该接口) | toast 无权限 |
 | `4004` | `CodeNotFound` | 404 | 资源不存在 | 业务提示 |
-| `4005` | `CodeAccessDenied` | 403 | 未登录 / 凭证无效 | 跳登录页 |
+| `4005` | `CodeAccessDenied` | 403 | 传输层未登录/凭证无效；业务层也复用该码（旧密码错等，HTTP 200） | HTTP 403 跳登录页；HTTP 200 只 toast |
 | `4010` | `CodeTooManyAttempts` | 429 | 登录/操作过于频繁(见 [`auth.md` §3.7](./auth.md)) | 读取 `Retry-After` 退避后重试 |
 | `1003` | `CodeUnavailable` | 503 | 服务不可用(无 DB 等) | 业务提示 |
 
+> **HTTP 列的含义**:admin responder 处理业务错误时仍写 HTTP `200`;上表的 HTTP Status 是同一业务码经 `transport/http` error interceptor / `errs.Error.HTTPStatus()` 处理时的标准映射(JWT、限流、404、panic 等)。前端以 `body.code` 为主、401 触发 refresh。
+>
 > **变更提醒**:`pkg/errs/error.go` 的 `TokenExpired` 自 2026-08-10 起映射到 HTTP `401`(原先映射 500 是 bug)。
 
 ## 1.4 JWT Claims
@@ -122,21 +124,21 @@ admin 模块所有业务 RPC 遵循同一规则:
 
 资源名由**表名**派生(singular / plural),所有资源统一挂载在 `/system/` 下(`ModuleName = "system"`):
 
-| 资源 | 表名 | 创建 / 详情 / 更新 / 删除 / 导出 | 列表 / 搜索 |
+| 资源 | 表名 | 写 (create/update/delete) | 读 (detail/list/export) |
 |---|---|---|---|
-| `User` | `sys_users` | `/system/sys_user` | `/system/sys_users` |
-| `Role` | `sys_roles` | `/system/sys_role` | `/system/sys_roles` |
-| `Menu` | `sys_menus` | `/system/sys_menu` | `/system/sys_menuses` |
-| `Department` | `sys_departments` | `/system/sys_department` | `/system/sys_departments` |
-| `Permission` | `sys_permissions` | `/system/sys_permission` | `/system/sys_permissions` |
-| `RolePermission` | `sys_role_permissions` | `/system/sys_role_permission` | `/system/sys_role_permissions` |
-| `Audit` | `sys_audits` | `/system/sys_audit` | `/system/sys_audits` |
-| `LoginLog` | `sys_login_logs` | `/system/sys_login_log` | `/system/sys_login_logs` |
-| `Tenant` | `sys_tenants` | `/system/sys_tenant` | `/system/sys_tenants` |
+| `User` | `sys_users` | ✅ `/system/sys_user` | `/system/sys_users` |
+| `Role` | `sys_roles` | ✅ `/system/sys_role` | `/system/sys_roles` |
+| `Menu` | `sys_menus` | ✅ `/system/sys_menu` | `/system/sys_menuses` |
+| `Department` | `sys_departments` | ✅ `/system/sys_department` | `/system/sys_departments` |
+| `Tenant` | `sys_tenants` | ✅ `/system/sys_tenant` | `/system/sys_tenants` |
+| `Permission` | `sys_permissions` | ❌ 只读（由 `Setup`/`Seed` 管理） | `/system/sys_permission` |
+| `RolePermission` | `sys_role_permissions` | ❌ 只读（授权走 `/role/permissions`） | `/system/sys_role_permission` |
+| `Audit` | `sys_audits` | ❌ 只读（由审计钩子写入） | `/system/sys_audit` |
+| `LoginLog` | `sys_login_logs` | ❌ 只读（由登录流程写入） | `/system/sys_login_log` |
 
 > 注意 `Menu` 的复数是 `sys_menuses`:复数是 rest/v3 对表名的机械转换(`inflector.Pluralize`),不做语义化处理。
 
-每个资源的标准 7 个端点详见 [rest-crud.md](./rest-crud.md)。
+可写资源的标准 7 个端点详见 [rest-crud.md](./rest-crud.md)；只读资源只挂载 detail / list / export。安全/审计表不暴露通用写路径，避免绕过 service 层不变量。
 
 ## 1.8 数据模型一览
 

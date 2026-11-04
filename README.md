@@ -152,6 +152,7 @@ aeus/
 │   ├── httpclient/           # 链式 HTTP 客户端（拦截器、tracer 注入、cookie、下载）
 │   ├── bytepool/             # *bytes.Buffer 与 []byte 分层池
 │   ├── netutil/              # EffectiveAddr / LocalIP
+│   ├── response/             # 共享 {code,message,data} envelope（transport + admin）
 │   └── proto/                # protoc descriptor 扩展（command / mcp / rest），配合
 │                             #   protoc-gen-go-aeus 插件使用
 ├── registry/                 # Registrar / Service / Watcher 接口 + etcd 子模块
@@ -188,6 +189,7 @@ aeus/
 | `pkg/httpclient/` | `Client` 流式 API，含 `New()`（每个实例独立 `*http.Client`，避免共享 `DefaultClient`） |
 | `pkg/bytepool/` | `GetBytes(size)/PutBytes` 分层池、`GetBuffer/PutBuffer` |
 | `pkg/netutil/` | `EffectiveAddr(addr, listener)`、`LocalIP()` |
+| `pkg/response/` | 共享 `{code,message,data}` envelope 与 `Write`，供 transport/http 与 admin 复用 |
 | `pkg/proto/` | protoc descriptor 扩展，配合 `protoc-gen-go-aeus` 插件 |
 | `registry/` | `Registrar` 接口 + `Service / Watcher` 数据结构 + 全部 options |
 | `registry/etcd/` | etcd v3 实现，支持 TTL 续约 + `HealthChecker.Status()` |
@@ -701,6 +703,8 @@ git push origin --tags
 若自上次发布以来没有模块内容变更，`make release` 会中止并打印 `nothing to release: 自上次发布以来没有模块内容变更`。
 
 `scripts/release.sh` 还会自动同步本次发布的子模块对根模块的 `require`（即便根模块没发布，也会对齐当前最新根 tag），避免子模块引用过期根版本。
+
+> **发布后验证**：在干净工作区、`GOWORK=off` 下对受影响模块执行 `go build ./...`。子模块新增了根模块包（例如 `pkg/response`）时，根模块必须与 `transport/http`、`admin` 在同一次发布中打 tag；否则子模块会指向不含该包的旧根版本。
 
 ### 消费者侧配置
 

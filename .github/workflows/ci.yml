@@ -22,6 +22,7 @@ jobs:
           - infra/broker/nats
           - infra/telemetry/otel
           - infra/telemetry/prometheus
+          - admin
     # etcd/nats 子模块的集成测试在本地无服务时会 t.Skip,这里用容器把
     # 服务拉起来,配合就绪轮询让测试真正执行(避免 CI 假绿)。
     # 注意:
@@ -78,3 +79,25 @@ jobs:
       - name: 静态检查
         working-directory: ${{ matrix.module }}
         run: go vet ./...
+
+  web:
+    name: web (admin/web)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: admin/web/package-lock.json
+      - name: 安装依赖
+        run: npm ci
+      - name: 类型检查
+        run: npm run typecheck
+      - name: 单元测试
+        run: npm test
+      - name: 构建
+        run: npm run build
