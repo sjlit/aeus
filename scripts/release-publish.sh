@@ -31,15 +31,20 @@ if [ -z "$branch" ]; then
 fi
 
 root_ver=""
+state_branch=""
 mods=()
 while IFS='=' read -r k v; do
   [ -z "$k" ] && continue
-  if [ "$k" = "root" ]; then
-    root_ver="$v"
-  else
-    mods+=("$k=$v")
-  fi
+  case "$k" in
+    branch) state_branch="$v" ;;
+    root) root_ver="$v" ;;
+    *) mods+=("$k=$v") ;;
+  esac
 done < "$STATE_FILE"
+
+if [ -n "$state_branch" ] && [ "$state_branch" != "$branch" ]; then
+  fail "staged release belongs to branch $state_branch, current branch is $branch"
+fi
 
 wait_for_tag() {
   local tag="$1" i=0

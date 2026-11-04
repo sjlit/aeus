@@ -155,6 +155,10 @@ cleanup() {
   local code=$?
   if [ "$COMMITTED" = "1" ]; then
     git reset --hard -q HEAD~1 || true
+  else
+    # The precheck guarantees a clean tree, so any modification left by a
+    # failed bump-version/versions.json step can be discarded safely.
+    git reset --hard -q HEAD || true
   fi
   if [ "${#CREATED_TAGS[@]}" -gt 0 ]; then
     git tag -d "${CREATED_TAGS[@]}" >/dev/null 2>&1 || true
@@ -241,6 +245,7 @@ fi
 
 if [ "$STAGED" = "1" ]; then
   {
+    echo "branch=${branch}"
     echo "root=${root_ver}"
     for k in "${keys[@]}"; do
       [ "$k" = "." ] && continue
