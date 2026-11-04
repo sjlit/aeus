@@ -133,9 +133,12 @@ aeus new /tmp/aeus-admin --template=admin
 
 ### PR 流程
 
-1. Fork 仓库并基于 `dev` 创建特性分支
+`main` 是唯一长期分支；特性分支保持短生命周期，预发布使用带后缀的 tag
+（例如 `v1.1.2-rc.1`），不再维护长期 `dev` 分支。
+
+1. Fork 仓库并基于 `main` 创建特性分支
 2. 提交代码并保证本地 `go test -race ./...` 与 `gofmt -l` 通过
-3. 提交 Pull Request 到 `dev` 分支
+3. 提交 Pull Request 到 `main` 分支
 4. 经过代码审查与 CI 通过后合并到 `main`，由 maintainer 触发发布流程
 
 ### 测试要求
