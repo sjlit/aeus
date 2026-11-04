@@ -1,4 +1,4 @@
-package http
+package mcpserver
 
 import (
 	"bytes"
@@ -7,15 +7,26 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
-	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	ghttp "github.com/sjlit/aeus/transport/http"
 )
 
-func TestDefaultMCPTokenVerifier_WrongTokenUnwrapsToInvalid(t *testing.T) {
-	verifier := defaultMCPTokenVerifier("secret")
+func start(t *testing.T, cfg Config) string {
+	t.Helper()
+	svr := ghttp.New(ghttp.WithAddress(":0"))
+	New(cfg).Attach(svr)
+	ts := httptest.NewServer(svr.Engine())
+	t.Cleanup(ts.Close)
+	return ts.URL
+}
+
+func TestDefaultTokenVerifier_WrongTokenUnwrapsToInvalid(t *testing.T) {
+	verifier := defaultTokenVerifier("secret")
 
 	info, err := verifier(context.Background(), "wrong", nil)
 	if info != nil {
@@ -26,8 +37,8 @@ func TestDefaultMCPTokenVerifier_WrongTokenUnwrapsToInvalid(t *testing.T) {
 	}
 }
 
-func TestDefaultMCPTokenVerifier_CorrectTokenGrantsAccess(t *testing.T) {
-	verifier := defaultMCPTokenVerifier("secret")
+func TestDefaultTokenVerifier_CorrectTokenGrantsAccess(t *testing.T) {
+	verifier := defaultTokenVerifier("secret")
 
 	before := time.Now()
 	info, err := verifier(context.Background(), "secret", nil)
@@ -49,67 +60,25 @@ func TestDefaultMCPTokenVerifier_CorrectTokenGrantsAccess(t *testing.T) {
 	}
 }
 
-func TestNewMCPServer_AppliesDefaults(t *testing.T) {
-	srv := newMCPServer(MCPConfig{})
-	if srv == nil {
-		t.Fatal("newMCPServer returned nil")
-	}
-	// Implementation identity lives on the unexported field, but the
-	// server must be non-nil and registered with default name/version —
-	// exercised end-to-end via WithMCP integration test below.
-}
-
-func TestServer_Mcp_NilByDefault(t *testing.T) {
-	svr := New(WithAddress(":0"))
-	if got := svr.Mcp(); got != nil {
-		t.Errorf("Mcp() = %v, want nil when neither WithMCP nor WithMCPServer is set", got)
+func TestNewServer_AppliesDefaults(t *testing.T) {
+	srv := New(Config{})
+	if srv.SDK() == nil {
+		t.Fatal("New returned a nil SDK server")
 	}
 }
 
-func TestServer_WithMCP_EnablesServer(t *testing.T) {
-	svr := New(WithAddress(":0"), WithMCP(MCPConfig{Name: "svc", Version: "1.0"}))
-	if got := svr.Mcp(); got == nil {
-		t.Fatal("Mcp() returned nil after WithMCP")
+func TestNewWithServer_InjectsPrebuilt(t *testing.T) {
+	prebuilt := sdk.NewServer(&sdk.Implementation{Name: "prebuilt"}, nil)
+	srv := NewWithServer(Config{}, prebuilt)
+	if got := srv.SDK(); got != prebuilt {
+		t.Errorf("SDK() did not return the injected server")
 	}
 }
 
-func TestServer_WithMCPServer_InjectsPrebuilt(t *testing.T) {
-	prebuilt := mcp.NewServer(&mcp.Implementation{Name: "prebuilt"}, nil)
-	svr := New(WithAddress(":0"), WithMCPServer(prebuilt))
-	if got := svr.Mcp(); got != prebuilt {
-		t.Errorf("Mcp() did not return the injected server")
-	}
-}
-
-// startTestServer spins up a real listener and returns its base URL.
-func startTestServer(t *testing.T, opts ...Option) (svr *Server, baseURL string) {
-	t.Helper()
-	all := append([]Option{WithAddress(":0")}, opts...)
-	svr = New(all...)
-
-	runCtx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- svr.Start(runCtx) }()
-
-	// Poll until the listener is bound (Start binds in createListener).
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if endpoint, err := svr.Endpoint(runCtx); err == nil {
-			baseURL = endpoint
-			return svr, baseURL
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("server failed to bind within 2s")
-	return nil, ""
-}
-
-// TestServer_MCP_MountsAtDefaultPath verifies the default /mcp route is
+// TestServer_MountsAtDefaultPath verifies the default /mcp route is
 // registered when Path is left empty.
-func TestServer_MCP_MountsAtDefaultPath(t *testing.T) {
-	_, base := startTestServer(t, WithMCP(MCPConfig{}))
+func TestServer_MountsAtDefaultPath(t *testing.T) {
+	base := start(t, Config{})
 
 	resp, err := http.Get(base + "/mcp")
 	if err != nil {
@@ -123,8 +92,8 @@ func TestServer_MCP_MountsAtDefaultPath(t *testing.T) {
 	}
 }
 
-func TestServer_MCP_MountsAtCustomPath(t *testing.T) {
-	_, base := startTestServer(t, WithMCP(MCPConfig{Path: "/custom-mcp"}))
+func TestServer_MountsAtCustomPath(t *testing.T) {
+	base := start(t, Config{Path: "/custom-mcp"})
 
 	if resp, err := http.Get(base + "/mcp"); err == nil {
 		resp.Body.Close()
@@ -142,10 +111,10 @@ func TestServer_MCP_MountsAtCustomPath(t *testing.T) {
 	}
 }
 
-// TestServer_MCP_RejectsMissingToken401 covers the auth middleware branch:
+// TestServer_RejectsMissingToken401 covers the auth middleware branch:
 // no Authorization header → 401, not 500.
-func TestServer_MCP_RejectsMissingToken401(t *testing.T) {
-	_, base := startTestServer(t, WithMCP(MCPConfig{Authorization: "secret"}))
+func TestServer_RejectsMissingToken401(t *testing.T) {
+	base := start(t, Config{Authorization: "secret"})
 
 	resp, err := http.Post(base+"/mcp", "application/json", bytes.NewReader([]byte("{}")))
 	if err != nil {
@@ -158,11 +127,11 @@ func TestServer_MCP_RejectsMissingToken401(t *testing.T) {
 	}
 }
 
-// TestServer_MCP_RejectsBadToken401 is the regression guard for the
-// defaultMCPTokenVerifier fix: returning auth.ErrInvalidToken makes the
+// TestServer_RejectsBadToken401 is the regression guard for the
+// defaultTokenVerifier fix: returning auth.ErrInvalidToken makes the
 // upstream middleware map to 401. A wrong error type would surface as 500.
-func TestServer_MCP_RejectsBadToken401(t *testing.T) {
-	_, base := startTestServer(t, WithMCP(MCPConfig{Authorization: "secret"}))
+func TestServer_RejectsBadToken401(t *testing.T) {
+	base := start(t, Config{Authorization: "secret"})
 
 	req, _ := http.NewRequest(http.MethodPost, base+"/mcp", bytes.NewReader([]byte("{}")))
 	req.Header.Set("Authorization", "Bearer wrong-token")
@@ -177,7 +146,7 @@ func TestServer_MCP_RejectsBadToken401(t *testing.T) {
 	}
 }
 
-func TestServer_MCP_CustomTokenVerifierIsInvoked(t *testing.T) {
+func TestServer_CustomTokenVerifierIsInvoked(t *testing.T) {
 	called := false
 	verifier := func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
 		called = true
@@ -189,10 +158,7 @@ func TestServer_MCP_CustomTokenVerifierIsInvoked(t *testing.T) {
 			Expiration: time.Now().Add(time.Hour),
 		}, nil
 	}
-	_, base := startTestServer(t,
-		WithMCP(MCPConfig{}),
-		WithMCPTokenVerifier(verifier),
-	)
+	base := start(t, Config{TokenVerifier: verifier})
 
 	// Wrong token → 401, confirms the verifier ran.
 	req, _ := http.NewRequest(http.MethodPost, base+"/mcp", bytes.NewReader([]byte("{}")))
@@ -210,11 +176,11 @@ func TestServer_MCP_CustomTokenVerifierIsInvoked(t *testing.T) {
 	}
 }
 
-func TestServer_MCP_NoAuthWhenUnconfigured(t *testing.T) {
-	// WithMCPConfig without Authorization AND no custom verifier → no
-	// RequireBearerToken middleware; the request reaches the MCP handler
-	// directly. An empty POST should NOT come back as 401.
-	_, base := startTestServer(t, WithMCP(MCPConfig{}))
+func TestServer_NoAuthWhenUnconfigured(t *testing.T) {
+	// No Authorization AND no custom verifier → no RequireBearerToken
+	// middleware; the request reaches the MCP handler directly. An empty
+	// POST should NOT come back as 401.
+	base := start(t, Config{})
 
 	resp, err := http.Post(base+"/mcp", "application/json", bytes.NewReader([]byte("{}")))
 	if err != nil {
@@ -226,23 +192,17 @@ func TestServer_MCP_NoAuthWhenUnconfigured(t *testing.T) {
 	}
 }
 
-// TestNewRouteOptions_DefaultMarshal covers the rename of
-// the Mcp*-prefixed identifier family to the MCP* form.
-func TestNewRouteOptions_DefaultMarshal(t *testing.T) {
-	opts := NewRouteOptions()
-	if opts.MCPResponseMarshal == nil {
-		t.Fatal("NewRouteOptions left MCPResponseMarshal nil")
-	}
-	content, err := opts.MCPResponseMarshal(context.Background(), map[string]string{"k": "v"})
+func TestDefaultResponseMarshal(t *testing.T) {
+	content, err := DefaultResponseMarshal(context.Background(), map[string]string{"k": "v"})
 	if err != nil {
 		t.Fatalf("default marshal error: %v", err)
 	}
 	if len(content) != 1 {
 		t.Fatalf("len(content) = %d, want 1", len(content))
 	}
-	tc, ok := content[0].(*mcp.TextContent)
+	tc, ok := content[0].(*sdk.TextContent)
 	if !ok {
-		t.Fatalf("content type = %T, want *mcp.TextContent", content[0])
+		t.Fatalf("content type = %T, want *sdk.TextContent", content[0])
 	}
 	var got map[string]string
 	if err := json.Unmarshal([]byte(tc.Text), &got); err != nil {
@@ -250,5 +210,16 @@ func TestNewRouteOptions_DefaultMarshal(t *testing.T) {
 	}
 	if got["k"] != "v" {
 		t.Errorf("payload = %v, want {k:v}", got)
+	}
+}
+
+func TestRequestContextRoundTrip(t *testing.T) {
+	want := &sdk.CallToolRequest{}
+	ctx := WithRequestContext(context.Background(), want)
+	if got := RequestFromContext(ctx); got != want {
+		t.Fatalf("RequestFromContext = %p, want %p", got, want)
+	}
+	if got := RequestFromContext(context.Background()); got != nil {
+		t.Fatalf("RequestFromContext(empty) = %v, want nil", got)
 	}
 }

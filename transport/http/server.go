@@ -21,8 +21,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/modelcontextprotocol/go-sdk/auth"
-	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sjlit/aeus/infra/logger"
 	"github.com/sjlit/aeus/infra/telemetry"
@@ -44,7 +42,6 @@ type Server struct {
 	pprofListener           net.Listener
 	pprofServe              *http.Server
 	fs                      *filesystem
-	mcpServer               *mcp.Server
 	middlewares             []middleware.Middleware
 	Logger                  logger.Logger
 	autoCompress            bool
@@ -72,11 +69,6 @@ func (s *Server) Endpoint(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return s.uri.String(), nil
-}
-
-// Mcp returns the mcp server if enabled, otherwise returns nil.
-func (s *Server) Mcp() *mcp.Server {
-	return s.mcpServer
 }
 
 // register wires a handler for a single HTTP method through the shared
@@ -222,34 +214,6 @@ func (s *Server) notFoundHandle(ctx *gin.Context) {
 		}
 	}
 	ctx.JSON(http.StatusNotFound, newResponse(int(errs.CodeNotFound), "Not Found", nil))
-}
-
-func (s *Server) CORSInterceptor() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.Request.Method == "OPTIONS" {
-			c.Writer.Header().Add("Vary", "Origin")
-			c.Writer.Header().Add("Vary", "Access-Control-Request-Method")
-			c.Writer.Header().Add("Vary", "Access-Control-Request-Headers")
-			// Wildcard origin is mutually exclusive with credentials per
-			// the Fetch spec: browsers reject responses carrying both.
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE")
-			h := c.Request.Header.Get("Access-Control-Request-Headers")
-			if h != "" {
-				c.Writer.Header().Set("Access-Control-Allow-Headers", h)
-			}
-			c.AbortWithStatus(204)
-			return
-		} else {
-			c.Writer.Header().Add("Vary", "Origin")
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-			h := c.Request.Header.Get("Access-Control-Request-Headers")
-			if h != "" {
-				c.Writer.Header().Set("Access-Control-Allow-Headers", h)
-			}
-		}
-		c.Next()
-	}
 }
 
 // abortWithEnvelope writes one shared {code, message, data} envelope and
@@ -412,44 +376,6 @@ func (s *Server) createListener() (err error) {
 	return
 }
 
-// mountMcp wires the streamable HTTP handler for the MCP server onto the
-// gin engine. Called from Start, after all user routes are known.
-func (s *Server) mountMcp() {
-	cfg := s.opts.mcp
-	streamableOpts := &mcp.StreamableHTTPOptions{
-		Stateless:      true,
-		SessionTimeout: cfg.SessionTimeout,
-	}
-	if cfg.Streamable != nil {
-		cfg.Streamable(streamableOpts)
-	}
-
-	var handler http.Handler = mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return s.mcpServer },
-		streamableOpts,
-	)
-	verifier := s.opts.mcpVerifier
-	if verifier == nil && cfg.Authorization != "" {
-		verifier = defaultMCPTokenVerifier(cfg.Authorization)
-	}
-	if verifier != nil {
-		handler = auth.RequireBearerToken(auth.TokenVerifier(verifier), &auth.RequireBearerTokenOptions{
-			Scopes: []string{"access"},
-		})(handler)
-	}
-
-	path := cfg.Path
-	if path == "" {
-		path = "/mcp"
-	}
-	s.engine.GET(path, gin.WrapH(handler))
-	s.engine.POST(path, gin.WrapH(handler))
-	s.engine.PUT(path, gin.WrapH(handler))
-	// DELETE terminates a session per the Streamable HTTP transport spec;
-	// a stateless server simply acknowledges it.
-	s.engine.DELETE(path, gin.WrapH(handler))
-}
-
 func (s *Server) Start(ctx context.Context) (err error) {
 	handler := http.Handler(s.engine)
 	if s.opts.handler != nil {
@@ -491,9 +417,6 @@ func (s *Server) Start(ctx context.Context) (err error) {
 		} else if err = s.startPprof(ctx); err != nil {
 			return
 		}
-	}
-	if s.mcpServer != nil {
-		s.mountMcp()
 	}
 	if s.opts.enableHealth {
 		s.engine.GET("/health", func(c *gin.Context) {
@@ -612,7 +535,10 @@ func New(cbs ...Option) *Server {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	svr.engine = gin.New(svr.opts.ginOptions...)
-	if svr.opts.enableCORS {
+	if svr.opts.cors != nil {
+		if err := validateCORS(*svr.opts.cors); err != nil {
+			panic(fmt.Sprintf("transport/http: invalid CORS config: %v", err))
+		}
 		svr.engine.Use(svr.CORSInterceptor())
 	}
 	// gin.New() has no recovery middleware. The outer instance catches
@@ -621,13 +547,6 @@ func New(cbs ...Option) *Server {
 	// before requestInterceptor's tail runs, allowing its metrics and
 	// tracing code to observe the 500 status.
 	svr.engine.Use(svr.recoveryInterceptor())
-	if svr.opts.mcpEnabled {
-		if svr.opts.mcpServer != nil {
-			svr.mcpServer = svr.opts.mcpServer
-		} else {
-			svr.mcpServer = newMCPServer(svr.opts.mcp)
-		}
-	}
 	svr.engine.Use(svr.requestInterceptor())
 	// Inner recovery for handler panics (see the comment above).
 	svr.engine.Use(svr.recoveryInterceptor())

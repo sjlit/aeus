@@ -21,7 +21,9 @@ func main() {
 	app := aeus.New(
 		aeus.WithDebug(true),
 		aeus.WithServer(http.New(
-			http.WithCORS(),
+			http.WithCORS(http.CORSConfig{
+				AllowOrigins: []string{"http://localhost:5173"},
+			}),
 			http.WithEnableHealth(true), // expose /health and /ready (also JWT-allowlisted)
 			// Keep pprof off the public listener; the framework refuses
 			// to mount it on the main port unless this loopback address

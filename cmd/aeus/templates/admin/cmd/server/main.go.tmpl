@@ -14,14 +14,24 @@ func main() {
 	cfg := config.Load()
 	scope := bootstrap.NewScope(cfg)
 
+	httpOpts := []ghttp.Option{
+		ghttp.WithAddress(cfg.HTTPAddr),
+		ghttp.WithEnableHealth(true),
+	}
+	// Empty CORS_ORIGINS keeps the API same-origin: the built SPA is
+	// served by this binary. Set CORS_ORIGINS when the web app runs on a
+	// separate origin (for example the Vite dev server).
+	if len(cfg.CORSOrigins) > 0 {
+		httpOpts = append(httpOpts, ghttp.WithCORS(ghttp.CORSConfig{
+			AllowOrigins:     cfg.CORSOrigins,
+			AllowCredentials: cfg.CORSCredentials,
+		}))
+	}
+
 	app := aeus.New(
 		aeus.WithName(cfg.AppName),
 		aeus.WithDebug(cfg.Debug),
-		aeus.WithServer(ghttp.New(
-			ghttp.WithAddress(cfg.HTTPAddr),
-			ghttp.WithCORS(),
-			ghttp.WithEnableHealth(true),
-		)),
+		aeus.WithServer(ghttp.New(httpOpts...)),
 		aeus.WithScope(scope),
 		aeus.WithServiceLoader(bootstrap.NewLoader(scope)),
 	)

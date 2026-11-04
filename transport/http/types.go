@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/modelcontextprotocol/go-sdk/auth"
-	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sjlit/aeus/infra/logger"
 )
 
@@ -24,30 +22,23 @@ const (
 type (
 	Option func(*options)
 
-	// MCPConfig enables and configures the embedded MCP server. The zero
-	// value passed to WithMCP means "enabled with defaults".
-	MCPConfig struct {
-		Name         string // default "aeus"
-		Version      string // default "0.0.0"
-		Path         string // mount path, default "/mcp"
-		Instructions string // mapped to mcp.ServerOptions.Instructions
-
-		SessionTimeout time.Duration // idle session timeout, 0 = never close
-		Authorization  string        // static bearer token; pairs with the default TokenVerifier
-
-		// Streamable, when set, is called after the defaults are applied,
-		// allowing fine-tuning of the underlying StreamableHTTPOptions
-		// (Stateless, JSONResponse, EventStore, ...). Defaults:
-		// Stateless=true, JSONResponse=false.
-		Streamable func(*mcp.StreamableHTTPOptions)
+	// CORSConfig controls the CORS interceptor installed by WithCORS.
+	//
+	// AllowOrigins is required: an empty list is rejected at construction
+	// time instead of silently disabling the interceptor. Origins are
+	// exact scheme://host[:port] values; "*" allows any origin but is
+	// rejected together with AllowCredentials (the Fetch spec forbids
+	// wildcard origins on credentialed requests).
+	CORSConfig struct {
+		AllowOrigins     []string      // required; exact origins or "*"
+		AllowMethods     []string      // default GET, HEAD, POST, PUT, PATCH, DELETE
+		AllowHeaders     []string      // empty = reflect Access-Control-Request-Headers
+		ExposeHeaders    []string      // exposed to browser JavaScript
+		AllowCredentials bool          // send Access-Control-Allow-Credentials
+		MaxAge           time.Duration // preflight cache lifetime; 0 = omit
 	}
 
-	// TokenVerifier validates a bearer token presented to the MCP endpoint.
-	TokenVerifier func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error)
-
-	RouteOptions struct {
-		MCPResponseMarshal MCPResponseMarshal
-	}
+	RouteOptions struct{}
 
 	RouteOption func(o *RouteOptions)
 
@@ -62,11 +53,7 @@ type (
 		logger        logger.Logger
 		context       context.Context
 		ginOptions    []gin.OptionFunc
-		mcp           MCPConfig
-		mcpEnabled    bool
-		mcpServer     *mcp.Server
-		mcpVerifier   TokenVerifier
-		enableCORS    bool
+		cors          *CORSConfig
 		enableHealth  bool
 		enableMetrics bool
 
@@ -174,9 +161,13 @@ func WithNetwork(network string) Option {
 	}
 }
 
-func WithCORS() Option {
+// WithCORS installs the CORS interceptor. The configuration is validated
+// when the server is constructed; an empty AllowOrigins panics rather than
+// silently allowing or blocking every cross-origin request.
+func WithCORS(cfg CORSConfig) Option {
 	return func(o *options) {
-		o.enableCORS = true
+		c := cfg
+		o.cors = &c
 	}
 }
 
@@ -241,35 +232,6 @@ func WithHandler(h http.Handler) Option {
 func WithGinOptions(opts ...gin.OptionFunc) Option {
 	return func(o *options) {
 		o.ginOptions = opts
-	}
-}
-
-// WithMCP enables the embedded MCP server with the given config. Fields left
-// empty fall back to defaults (see MCPConfig). It is order-independent:
-// WithMCPServer and WithMCPTokenVerifier may appear before or after it.
-func WithMCP(cfg MCPConfig) Option {
-	return func(o *options) {
-		o.mcp = cfg
-		o.mcpEnabled = true
-	}
-}
-
-// WithMCPServer injects a pre-built MCP server, bypassing the config-based
-// one. It implies WithMCP; tool/prompt/resource registration on s belongs
-// to the caller.
-func WithMCPServer(s *mcp.Server) Option {
-	return func(o *options) {
-		o.mcpServer = s
-		o.mcpEnabled = true
-	}
-}
-
-// WithMCPTokenVerifier replaces the default bearer-token check for the MCP
-// endpoint. When unset, verification falls back to a constant-time compare
-// against MCPConfig.Authorization (no auth if that is also empty).
-func WithMCPTokenVerifier(v TokenVerifier) Option {
-	return func(o *options) {
-		o.mcpVerifier = v
 	}
 }
 
@@ -339,16 +301,8 @@ func WithMaxHeaderBytes(n int) Option {
 	}
 }
 
-func WithRouteMCPResponseMarshal(marshal MCPResponseMarshal) RouteOption {
-	return func(o *RouteOptions) {
-		o.MCPResponseMarshal = marshal
-	}
-}
-
 func NewRouteOptions(opts ...RouteOption) *RouteOptions {
-	s := &RouteOptions{
-		MCPResponseMarshal: DefaultMCPResponseMarshal,
-	}
+	s := &RouteOptions{}
 	for _, opt := range opts {
 		opt(s)
 	}

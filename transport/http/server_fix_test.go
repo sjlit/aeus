@@ -193,25 +193,3 @@ func TestServer_RangeDroppedUnderGzip(t *testing.T) {
 		t.Fatalf("decoded %d bytes, want full %d", len(got), len(css))
 	}
 }
-
-// 回归 #5: 通配符 Origin 下不再下发 Allow-Credentials
-func TestCORS_NoWildcardCredentials(t *testing.T) {
-	svr := New(WithAddress(":0"), WithDebug(true), WithCORS())
-	ep := startFixTest(t, svr)
-
-	req, _ := http.NewRequest("OPTIONS", ep+"/any", nil)
-	req.Header.Set("Origin", "https://example.com")
-	req.Header.Set("Access-Control-Request-Method", "POST")
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-
-	if acac := resp.Header.Get("Access-Control-Allow-Credentials"); acac != "" {
-		t.Fatalf("Allow-Credentials %q sent alongside wildcard origin", acac)
-	}
-	if acao := resp.Header.Get("Access-Control-Allow-Origin"); acao != "*" {
-		t.Fatalf("got ACAO %q, want *", acao)
-	}
-}

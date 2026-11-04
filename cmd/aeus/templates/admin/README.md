@@ -40,6 +40,8 @@ Copy `.env.example` and export the values you need:
 | `MULTI_TENANT` | `false` | enable GORM tenant scoping |
 | `AUTO_MIGRATE` | `true` | boot-time table DDL |
 | `SEED_ON_START` | `true` | seed the admin/role/menu catalog on boot |
+| `CORS_ORIGINS` | empty | comma-separated allowed browser origins; empty = same-origin |
+| `CORS_ALLOW_CREDENTIALS` | `false` | allow cookies on cross-origin requests |
 
 ## Production migration
 
