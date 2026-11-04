@@ -146,3 +146,45 @@ func RegisterSchemaEndpoint(opts *Options) (http.HandlerFunc, error)
 ```
 
 由 `Server.Setup` 在内置模型注册完毕后自动调用,应用一般无需手动调。
+## 2.9 选项 / 层级查询端点
+
+`Server.Setup` 在注册完所有内置模型后自动挂载三个 `GET` 端点，按 `(module, table)`
+定位已注册模型，无需应用额外装配。
+
+| 方法 | 路径 | 必填 query | 可选 query | 说明 |
+|------|------|-----------|-----------|------|
+| `GET` | `/schema/:module/:table` | — | — | 返回该表的全量列元数据（`[]schema.Schema`） |
+| `GET` | `/rest/model-types/:module/:table` | `label`, `value` | `valueType`（默认 `string`；支持 `int`/`int64`/`uint`/`uint64`）、`tenant` | 扁平选项列表 `[{label, value}, ...]` |
+| `GET` | `/rest/model-tiers/:module/:table` | `parent`, `label`, `value` | `valueType`、`tenant` | 层级树 `[{label, value, children:[...]}, ...]` |
+
+实现细节：
+
+- **模型查找**：路径参数通过 `Server.modelsByModuleTable["<module>/<table>"]` 反查；
+  未注册的 `(module, table)` 返回 `4004 NotFound`。
+- **租户隔离**：`tenant` query 优先，否则走 `s.opts.TenantResolver(r.Context())`；
+  传 `""` 表示跨租户。`Menu` / `Permission` / `Tenant` 等全局模型传 `""`。
+- **valueType 分发**：按 `valueType` 路由到 `rest.ModelTypes[T]` / `rest.ModelTiers[T]`
+  泛型实例，`uint` 等字段直接以 JSON 数字回传。
+- **响应与认证**：统一 admin envelope；必须挂在 JWT 中间件之后，与 CRUD 端点一致。
+
+典型调用（菜单管理页的“父级菜单”下拉）：
+
+```http
+GET /rest/model-tiers/system/sys_menus?parent=parent&label=name&value=component HTTP/1.1
+Authorization: Bearer <token>
+
+→ 200 OK
+{
+  "code": 0,
+  "message": "",
+  "data": [
+    { "label": "系统设置", "value": "SystemSettings", "children": [
+        { "label": "菜单管理", "value": "SystemSysMenus", "children": [] }
+    ]}
+  ]
+}
+```
+
+> `/schema/:module/:table` 由 `RegisterSchemaEndpoint`（`schema_endpoint.go`）挂载；
+> 三个端点共用“Setup 末尾自动注册”的契约，前端同时拉取 schema 与下拉数据驱动
+> CRUD 页面。

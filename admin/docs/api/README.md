@@ -51,4 +51,5 @@
 ## 配套文档
 
 - [`../../README.md`](../../README.md) — 入门、装配示例、设计原则
-- `pkg/errs/const.go` — 业务码常量定义
+- [`../guide/`](../guide/) — 认证、RBAC、dbcache、租户隔离、审计、模型、前端等深度指南
+- [`../../../pkg/errs/const.go`](../../../pkg/errs/const.go) — 业务码常量定义

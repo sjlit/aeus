@@ -65,7 +65,7 @@ curl -s -XPOST localhost:$PORT/auth/login \
 
 ## 接口速查
 
-完整接口契约见 [admin/README.md](../README.md#api-一览)。本服务暴露的全部端点:
+完整接口契约见 [admin/README.md](../../README.md)。本服务暴露的全部端点:
 
 ### 公开(无需 token,JWT 白名单)
 
