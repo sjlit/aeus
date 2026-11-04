@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 	github.com/prometheus/client_golang v1.20.5
-	github.com/sjlit/aeus v1.0.0
+	github.com/sjlit/aeus v1.1.0
 )
 
 require (
