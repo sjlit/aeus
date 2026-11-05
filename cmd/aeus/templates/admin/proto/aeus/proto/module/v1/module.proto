@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/module/v1;modulev1";
+
+// ModuleOptions describes a business module's top-level admin menu
+// section. Attach it to a file; the generator creates one section row
+// (e.g. "商城管理") and resources reference it via MenuOptions.parent.
+message ModuleOptions {
+  string name      = 1; // shop
+  string title     = 2; // 商城管理
+  string icon      = 3; // Shop
+  int64  sort      = 4;
+  string component = 5; // defaults to <Pascal(name)>Center
+}
+
+extend google.protobuf.FileOptions {
+  ModuleOptions module = 52206;
+}

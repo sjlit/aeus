@@ -49,6 +49,31 @@ aeus new my-admin --template=admin --module=github.com/acme/my-admin
 - Vue 3 + Element Plus 管理台（构建后由 Go binary 托管）
 - 默认账号 `admin / Admin123`，首次启动后必须修改
 - `make web` 构建前端；`make run` 启动后端
+- `proto/` + `buf` + `make proto`：业务资源走 proto-first，生成实体、HTTP、权限清单与菜单元数据
+- `proto/shop/v1/order.proto` 是一个可直接运行的业务示例
+
+## 业务 Proto-First
+
+`admin` 模板内置 `proto/`、`buf.yaml`、`buf.gen.yaml` 和
+`proto/shop/v1/order.proto` 示例。新增业务资源时：
+
+```bash
+# 1. 修改 proto
+vim proto/shop/v1/order.proto
+
+# 2. 生成实体 / HTTP / 权限 / 模块菜单
+make proto
+go mod tidy
+
+# 3. 读取 *_aeus.json，自动生成 internal/bootstrap/generated.go
+#    以及 web/src/views/<module>/<singular>/Index.vue
+#        web/src/api/generated/<proto-path>.ts
+aeus gen
+
+# 4. make migrate 会自动包含生成的实体（bootstrap.MigrateGenerated）
+```
+
+完整注解说明见 [业务 Proto-First](./guide/proto-first.md)。
 
 ## 模板占位符
 

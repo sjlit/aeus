@@ -346,7 +346,7 @@ const file_rest_proto_rawDesc = "" +
 	"\x06module\x18\x03 \x01(\tR\x06module\x12\x1c\n" +
 	"\tscenarios\x18\x04 \x03(\tR\tscenarios:M\n" +
 	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18\x96\x97\x03 \x01(\v2\x16.aeus.RestFieldOptionsR\x05field:O\n" +
-	"\x04rest\x12\x1f.google.protobuf.MessageOptions\x18\x97\x97\x03 \x01(\v2\x18.aeus.RestMessageOptionsR\x04restB)Z'github.com:sjlit/aeus/pkg/proto/restb\x06proto3"
+	"\x04rest\x12\x1f.google.protobuf.MessageOptions\x18\x97\x97\x03 \x01(\v2\x18.aeus.RestMessageOptionsR\x04restB&Z$github.com/sjlit/aeus/pkg/proto/restb\x06proto3"
 
 var (
 	file_rest_proto_rawDescOnce sync.Once

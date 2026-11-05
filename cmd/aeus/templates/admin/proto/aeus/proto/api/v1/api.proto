@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/api/v1;apiv1";
+
+// ApiOptions describes the service-level metadata used to generate
+// registration and permission catalog entries.
+message ApiOptions {
+  // Logical module name, e.g. "shop".
+  string module = 1;
+  // Related persistence table, e.g. "orders". Optional; used to group
+  // route permissions with the resource permission set.
+  string resource = 2;
+  // Permission group shown in the admin UI, e.g. "订单".
+  string group = 3;
+}
+
+// PolicyOptions describes the authorization policy of one RPC.
+//
+// The API permission code is always derived from the google.api.http
+// rule as "<METHOD> <gin route template>" — e.g. "GET /shop/orders/:id".
+// That is exactly what admin.NewPermissionChecker compares against, so
+// proto authors must not hand-write it. Button is an optional
+// front-end-only permission code (type=button in sys_permissions).
+message PolicyOptions {
+  // Public route: the generated policy carries Public=true so the
+  // application bootstrap can add the path to the JWT/checker
+  // allowlists. The plugin does not modify middleware configuration.
+  bool public = 1;
+  // Optional front-end button permission code, e.g. "shop:order:pay".
+  string button = 2;
+  // Permission group. Falls back to ApiOptions.group.
+  string group = 3;
+  // Permission description. Falls back to the RPC leading comment.
+  string description = 4;
+}
+
+extend google.protobuf.ServiceOptions {
+  ApiOptions api = 52202;
+}
+
+extend google.protobuf.MethodOptions {
+  PolicyOptions policy = 52203;
+}

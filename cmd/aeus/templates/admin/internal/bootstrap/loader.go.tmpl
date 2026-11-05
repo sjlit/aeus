@@ -48,6 +48,12 @@ func (s *Scope) wire(ctx context.Context) error {
 	httpSrv := s.HTTP
 	db := s.DB
 
+	// Proto-generated business models, module menus and route policies.
+	// `aeus gen` rewrites generated.go; the checked-in version is a no-op.
+	if err := RegisterGenerated(s.Admin, db); err != nil {
+		return fmt.Errorf("generated resources: %w", err)
+	}
+
 	pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
 		service.WithAuthServiceDB(db),
 		service.WithAuthSecret(s.Cfg.JWTSecret),

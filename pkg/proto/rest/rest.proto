@@ -6,6 +6,11 @@ import "google/protobuf/descriptor.proto";
 
 option go_package = "github.com/sjlit/aeus/pkg/proto/rest";
 
+// v1 resource options. New business resources should use the v2
+// annotations under aeus/proto/resource/v1, aeus/proto/admin/v1,
+// aeus/proto/api/v1 and aeus/proto/module/v1. The v1 options remain for
+// existing protos and the admin module's historical examples.
+
 extend google.protobuf.FieldOptions {
     // ormable will cause orm code to be generated for this field
   RestFieldOptions field = 52118;

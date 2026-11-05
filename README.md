@@ -18,7 +18,8 @@ Prometheus 指标采集、JWT 鉴权与 token-bucket 限流等开箱即用的组
 - **结构化日志**：基于 Go `log/slog`，自动注入 `trace_id` / `span_id`。
 - **可观测性**：所有 server 自动为每个请求创建 `SpanKindServer` span、记录请求耗时与总量；HTTP server 可通过 `WithEnableMetrics(true)` 暴露 `/metrics` 端点。
 - **JWT + 限流中间件**：`middleware/auth` 提供 `JWT` 校验与基于 token-bucket 的 `RateLimit` 中间件（含 `4010 TooManyAttempts` 业务码、`Retry-After` 响应头）。
-- **Proto 扩展**：`pkg/proto/{command,mcp,rest}` 提供 protoc descriptor 扩展，配合 `protoc-gen-go-aeus` 插件生成自定义代码（admin 子模块使用）。
+- **业务 Proto-First**：`pkg/proto/{resource,admin,api,module}/v1` 提供 v2 注解，配合 `protoc-gen-go-aeus` 生成 GORM 实体、HTTP 路由、权限清单和后台菜单元数据；admin 内置安全模型仍保持手写。
+- **Proto 扩展**：`pkg/proto/{command,mcp,rest}` 提供 protoc descriptor 扩展，兼容既有 v1 注解。
 - **可选 pprof 调试**：HTTP transport 在显式 `WithDebugAddr` 时启动独立的 loopback-only pprof 监听器，避免在公网端口暴露调试接口。
 
 ---
@@ -110,6 +111,18 @@ cd my-admin && make web && make run
 ```bash
 go run ./cmd/aeus new /tmp/demo --template=admin --local="$PWD"
 ```
+
+admin 模板内置业务 proto 示例。新增业务资源：
+
+```bash
+cd my-admin
+make proto
+go mod tidy
+aeus gen
+```
+
+`aeus gen` 读取 `_aeus.json` manifest，自动生成 bootstrap 注册和迁移接线。详见
+[业务 Proto-First](docs/guide/proto-first.md)。
 
 手工组装 `Service` 仍然可用：
 
@@ -240,6 +253,7 @@ aeus/
 | 文档 | 内容 |
 | --- | --- |
 | [脚手架 CLI](docs/scaffolding.md) | `aeus new`、`minimal` / `admin` 模板、`--local`、web 模板同步 |
+| [业务 Proto-First](docs/guide/proto-first.md) | 业务 proto 注解、实体/权限/菜单生成 |
 | [HTTP 服务](docs/guide/http.md) | Gin transport、CORS、MCP、静态资源、健康检查 |
 | [gRPC 与 CLI](docs/guide/grpc-cli.md) | gRPC server/client、CLI 协议 |
 | [基础设施](docs/guide/infrastructure.md) | etcd、缓存、NATS、HTTP 客户端 |

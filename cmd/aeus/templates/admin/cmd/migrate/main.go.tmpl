@@ -33,5 +33,8 @@ func main() {
 	); err != nil {
 		log.Fatal(err)
 	}
+	if err := bootstrap.MigrateGenerated(db); err != nil {
+		log.Fatal(err)
+	}
 	log.Print("migration complete")
 }

@@ -311,6 +311,26 @@ func permissionResourceLabel(resource *rest.Resource) string {
 	return table
 }
 
+// permissionGroupProvider lets a model override the permission group
+// without changing its menu label. Generated business entities expose
+// this when (aeus.admin).permission_group is set.
+type permissionGroupProvider interface {
+	PermissionGroup() string
+}
+
+func permissionGroup(resource *rest.Resource) string {
+	if resource == nil {
+		return ""
+	}
+	modelType := resource.ModelValue().ModelType()
+	if p, ok := reflect.New(modelType).Interface().(permissionGroupProvider); ok {
+		if group := p.PermissionGroup(); group != "" {
+			return group
+		}
+	}
+	return permissionResourceLabel(resource)
+}
+
 // permissionCode builds the Data, Description and Group of one
 // permission row.  Data looks like "POST /system/sys_user" (METHOD +
 // single space + URI); Description looks like "创建 用户管理"; Group
@@ -321,7 +341,8 @@ func permissionResourceLabel(resource *rest.Resource) string {
 // registers through Setup gets the right cluster without per-model
 // configuration.  Operators can override Group by editing the row
 // directly; ensurePermissionRows never overwrites a populated value on
-// a re-seed.
+// a re-seed. A model implementing permissionGroupProvider can override
+// the group while keeping its menu label for descriptions.
 //
 // Takes *rest.Resource so the same model source is used to read
 // ModuleName/TableName (via resource.ModelValue().GetNaming()) and to
@@ -345,7 +366,7 @@ func permissionCode(resource *rest.Resource, scenario string) (data, description
 	label := permissionResourceLabel(resource)
 	return fmt.Sprintf("%s %s", method, uri),
 		fmt.Sprintf("%s %s", scenarioCNLabel(scenario), label),
-		label
+		permissionGroup(resource)
 }
 
 // _endpointPermissionCodes registers the metadata/business RPC endpoints

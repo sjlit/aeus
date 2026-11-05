@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/admin/v1;adminv1";
+
+// MenuOptions describes the admin console menu row generated for a
+// resource. Component / URI / ViewPath are derived from module + table
+// when left empty.
+message MenuOptions {
+  string name        = 1;
+  string parent      = 2;
+  string icon        = 3;
+  int64  sort        = 4;
+  string view_path   = 5;
+  string component   = 6;
+  string uri         = 7;
+  bool   hidden      = 8;
+  bool   public      = 9;
+  string description = 10;
+}
+
+// AdminOptions is admin-console metadata attached to an entity message.
+message AdminOptions {
+  MenuOptions menu        = 1;
+  string permission_group = 2;
+  bool read_only          = 3;
+  string vue_template     = 4;
+}
+
+// EnumOption is one value/label pair for a select widget.
+message EnumOption {
+  string value = 1;
+  string label = 2;
+}
+
+// FieldUI describes how a field is rendered by the admin console.
+message FieldUI {
+  string label             = 1;
+  string widget            = 2; // input / select / date / upload / ...
+  string format            = 3;
+  repeated EnumOption enum = 4;
+  bool readonly            = 5;
+  bool hidden              = 6;
+  string tooltip           = 7;
+  string condition         = 8;
+  string upload_uri        = 9;
+  string match             = 10;
+}
+
+extend google.protobuf.MessageOptions {
+  AdminOptions admin = 52204;
+}
+
+extend google.protobuf.FieldOptions {
+  FieldUI ui = 52205;
+}

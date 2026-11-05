@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package aeus;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sjlit/aeus/pkg/proto/resource/v1;resourcev1";
+
+// BaseModel selects the framework base fields embedded in the generated
+// GORM model. BASE maps to rest.BaseModel (ID, CreatedAt, UpdatedAt,
+// DeletedAt); TENANT maps to rest.TenantModel (BASE + TenantID).
+//
+// When a non-NONE base is selected the proto message must NOT declare
+// id / created_at / updated_at / deleted_at / tenant_id: those fields
+// belong to the embedded base struct.
+enum BaseModel {
+  BASE_MODEL_UNSPECIFIED = 0;
+  BASE_MODEL_NONE        = 1;
+  BASE_MODEL_BASE        = 2;
+  BASE_MODEL_TENANT      = 3;
+}
+
+// Scenario is the REST surface a resource (or field) participates in.
+// The generator maps these enum values to the string scenarios consumed
+// by rest/v3.
+enum Scenario {
+  SCENARIO_UNSPECIFIED = 0;
+  SCENARIO_CREATE      = 1;
+  SCENARIO_UPDATE      = 2;
+  SCENARIO_DELETE      = 3;
+  SCENARIO_SEARCH      = 4;
+  SCENARIO_DETAIL      = 5;
+  SCENARIO_EXPORT      = 6;
+}
+
+// EntityOptions describes how a message maps to a persistence entity.
+message EntityOptions {
+  // Physical table name, e.g. "orders".
+  string table = 1;
+  // Logical module name used by rest/v3 and the admin menu, e.g. "shop".
+  string module = 2;
+  // Base fields to embed in the generated model.
+  BaseModel base = 3;
+  // REST scenarios exposed for this resource. Empty means the rest/v3
+  // default (all six canonical scenarios).
+  repeated Scenario scenarios = 4;
+  // Primary-key column when base is NONE. Defaults to "id".
+  string primary_key = 5;
+}
+
+// FieldOptions describes persistence-level field metadata. UI metadata
+// lives in aeus.admin.v1 so projects that do not use the admin console
+// can ignore it.
+message FieldOptions {
+  // Physical column name. Defaults to the proto field name.
+  string column = 1;
+  // Raw gorm tag escape hatch, e.g. "size:64;not null;uniqueIndex".
+  string gorm = 2;
+  // Field-level REST scenarios. Empty means "all scenarios".
+  repeated Scenario scenarios = 3;
+  // rest/v3 validation rule string, e.g. "required;unique".
+  // Prefer validate.rules for RPC validation; this tag drives the
+  // generic REST CRUD layer and the generated front-end form.
+  string rule = 4;
+}
+
+extend google.protobuf.MessageOptions {
+  EntityOptions entity = 52200;
+}
+
+extend google.protobuf.FieldOptions {
+  FieldOptions resource_field = 52201;
+}

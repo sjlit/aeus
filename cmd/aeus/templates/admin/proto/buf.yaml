@@ -1,0 +1,15 @@
+version: v1
+
+lint:
+  use:
+    - STANDARD
+  except:
+    - RPC_RESPONSE_STANDARD_NAME
+  ignore:
+    - google
+    - validate
+    - aeus
+
+breaking:
+  use:
+    - FILE

@@ -1,0 +1,246 @@
+# 业务 Proto-First
+
+AEUS 的 admin 内置安全模型（用户、角色、权限、租户等）仍然手写，以便集中维护密码哈希、级联清理、fail-closed 权限等不变量。**业务资源**走 proto-first：写 `.proto`，生成 GORM 实体、HTTP 路由、权限清单和菜单元数据。
+
+## 目录约定
+
+```text
+proto/
+├── aeus/proto/resource/v1/resource.proto   # 实体与字段
+├── aeus/proto/admin/v1/admin.proto         # 菜单与后台 UI
+├── aeus/proto/api/v1/api.proto             # RPC 与路由权限
+├── aeus/proto/module/v1/module.proto       # 模块分区菜单
+├── google/api/                             # HTTP 注解
+├── validate/                               # protoc-gen-validate
+└── shop/v1/order.proto                     # 业务 proto
+```
+
+`admin` 模板已经自带这些文件和 `buf.yaml` / `buf.gen.yaml`。生成项目后：
+
+```bash
+make proto
+go mod tidy
+```
+
+默认只生成 `proto/shop` 下的业务 proto，避免把 vendored 的
+`google/api`、`validate`、`aeus/proto` 也生成成 Go 包。新增模块时：
+
+```bash
+make proto PROTO_PATHS="shop warehouse"
+```
+
+需要本机安装 `buf`、`protoc-gen-go`、`protoc-gen-go-aeus` 和
+`protoc-gen-validate`。`protoc-gen-go-aeus` 是独立项目；本地开发时可在
+其仓库执行：
+
+```bash
+go build -o "$(go env GOPATH)/bin/protoc-gen-go-aeus" .
+```
+
+CI 或本地提交前可运行：
+
+```bash
+make proto-lint
+make proto-breaking
+```
+
+## 注解
+
+### 文件级：模块分区
+
+```proto
+option (aeus.module) = {
+  name: "shop"
+  title: "商城管理"
+  icon: "Shop"
+  sort: 100
+};
+```
+
+生成 `Module` 变量（`models.ModuleSpec`），用于创建顶层菜单分区。默认 Component 为 `ShopCenter`。
+
+### 消息级：持久化实体
+
+```proto
+message Order {
+  option (aeus.entity) = {
+    table: "orders"
+    module: "shop"
+    base: BASE_MODEL_TENANT
+    scenarios: [
+      SCENARIO_CREATE,
+      SCENARIO_UPDATE,
+      SCENARIO_DELETE,
+      SCENARIO_SEARCH,
+      SCENARIO_DETAIL,
+      SCENARIO_EXPORT
+    ]
+  };
+}
+```
+
+- `base: BASE_MODEL_NONE`：不嵌入基础字段
+- `base: BASE_MODEL_BASE`：嵌入 `rest.BaseModel`
+- `base: BASE_MODEL_TENANT`：嵌入 `rest.TenantModel`
+
+选择非 `NONE` 时，不要在 proto 里重复声明 `id`、`created_at`、`updated_at`、`deleted_at`、`tenant_id`，生成器会报错。
+
+`(aeus.entity)` 的 message 是**持久化实体**，不是 wire DTO。需要返回基础字段时，单独定义 DTO：
+
+```proto
+message OrderView {
+  uint64 id = 1;
+  string order_no = 2;
+  int64 created_at = 3;
+}
+```
+
+### 字段级：持久化与 UI
+
+```proto
+string order_no = 1 [
+  (aeus.resource_field) = {
+    gorm: "size:64;not null;uniqueIndex"
+    rule: "required;unique"
+    scenarios: [SCENARIO_CREATE, SCENARIO_SEARCH, SCENARIO_EXPORT]
+  },
+  (aeus.ui) = {
+    label: "订单号"
+    widget: "input"
+  }
+];
+```
+
+- `gorm` 是复杂 GORM tag 的逃生口
+- `rule` 驱动通用 REST 校验与前端表单
+- `scenarios` 控制字段在 CRUD 场景中的可见性
+- `(aeus.ui)` 只影响后台管理台，不影响持久化
+
+### 消息级：后台菜单
+
+```proto
+option (aeus.admin) = {
+  menu: {
+    name: "订单管理"
+    parent: "ShopCenter"
+    icon: "Tickets"
+    sort: 10
+  }
+  permission_group: "订单"
+};
+```
+
+生成模型会实现 `MenuEntry() models.MenuSpec`，admin 注册时自动创建菜单。
+
+### 服务级：RPC 与权限
+
+```proto
+service OrderService {
+  option (aeus.api) = {
+    module: "shop"
+    resource: "orders"
+    group: "订单"
+  };
+
+  rpc GetOrder(GetOrderRequest) returns (OrderView) {
+    option (google.api.http) = {
+      get: "/shop/orders/{id}"
+    };
+    option (aeus.policy) = {
+      button: "shop:order:detail"
+    };
+  }
+}
+```
+
+- API 权限码由生成器从 `google.api.http` 自动推导，格式为 `"<METHOD> <gin 路由模板>"`，例如 `GET /shop/orders/:id`
+- `button` 是前端按钮权限码，生成 `type=button` 的权限行
+- `public: true` 表示跳过 JWT 与权限检查
+
+## 生成物
+
+```text
+*_model.pb.go     GORM 实体 + TableName / ModuleName / Scenarios / MenuEntry
+*_http.pb.go      HTTP 接口 + wrapper + RegisterXxxRouter + UnimplementedXxxServer
+*_policy.pb.go    路由权限清单（policy.Policy）
+*_module.pb.go    模块分区菜单（models.ModuleSpec）
+*_aeus.json       供 `aeus gen` 生成 bootstrap/migration 接线的 manifest
+```
+
+## 注册业务模型
+
+`make proto` 会同时生成 `_aeus.json` manifest。执行：
+
+```bash
+make proto
+go mod tidy
+aeus gen
+```
+
+`aeus gen` 读取 manifest，重写 `internal/bootstrap/generated.go`：
+
+```go
+func registerGenerated(s *admin.Server, db *gorm.DB) error {
+    if err := admin.EnsureModuleMenu(db, shopv1.Module); err != nil { ... }
+    if err := s.RegisterModel(&shopv1.OrderModel{}); err != nil { ... }
+    if err := admin.EnsureEndpointPermissions(db, shopv1.OrderServicePolicies...); err != nil { ... }
+    return nil
+}
+```
+
+模板的 `internal/bootstrap/loader.go` 已经在 `admin.Setup` 之后调用
+`RegisterGenerated`，因此不需要再手写注册代码。`cmd/migrate` 调用
+`MigrateGenerated` 自动包含生成实体，`cmd/seed` 也会先调用
+`RegisterGenerated` 再 Seed。通用 CRUD 路由、菜单、权限目录由
+`RegisterModel` 自动处理。
+
+`aeus gen` 同时生成前端产物：
+
+```text
+web/src/views/<module>/<singular>/Index.vue
+web/src/api/generated/<proto-path>.ts
+```
+
+- Vue 页面默认使用 `SchemaViewer`，文件已存在时跳过，不覆盖手写页面
+- TS 文件包含 proto message 接口和自定义 RPC 的 `http` 包装函数
+- 文件已存在时同样跳过
+- 可用 `--web-dir` / `--api-dir` 改输出目录，或 `--no-web` / `--no-api` 只生成 Go 接线
+
+TS 类型规则：
+
+| proto | TypeScript |
+| --- | --- |
+| `string` / `bytes` | `string` |
+| 整数 / 浮点 | `number` |
+| `bool` | `boolean` |
+| enum | 数字字面量 union + `as const` 对象 |
+| `repeated T` | `T[]` |
+| `map<string, T>` | `Record<string, T>` |
+| 同文件 message | 同文件接口 |
+| 跨文件 message | 自动相对路径 `import type` |
+| 嵌套 message | 扁平接口名，例如 `Outer_Inner` |
+| `google.protobuf.Timestamp` / `Duration` | `{ seconds?: number; nanos?: number }` |
+| `google.protobuf.Struct` / `Value` / `Any` | `unknown` |
+| `google.protobuf.Empty` | RPC 请求/响应映射为 `void` |
+
+当前服务端使用 `encoding/json`，所以 `Timestamp` 是 `{seconds,nanos}` 对象。业务 DTO 推荐直接使用 `int64` Unix 秒，前端映射为 `number`。
+
+自定义 RPC 仍需实现 `OrderServiceHttpServer` 并注册：
+
+```go
+pb.RegisterOrderServiceRouter(httpSrv, service.NewOrderService(db))
+```
+
+> `aeus gen` 使用已安装的 CLI。源码开发时可以执行
+> `go run github.com/sjlit/aeus/cmd/aeus gen`，或先
+> `go install github.com/sjlit/aeus/cmd/aeus@latest`。
+
+## 约束
+
+- 路由使用 `/<module>/<plural>`，例如 `module: "shop", table: "orders"` → `/shop/orders`；不要写 `table: "shop_orders"`，否则路径会变成 `/shop/shop_orders`
+- `google.api.http` 的 `additional_bindings` 暂不支持
+- 跨文件 TS 类型要求被引用的 proto 目录也参与生成，例如
+  `make proto PROTO_PATHS="shop user"`；纯类型 proto 会生成无 `http`
+  import 的 type-only TS 文件
+- `public` 路由需要应用自己加入 JWT allowlist；`EnsureEndpointPermissions` 会跳过 public 策略
+- 复杂索引、联合唯一约束、关联关系仍允许手写模型或迁移，不要把所有 DDL 塞进 proto

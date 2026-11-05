@@ -24,6 +24,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "aeus:", err)
 			os.Exit(1)
 		}
+	case "gen":
+		if err := runGen(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "aeus:", err)
+			os.Exit(1)
+		}
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -36,18 +41,32 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `Usage:
   aeus new <name> [flags]
+  aeus gen [flags]
 
-Flags:
+Flags for new:
   --template string   minimal (default) or admin
   --module string     Go module path (default: the project name)
   --local string      path to an AEUS checkout; emits replace directives
   --force             write into a non-empty directory
+
+Flags for gen:
+  --proto-dir string   directory containing *_aeus.json (default "proto")
+  --out string         output directory (default "internal/bootstrap")
+  --package string     Go package name (default "bootstrap")
+  --file string        generated file name (default "generated.go")
+  --web-dir string     Vue views directory (default "web/src/views")
+  --api-dir string     TypeScript API directory (default "web/src/api/generated")
+  --no-web             skip Vue page generation
+  --no-api             skip TypeScript API generation
+  --check              verify generated Go/Vue/API outputs
 
 Examples:
   aeus new order-svc
   aeus new order-svc --template=admin
   aeus new order-svc --module github.com/acme/order-svc
   aeus new order-svc --local=/workspace/go/aeus
+  aeus gen
+  aeus gen --check
 `)
 }
 

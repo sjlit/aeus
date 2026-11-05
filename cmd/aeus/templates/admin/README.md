@@ -81,12 +81,46 @@ web/                 Vue 3 + Element Plus + @sjlit/rest-ui
 
 ## Adding a business model
 
-1. Create the model under `internal/models` (embed `models.TenantModel`
-   if it belongs to a tenant).
-2. Register it with `admin.Server.RegisterModel` after `Setup`, or add
-   it to the template's bootstrap.
-3. Add the model to `cmd/migrate/main.go`.
-4. Add a `SchemaViewer` page under `web/src/views/<module>/<table>/`.
+Business resources are proto-first. The template ships a complete
+example at `proto/shop/v1/order.proto`:
 
-The admin console reads the menu and column metadata from the backend,
-so a registered model with a `MenuProvider` shows up automatically.
+1. Edit or copy a proto under `proto/<module>/<version>/`.
+2. Declare the entity with `(aeus.entity)`, the admin menu with
+   `(aeus.admin)`, and custom RPCs with `(aeus.api)` / `(aeus.policy)`.
+3. Generate and wire:
+
+   ```bash
+   make proto
+   go mod tidy
+   aeus gen
+   # or: make proto PROTO_PATHS="shop warehouse"
+   ```
+
+   `aeus gen` reads the `_aeus.json` manifests and rewrites
+   `internal/bootstrap/generated.go`, registering module menus, models
+   and route policies. It also creates
+   `web/src/views/shop/order/Index.vue` and
+   `web/src/api/generated/shop/v1/order.ts` when they do not exist yet.
+   The TS file includes proto enums, nested messages, cross-file imports
+   and custom-RPC wrappers.
+   Use `--web-dir` / `--api-dir` to change the output directories, or
+   `--no-web` / `--no-api` to skip frontend generation.
+
+4. `make migrate` uses the generated `bootstrap.MigrateGenerated`, so
+   generated entities are included automatically.
+5. Replace the generated placeholder view under
+   `web/src/views/shop/order/Index.vue` when you need custom behavior.
+   Later `aeus gen` runs never overwrite an existing view.
+
+The generic REST CRUD endpoints, menu row, permission catalog entries,
+and placeholder Vue page are all derived from the proto annotations.
+For complex domain behavior, add a service implementation and register
+it with the generated `RegisterXxxRouter` function.
+
+> `make proto` requires `buf` plus `protoc-gen-go`,
+> `protoc-gen-go-aeus`, and `protoc-gen-validate` on `PATH`.
+> `aeus gen` requires the AEUS CLI (`go install
+> github.com/sjlit/aeus/cmd/aeus@latest`).
+> The generated `_model.pb.go` file is intentionally a persistence
+> entity; define a separate `OrderView` message for wire responses that
+> need base fields such as `id` / `created_at`.

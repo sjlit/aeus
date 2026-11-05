@@ -19,11 +19,41 @@ Flags:
 The generated project runs `go mod tidy` at the end. The web app in the
 `admin` template is built separately with `make web`.
 
+After `make proto` in a generated project, wire the generated business
+resources into admin:
+
+```bash
+aeus gen
+aeus gen --check   # CI drift check
+```
+
+`aeus gen` reads `_aeus.json` manifests under `proto/`, rewrites
+`internal/bootstrap/generated.go`, creates missing
+`web/src/views/<module>/<singular>/Index.vue` placeholder pages, and
+generates TypeScript interfaces plus custom-RPC wrappers under
+`web/src/api/generated/`. TS generation covers enums, nested messages,
+cross-file imports and well-known types. Existing generated frontend
+files are never overwritten.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--proto-dir` | `proto` | manifest directory |
+| `--out` | `internal/bootstrap` | generated Go directory |
+| `--package` | `bootstrap` | generated Go package |
+| `--file` | `generated.go` | generated Go file |
+| `--web-dir` | `web/src/views` | Vue views directory |
+| `--api-dir` | `web/src/api/generated` | TypeScript API directory |
+| `--no-web` | false | skip Vue page generation |
+| `--no-api` | false | skip TypeScript API generation |
+| `--check` | false | verify generated Go/Vue/API outputs |
+
 ## Templates
 
 - `templates/minimal`: HTTP + config + health + graceful shutdown.
 - `templates/admin`: minimal + GORM/SQLite + admin REST/RPC + JWT/RBAC
-  + Seed + Vue 3 management console.
+  + Seed + Vue 3 management console. It also ships `proto/`, `buf`
+  configuration and a `proto/shop/v1/order.proto` business example so
+  new resources can be generated with `make proto`.
 
 Template files use `__AEUS_*__` placeholders. Files ending in `.tmpl`
 are written without that suffix (notably `go.mod` and the Go sources,

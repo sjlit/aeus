@@ -1,6 +1,7 @@
 APP := __AEUS_NAME__
+PROTO_PATHS ?= shop
 
-.PHONY: run web build test migrate seed fmt vet
+.PHONY: run web build test migrate seed fmt vet proto proto-lint proto-breaking
 
 run:
 	go run ./cmd/server
@@ -28,3 +29,15 @@ fmt:
 
 vet:
 	go vet ./...
+
+# Generate Go code from proto/. Requires buf and the protoc plugins
+# (protoc-gen-go, protoc-gen-go-aeus, protoc-gen-validate) on PATH.
+proto:
+	cd proto && buf generate $(addprefix --path ,$(PROTO_PATHS))
+	gofmt -w ./proto
+
+proto-lint:
+	cd proto && buf lint
+
+proto-breaking:
+	cd proto && buf breaking --against '../.git#branch=main'

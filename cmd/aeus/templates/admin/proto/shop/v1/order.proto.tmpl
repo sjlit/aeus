@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+import "aeus/proto/resource/v1/resource.proto";
+import "aeus/proto/admin/v1/admin.proto";
+import "aeus/proto/api/v1/api.proto";
+import "aeus/proto/module/v1/module.proto";
+
+option go_package = "__AEUS_MODULE__/proto/shop/v1;shopv1";
+
+option (aeus.module) = {
+  name: "shop"
+  title: "商城管理"
+  icon: "Shop"
+  sort: 100
+};
+
+// Order is the persistence entity. Base fields come from rest.TenantModel.
+message Order {
+  option (aeus.entity) = {
+    table: "orders"
+    module: "shop"
+    base: BASE_MODEL_TENANT
+    scenarios: [
+      SCENARIO_CREATE,
+      SCENARIO_UPDATE,
+      SCENARIO_DELETE,
+      SCENARIO_SEARCH,
+      SCENARIO_DETAIL,
+      SCENARIO_EXPORT
+    ]
+  };
+  option (aeus.admin) = {
+    menu: {
+      name: "订单管理"
+      parent: "ShopCenter"
+      icon: "Tickets"
+      sort: 10
+    }
+    permission_group: "订单"
+  };
+
+  string order_no = 1 [
+    (aeus.resource_field) = {
+      gorm: "size:64;not null;uniqueIndex"
+      rule: "required;unique"
+      scenarios: [SCENARIO_CREATE, SCENARIO_SEARCH, SCENARIO_EXPORT]
+    },
+    (aeus.ui) = {
+      label: "订单号"
+      widget: "input"
+    }
+  ];
+
+  string status = 2 [
+    (aeus.resource_field) = {
+      scenarios: [SCENARIO_CREATE, SCENARIO_UPDATE, SCENARIO_SEARCH, SCENARIO_EXPORT]
+    },
+    (aeus.ui) = {
+      label: "状态"
+      widget: "select"
+      enum: [
+        { value: "draft", label: "草稿" },
+        { value: "paid", label: "已支付" },
+        { value: "cancelled", label: "已取消" }
+      ]
+    }
+  ];
+
+  int64 amount_cent = 3 [
+    (aeus.ui) = { label: "金额(分)" }
+  ];
+}
+
+// OrderView is the wire DTO returned by custom RPCs.
+message OrderView {
+  uint64 id          = 1;
+  string order_no    = 2;
+  string status      = 3;
+  int64  amount_cent = 4;
+  int64  created_at  = 5;
+  int64  updated_at  = 6;
+}
+
+message GetOrderRequest {
+  uint64 id = 1 [(validate.rules).uint64.gt = 0];
+}
+
+service OrderService {
+  option (aeus.api) = {
+    module: "shop"
+    resource: "orders"
+    group: "订单"
+  };
+
+  rpc GetOrder(GetOrderRequest) returns (OrderView) {
+    option (google.api.http) = {
+      get: "/shop/orders/{id}"
+    };
+    option (aeus.policy) = {
+      button: "shop:order:detail"
+    };
+  }
+}

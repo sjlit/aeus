@@ -33,6 +33,9 @@ func main() {
 	if err := srv.Setup(context.Background()); err != nil {
 		log.Fatal(err)
 	}
+	if err := bootstrap.RegisterGenerated(srv, db); err != nil {
+		log.Fatal(err)
+	}
 	if err := admin.Seed(db, cfg.AdminUser, cfg.AdminPassword); err != nil {
 		log.Fatal(err)
 	}

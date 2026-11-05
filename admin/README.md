@@ -24,6 +24,7 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 - **接口权限执行**：`NewPermissionChecker` 把 HTTP 请求的 `"METHOD <路由模板>"` 与权限目录、角色授权逐一比对，**默认 fail-closed**——未收录路由直接拒绝，自助路由走内置公开清单，目录里有但当前角色无授权同样拒绝；`WithCheckerAllowlist` 用于显式 bypass（详见[接口权限校验](docs/guide/rbac.md)）
 - **读穿透缓存**：权限目录与角色授权都走 `admin/dbcache` 的 SqlDependency 版本标记缓存，写授权后下一个请求就生效，无需应用显式失效
 - **公开 `RegisterModel`**：应用自定义模型可与内置模型走同一条迁移+菜单+权限注册路径；per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）按需覆盖
+- **Proto-First 辅助**：`EnsureModuleMenu` 创建业务模块分区菜单；`EnsureEndpointPermissions` 把 `protoc-gen-go-aeus` 生成的 `policy.Policy` 清单幂等写入权限目录
 - **Vue 视图自动生成**：`WithVueOutputDir` 启用后，每个模型按 `(module, singular)` 自动创建 `Index.vue`（SchemaViewer 占位），已存在的文件跳过不覆盖手写修改
 - **一键引导**：`admin.Seed(db, user, pass)` 幂等收敛到引导状态：分区容器菜单 + 默认租户（`id="00000000-..."`）+ 超管角色（`key="admin"`, `is_super=true`, `data_scope="all"`）+ admin 用户 + 全量授权 + per-tenant `sys_schemas` 克隆；详见 [Seed 收敛契约](#seed-的收敛契约)
 

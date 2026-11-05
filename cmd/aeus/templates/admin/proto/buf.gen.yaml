@@ -1,0 +1,12 @@
+version: v1
+
+plugins:
+  - name: go
+    out: .
+    opt: paths=source_relative
+  - name: go-aeus
+    out: .
+    opt: paths=source_relative
+  - name: validate
+    out: .
+    opt: paths=source_relative,lang=go

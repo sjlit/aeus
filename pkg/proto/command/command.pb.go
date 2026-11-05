@@ -102,7 +102,7 @@ const file_command_command_proto_rawDesc = "" +
 	"\x0eCommandOptions\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription:S\n" +
-	"\acommand\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\v2\x14.aeus.CommandOptionsR\acommand\x88\x01\x01B,Z*github.com:sjlit/aeus/pkg/proto/commandb\x06proto3"
+	"\acommand\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\v2\x14.aeus.CommandOptionsR\acommand\x88\x01\x01B)Z'github.com/sjlit/aeus/pkg/proto/commandb\x06proto3"
 
 var (
 	file_command_command_proto_rawDescOnce sync.Once

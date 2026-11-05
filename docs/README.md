@@ -1,6 +1,7 @@
 # AEUS 文档
 
 - [脚手架 CLI](./scaffolding.md)：`aeus new`、模板、`--local`、web 模板同步
+- [业务 Proto-First](./guide/proto-first.md)：业务 proto 注解、实体/权限/菜单生成
 - [HTTP 服务](./guide/http.md)：Gin transport、CORS、MCP、静态资源、健康检查
 - [gRPC 与 CLI](./guide/grpc-cli.md)
 - [基础设施](./guide/infrastructure.md)：etcd、缓存、NATS、HTTP 客户端
