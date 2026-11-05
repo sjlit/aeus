@@ -4,7 +4,7 @@
 
 admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https://github.com/sjlit/rest) + GORM，为应用提供即开即用的系统管理能力：
 
-- **通用 REST CRUD**：用户、角色、部门、菜单、租户 5 个业务模型自动注册为可写 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；权限目录、角色-权限中间表、审计日志、登录日志 4 个安全/审计模型只读挂载——它们由 `Setup`/`Seed`/service/审计钩子管理，避免通用写路径绕过业务不变量；
+- **通用 REST CRUD**：用户、角色、部门、菜单 4 个业务模型自动注册为可写 REST 资源（列表/搜索、详情、创建、更新、删除、导出、OpenAPI 文档）；租户模型只在多租户模式下注册，默认单租户不会出现 `/system/sys_tenants` 路由或“租户管理”菜单；权限目录、角色-权限中间表、审计日志、登录日志 4 个安全/审计模型只读挂载——它们由 `Setup`/`Seed`/service/审计钩子管理，避免通用写路径绕过业务不变量；
 - **JWT 认证**：登录 / 刷新 / 登出（`AuthService`），支持 Token 吊销与登录前后钩子；
 - **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，**未收录路由默认拒绝（fail-closed）**；自助路由（profile / menu / password 等）由内置公开清单放行；`WithCheckerAllowlist` 是额外的显式 bypass 清单，不是“更严格”的开关（详见[接口权限校验](docs/guide/rbac.md)）；
 - **用户业务 RPC**（`UserService`）：个人资料、改密、管理员重置密码、头像、可见菜单、权限码；
@@ -117,7 +117,7 @@ func main() {
 
 - 认证：`POST /auth/login`（`{"username":"alice","password":"..."}`）返回 `access_token` / `refresh_token`；
 - 用返回的 access token 访问其余接口（`Authorization: Bearer <token>`）；
-- 默认是**单租户**模式：不会安装 GORM 租户回调，适合快速起步。需要多租户时显式 `admin.WithMultiTenant(true)`（或 `WithTenantResolver(...)`）；启用后 JWT 中间件写入的 `claims.TenantID` 才会驱动 GORM 回调。
+- 默认是**单租户**模式：不会安装 GORM 租户回调，也不会注册租户管理 REST 资源或菜单，适合快速起步。需要多租户时显式 `admin.WithMultiTenant(true)`（或 `WithTenantResolver(...)`）；启用后 JWT 中间件写入的 `claims.TenantID` 才会驱动 GORM 回调，同时恢复 `/system/sys_tenants` 和“租户管理”菜单。
 
 ## P0 一键集成(搭配 dashboard/web)
 

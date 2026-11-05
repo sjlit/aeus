@@ -7,7 +7,7 @@
 | # | 文件 | 内容 |
 |---|---|---|
 | 1 | [overview.md](./overview.md) | 模块形态、响应外壳、错误码、JWT Claims、URL 约定、模块命名、认证与租户隔离机制 |
-| 2 | [rest-crud.md](./rest-crud.md) | rest/v3 自动生成的 9 个资源（5 可写 + 4 只读）+ schema 元数据端点 |
+| 2 | [rest-crud.md](./rest-crud.md) | rest/v3 自动生成的资源（默认 8 个：4 可写 + 4 只读；多租户增加 Tenant 可写资源）+ schema 元数据端点 |
 | 3 | [auth.md](./auth.md) | `AuthService` — `/auth/login`、`/auth/refresh-token`、`/auth/logout`、登录钩子、TokenStore |
 | 4 | [user.md](./user.md) | `UserService` — 当前用户自助接口(资料、改密、头像、可见菜单、权限码) |
 | 5 | [role.md](./role.md) | `RoleService` — 角色下拉、权限查询/替换、角色菜单预览 |
@@ -23,7 +23,7 @@
 
 | 服务 | 注册方式 | 来源文件 |
 |---|---|---|
-| REST 资源(9 个：5 可写 + 4 只读) | `admin.New(...).Setup(ctx)` 自动挂到 `WithRouter` 指定的 router | `server.go:registerModel` |
+| REST 资源(默认 8 个：4 可写 + 4 只读；多租户增加 Tenant) | `admin.New(...).Setup(ctx)` 自动挂到 `WithRouter` 指定的 router | `server.go:registerModel` |
 | `AuthService` | `pb.RegisterAuthServiceRouter(router, service.NewAuthService(...))` | `pb/auth.proto`、`service/auth.go` |
 | `UserService` | `pb.RegisterUserServiceRouter(router, service.NewUserService(...))` | `pb/user.proto`、`service/user.go` |
 | `RoleService` | `pb.RegisterRoleServiceRouter(router, service.NewRoleService(...))` | `pb/role.proto`、`service/role.go` |

@@ -145,6 +145,32 @@ func TestSchemaEndpoint_HappyPath(t *testing.T) {
 	}
 }
 
+// TestSchemaEndpoint_RoleKeyRequiredOnCreate pins the schema payload
+// consumed by @sjlit/rest-ui: role_key must be marked required for the
+// create scenario, while update remains optional for partial updates.
+func TestSchemaEndpoint_RoleKeyRequiredOnCreate(t *testing.T) {
+	_, httpSrv := setupSchemaDB(t)
+	rec := callEndpoint(t, httpSrv, "/schema/system/sys_users")
+
+	var env struct {
+		Code int             `json:"code"`
+		Data []schema.Schema `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, rec.Body.String())
+	}
+	for _, row := range env.Data {
+		if row.Column != "role_key" {
+			continue
+		}
+		if len(row.Rules.Required) != 1 || row.Rules.Required[0] != schema.ScenarioCreate {
+			t.Fatalf("role_key required scenarios = %v, want [create]", row.Rules.Required)
+		}
+		return
+	}
+	t.Fatal("schema data missing role_key column")
+}
+
 // TestSchemaEndpoint_NoDuplicateColumnsAfterSeed pins the regression
 // where Seed fans the global schema templates out to the default
 // tenant, and the endpoint returned both the templates and the clones.

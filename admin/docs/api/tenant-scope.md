@@ -57,7 +57,7 @@ func FromClaimsResolver(ctx context.Context) string {
 }
 ```
 
-读取 `*auth.Claims.TenantID`(由 JWT 中间件写入 ctx)。租户隔离默认**关闭**(单租户):只有显式 `admin.WithMultiTenant(true)` 或 `admin.WithTenantResolver(...)` 才会安装 GORM 回调。启用多租户且未配置自定义 resolver 时,`newOptions` 才把 `TenantResolver` 设为 `FromClaimsResolver`。
+读取 `*auth.Claims.TenantID`(由 JWT 中间件写入 ctx)。租户隔离默认**关闭**(单租户):只有显式 `admin.WithMultiTenant(true)` 或 `admin.WithTenantResolver(...)` 才会安装 GORM 回调。启用多租户且未配置自定义 resolver 时,`newOptions` 才把 `TenantResolver` 设为 `FromClaimsResolver`。单租户同时不注册 `Tenant` REST 模型和“租户管理”菜单；启用多租户后自动恢复。
 
 ## 10.4 自定义 Resolver
 

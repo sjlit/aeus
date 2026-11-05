@@ -130,7 +130,7 @@ func ensureCallerMayAssignRole(ctx context.Context, db *gorm.DB, roleKey string)
 }
 
 func (s *Server) getModels() []any {
-	return []any{
+	registered := []any{
 		&models.Menu{},
 		&models.User{},
 		&models.LoginLog{},
@@ -144,8 +144,17 @@ func (s *Server) getModels() []any {
 		&models.RolePermission{},
 		&models.Permission{},
 		&models.Audit{},
-		&models.Tenant{},
 	}
+	// Tenant management only makes sense when tenant scoping is active.
+	// Registering it in single-tenant mode would mount /system/sys_tenants
+	// and auto-create a "租户管理" menu whose page has no meaningful
+	// operational purpose. The sys_tenants table itself is still
+	// migrated in Setup because Seed and login need the default tenant
+	// row regardless of mode.
+	if s.opts.MultiTenant {
+		registered = append(registered, &models.Tenant{})
+	}
+	return registered
 }
 
 // RegisterModel wires an application model onto the http server's REST
@@ -439,10 +448,32 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 		if err = s.opts.DB.AutoMigrate(&schema.Schema{}); err != nil {
 			return fmt.Errorf("migrate schema meta table: %w", err)
 		}
+		// Tenant is a built-in model only in multi-tenant mode, but the
+		// table must exist in every mode: Seed writes the default tenant
+		// row and AuthService resolves its display name during login.
+		if err = s.opts.DB.AutoMigrate(&models.Tenant{}); err != nil {
+			return fmt.Errorf("migrate tenant table: %w", err)
+		}
 	}
 
 	for _, m := range s.getModels() {
 		if err = s.RegisterModel(m); err != nil {
+			return err
+		}
+	}
+	// rest/v3's sys_schemas migration is insert-only: existing rows keep
+	// their old Rules when a struct tag changes. Backfill the rule added
+	// to User.RoleKey so already-initialized databases show it as
+	// required on create too.
+	if err = syncRoleKeyCreateRule(s.opts.DB); err != nil {
+		return err
+	}
+	// In single-tenant mode Tenant is deliberately not registered. Remove
+	// the auto-generated menu and CRUD permissions left behind by earlier
+	// versions so an existing database converges to the same sidebar and
+	// permission catalog as a fresh one.
+	if !s.opts.MultiTenant {
+		if err = removeTenantManagementArtifacts(s.opts.DB); err != nil {
 			return err
 		}
 	}

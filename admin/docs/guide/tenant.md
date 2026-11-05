@@ -25,6 +25,8 @@ Resolver **必须廉价且不可 panic**——JWT 缺失时返回 `""` 即可，
 
 租户隔离默认**关闭**（单租户）。调用 `admin.WithMultiTenant(true)` 或 `admin.WithTenantResolver(...)` 后才会安装 GORM 回调；启用且未提供自定义 resolver 时，默认 resolver 是 `middleware.FromClaimsResolver`，直接读取 `auth.Claims.TenantID`（由 JWT 中间件写入 ctx），无需额外中间件。
 
+管理界面也跟随该开关：单租户模式不注册 `Tenant` 业务模型，因此不会有 `/system/sys_tenants` REST 路由、“租户管理”菜单和对应 CRUD 权限；`sys_tenants` 表仍会迁移并由 `Seed` 写入默认租户行，供登录响应展示租户名。启用多租户后这些资源会自动恢复。
+
 覆盖示例（优先信任 `X-Tenant-Id` 请求头，兜底 JWT 租户，适用于超管工具）：
 
 ```go

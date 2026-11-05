@@ -12,7 +12,7 @@
 | `Role` | `sys_roles` | ✅ `/system/sys_role` | `/system/sys_roles` | `/system/sys_role/openapi.json` |
 | `Menu` | `sys_menus` | ✅ `/system/sys_menu` | `/system/sys_menuses` | `/system/sys_menu/openapi.json` |
 | `Department` | `sys_departments` | ✅ `/system/sys_department` | `/system/sys_departments` | `/system/sys_department/openapi.json` |
-| `Tenant` | `sys_tenants` | ✅ `/system/sys_tenant` | `/system/sys_tenants` | `/system/sys_tenant/openapi.json` |
+| `Tenant` | `sys_tenants` | ✅ 仅多租户 `/system/sys_tenant` | 仅多租户 `/system/sys_tenants` | 仅多租户 `/system/sys_tenant/openapi.json` |
 | `Permission` | `sys_permissions` | ❌ 只读 | `/system/sys_permissions` | `/system/sys_permission/openapi.json` |
 | `RolePermission` | `sys_role_permissions` | ❌ 只读 | `/system/sys_role_permissions` | `/system/sys_role_permission/openapi.json` |
 | `Audit` | `sys_audits` | ❌ 只读 | `/system/sys_audits` | `/system/sys_audit/openapi.json` |

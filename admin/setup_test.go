@@ -84,8 +84,8 @@ func TestSetup_OrphanParentWarnsAndContinues(t *testing.T) {
 // log" change would silently start spamming the log on every healthy
 // boot.
 //
-// The 9 built-in model menus declare Parent references on section
-// menus (inserted by Seed).  To isolate this test's "no extra orphan"
+// The built-in model menus declare Parent references on section menus
+// (inserted by Seed). To isolate this test's "no extra orphan"
 // intent from the expected setup-time orphans, we pre-seed the three
 // section containers so Setup's auto-inserted model menus find valid
 // parents on the very first pass.
@@ -169,7 +169,6 @@ func TestSetup_Seed_LinksChildrenToSections(t *testing.T) {
 		"SystemSysDepartments":     "SystemUserCenter",
 		"SystemSysAudits":          "SystemLogs",
 		"SystemSysLoginLogs":       "SystemLogs",
-		"SystemSysTenants":         "SystemSettings",
 		"SystemSysMenus":           "SystemSettings",
 		"SystemSysPermissions":     "SystemSettings",
 	}
@@ -201,8 +200,8 @@ func TestSetup_Seed_LinksChildrenToSections(t *testing.T) {
 // in each MenuEntry().Sort — within a section, rows must sort
 // ascending by Sort so the sidebar renders them in the documented
 // order (User → Role → RolePermission → Department inside 用户中心,
-// Audit → LoginLog inside 日志记录, Tenant → Menu → Permission inside
-// 系统设置).
+// Audit → LoginLog inside 日志记录, Menu → Permission inside 系统设置;
+// 租户管理 is absent in the default single-tenant mode).
 func TestSetup_Seed_SortWithinSections(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -229,7 +228,6 @@ func TestSetup_Seed_SortWithinSections(t *testing.T) {
 		"SystemSysDepartments":     40,
 		"SystemSysAudits":          10,
 		"SystemSysLoginLogs":       20,
-		"SystemSysTenants":         10,
 		"SystemSysMenus":           20,
 		"SystemSysPermissions":     30,
 	}

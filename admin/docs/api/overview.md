@@ -156,6 +156,8 @@ admin 模块所有业务 RPC 遵循同一规则:
 
 **租户列**:6/9 模型(User/Role/Department/RolePermission/Audit/LoginLog)带 `tenant_id`;Menu/Permission/Tenant 全局共享。
 
+`Tenant` 的 REST 资源和“租户管理”菜单只在 `WithMultiTenant(true)` 时注册；单租户仍会迁移 `sys_tenants` 表并由 `Seed` 写入默认租户行。
+
 所有模型在 `Setup` 时由 rest/v3 自动 `AutoMigrate`,无需手动迁移。模型上的 `scenarios`、`rule`、`enum` 等标签驱动 rest/v3 的字段可见性与校验。
 
 ## 1.9 业务码对照速查

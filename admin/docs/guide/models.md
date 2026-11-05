@@ -4,8 +4,8 @@
 
 | 模型 | 表名 | 租户 | 说明 |
 |------|------|------|------|
-| `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）、`created_at` / `updated_at`。全局可见，无 `tenant_id` 列 |
-| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一，更新只读）、`username`（与 `uid` 共用登录命名空间；Login 没有租户选择器，因此跨租户也全局唯一）、`role_key`（创建/更新可写，但**任何角色变更都要求 super 调用者**）、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description`。更新/删除当前角色为 super 的用户同样要求 super 调用者 |
+| `Tenant` | `sys_tenants` | ❌ | 租户实体：`id`（char(60) 字符串主键，即各表 `tenant_id` 引用的值；创建时留空由 `BeforeCreate` 生成 uuid）、`name`、`status`（`enabled` / `disabled`，登录时校验）、`created_at` / `updated_at`。全局可见，无 `tenant_id` 列。仅 `WithMultiTenant(true)` 时注册 REST 资源和“租户管理”菜单；单租户仍保留表和 Seed 的默认租户行 |
+| `User` | `sys_users` | ✅ | 用户：`uid`（工号，唯一，更新只读）、`username`（与 `uid` 共用登录命名空间；Login 没有租户选择器，因此跨租户也全局唯一）、`role_key`（创建必填；创建/更新可写，但**任何角色变更都要求 super 调用者**）、`dept_id`、bcrypt `password`、`avatar`、`status`（`normal` / `disabled`，登录时校验）、`email`、`gender`（`man` / `woman` / `other`）、`description`。更新/删除当前角色为 super 的用户同样要求 super 调用者 |
 | `Role` | `sys_roles` | ✅ | 角色：`name`、`key`（机器标识，唯一，匹配 `^[a-z][a-z0-9_]*$`，更新只读）、`status`（`enabled` / `disabled`；super 角色的状态变更要求 super 调用者）、`builtin`（REST 只读）、`is_super`（REST 只读；由 Seed 管理）、`data_scope`（`all` / `dept` / `self` / `custom`）、`sort`、`created_by`、`description`。`key` 变更自动同步 `sys_role_permissions` 与 `sys_users.role_key`；删除（含软删）自动清理关联权限并将 `sys_users.role_key` 置空；super 角色的删除要求 super 调用者 |
 | `Menu` | `sys_menus` | ❌ | 菜单树：`parent`（父级菜单 Component，全局共享）、`name`（唯一，标题）、`component`（唯一，标识，路由 keep-alive 用）、`uri`、`view_path`（自动生成的 Vue 路径 `@/views/<module>/<singular>/Index.vue`）、`icon`、`hidden` / `public`、`sort`、`description`。删除自动清理 `sys_role_permissions` 中 `type=menu` 的行 |
 | `Department` | `sys_departments` | ✅ | 部门树：`parent_id`、`name`、`description` |

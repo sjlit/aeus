@@ -135,9 +135,11 @@ type User struct {
 	// RoleKey holds Role.Key (machine identifier); size:30 matches Role.Key.
 	// RoleKey is editable through the update scenario, but the admin
 	// security guard requires a super caller for every actual role
-	// change. Requiredness is enforced by the create hook instead of a
-	// rule tag, so partial updates that omit role_key remain valid.
-	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"用户角色" scenarios:"create;update;list;view;search;export" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
+	// change. The rule tag marks it required only for create so the
+	// admin form shows the required indicator while partial updates that
+	// omit role_key remain valid; the create hook enforces the same
+	// contract server-side.
+	RoleKey     string `json:"role_key" yaml:"roleKey" xml:"roleKey" gorm:"size:30;not null;default:'';column:role_key" comment:"用户角色" scenarios:"create;update;list;view;search;export" rule:"required:create" live:"type:dropdown;url:/rest/model-types/system/sys_roles?label=name&value=key"`
 	Status      string `json:"status" yaml:"status" xml:"status" gorm:"size:20;default:normal;column:status" comment:"状态" scenarios:"create;update;list;search" enum:"normal:正常;disabled:禁用"`
 	DeptID      int64  `json:"dept_id" yaml:"deptId" xml:"deptId" gorm:"not null;column:dept_id" comment:"所属部门" rule:"required" live:"type:dropdown;url:/rest/model-types/system/sys_departments?label=name&value=id&valueType=int64"`
 	Password    string `json:"password" yaml:"password" xml:"password" gorm:"size:120;column:password" comment:"用户密码" scenarios:"create" rule:"required;regexp:^[A-Za-z0-9]{8,32}$"`

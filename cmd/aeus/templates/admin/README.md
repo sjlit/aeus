@@ -37,7 +37,7 @@ Copy `.env.example` and export the values you need:
 | `ADMIN_PASSWORD` | `Admin123` | seeded password — replace after login |
 | `WEB_ROOT` | `./web/dist` | built SPA directory |
 | `DEBUG` | `true` | framework debug mode |
-| `MULTI_TENANT` | `false` | enable GORM tenant scoping |
+| `MULTI_TENANT` | `false` | enable GORM tenant scoping and the tenant-management menu/REST resource |
 | `AUTO_MIGRATE` | `true` | boot-time table DDL |
 | `SEED_ON_START` | `true` | seed the admin/role/menu catalog on boot |
 | `CORS_ORIGINS` | empty | comma-separated allowed browser origins; empty = same-origin |
