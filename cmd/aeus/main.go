@@ -58,7 +58,7 @@ Flags for gen:
   --api-dir string     TypeScript API directory (default "web/src/api/generated")
   --no-web             skip Vue page generation
   --no-api             skip TypeScript API generation
-  --check              verify generated Go/Vue/API outputs
+  --check              verify generated Go/Vue/API outputs (TS content, Vue presence)
 
 Examples:
   aeus new order-svc

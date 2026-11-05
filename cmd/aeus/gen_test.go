@@ -15,6 +15,7 @@ func TestRenderGenerated(t *testing.T) {
 		GoPackageName: "shopv1",
 		Module: &manifestModule{
 			Name: "shop", Title: "商城管理", Icon: "Shop", Component: "ShopCenter", Sort: 100,
+			VarName: "ShopModule",
 		},
 		Entities: []manifestEntity{{
 			GoName: "Order", ModelName: "OrderModel", Table: "orders", Module: "shop",
@@ -34,7 +35,7 @@ func TestRenderGenerated(t *testing.T) {
 	got := string(formatted)
 	for _, want := range []string{
 		`shopv1 "example.com/shop/proto/shop/v1"`,
-		`admin.EnsureModuleMenu(db, shopv1.Module)`,
+		`admin.EnsureModuleMenu(db, shopv1.ShopModule)`,
 		`s.RegisterModel(&shopv1.OrderModel{})`,
 		`admin.EnsureEndpointPermissions(db, shopv1.OrderServicePolicies...)`,
 		`db.AutoMigrate(&shopv1.OrderModel{})`,
@@ -69,6 +70,9 @@ func TestLoadManifests(t *testing.T) {
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(nested, "order.proto"), []byte("syntax = \"proto3\";\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	payload := `{"source":"shop/v1/order.proto","go_package":"example.com/shop/proto/shop/v1","go_package_name":"shopv1"}`
 	if err := os.WriteFile(filepath.Join(nested, "order_aeus.json"), []byte(payload), 0o644); err != nil {
 		t.Fatal(err)
@@ -79,6 +83,40 @@ func TestLoadManifests(t *testing.T) {
 	}
 	if len(manifests) != 1 || manifests[0].GoPackage != "example.com/shop/proto/shop/v1" {
 		t.Fatalf("manifests = %+v", manifests)
+	}
+}
+
+func TestRenderGeneratedTypeOnlyDoesNotImportPackage(t *testing.T) {
+	src, err := renderGenerated("bootstrap", []resourceManifest{{
+		Source:        "user/v1/user.proto",
+		GoPackage:     "example.com/user/v1",
+		GoPackageName: "userv1",
+		Messages:      []manifestMessage{{GoName: "User", Fields: []manifestField{{Name: "name", Type: "string"}}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	formatted, err := format.Source(src)
+	if err != nil {
+		t.Fatalf("gofmt: %v\n%s", err, src)
+	}
+	if strings.Contains(string(formatted), `"example.com/user/v1"`) {
+		t.Fatalf("type-only manifest should not be imported:\n%s", formatted)
+	}
+}
+
+func TestLoadManifestsRejectsStaleSource(t *testing.T) {
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "shop", "v1")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{"source":"shop/v1/order.proto","go_package":"example.com/shop/proto/shop/v1"}`
+	if err := os.WriteFile(filepath.Join(nested, "order_aeus.json"), []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadManifests(dir); err == nil || !strings.Contains(err.Error(), "stale manifest") {
+		t.Fatalf("loadManifests error = %v, want stale manifest", err)
 	}
 }
 
@@ -368,5 +406,244 @@ func TestRenderAPITypeOnlyFile(t *testing.T) {
 	}
 	if strings.Contains(body, "@/api/http") {
 		t.Fatalf("type-only file should not import http:\n%s", body)
+	}
+}
+
+func TestRenderVueUsesExplicitComponentAndReadonly(t *testing.T) {
+	body := renderVue(manifestEntity{
+		Module: "shop", Table: "order", Component: "ShopOrder",
+		MenuName: "订单管理", ReadOnly: true,
+	})
+	for _, want := range []string{
+		`defineOptions({ name: "ShopOrder" })`,
+		`<SchemaViewer module="shop" table="order" :title="title" readonly />`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("vue output missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestRenderAPISamePackageCrossFileImport(t *testing.T) {
+	order := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages: []manifestMessage{{GoName: "OrderView", Fields: []manifestField{{
+			Name: "user", Type: "User",
+			Ref: &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "User"},
+		}}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "GetOrder", Request: "OrderView", Response: "OrderView",
+			HTTPMethod: "GET", HTTPPath: "/shop/order",
+		}}}},
+	}
+	user := resourceManifest{
+		Source:    "shop/v1/user.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages:  []manifestMessage{{GoName: "User", Fields: []manifestField{{Name: "name", Type: "string"}}}},
+	}
+	root := t.TempDir()
+	index, err := buildAPIIndex([]resourceManifest{order, user}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, order.Source)
+	body := renderAPI(order, index, path)
+	for _, want := range []string{
+		`import type { User } from './user'`,
+		`user?: User`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("api output missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestRenderAPIServiceOnly(t *testing.T) {
+	types := resourceManifest{
+		Source:    "types/v1/types.proto",
+		GoPackage: "example.com/types/v1",
+		Messages: []manifestMessage{
+			{GoName: "Req", Fields: []manifestField{{Name: "id", Type: "string"}}},
+			{GoName: "Res", Fields: []manifestField{{Name: "id", Type: "string"}}},
+		},
+	}
+	service := resourceManifest{
+		Source:    "service/v1/service.proto",
+		GoPackage: "example.com/service/v1",
+		Services: []manifestService{{GoName: "ShopService", Methods: []manifestMethod{{
+			GoName: "Get", Request: "Req", Response: "Res",
+			RequestRef:  &manifestRef{Kind: "message", Package: "example.com/types/v1", Name: "Req"},
+			ResponseRef: &manifestRef{Kind: "message", Package: "example.com/types/v1", Name: "Res"},
+			HTTPMethod:  "GET", HTTPPath: "/shop/get",
+		}}}},
+	}
+	root := t.TempDir()
+	index, err := buildAPIIndex([]resourceManifest{types, service}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, service.Source)
+	body := renderAPI(service, index, path)
+	for _, want := range []string{
+		`import type { Req, Res } from '../../types/v1/types'`,
+		`export function get(req: Req): Promise<Res>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("api output missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestRenderAPIReservedFunctionName(t *testing.T) {
+	m := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages:  []manifestMessage{{GoName: "Req", Fields: []manifestField{{Name: "id", Type: "number"}}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "Delete", Request: "Req", Response: "void",
+			RequestRef: &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "Req"},
+			HTTPMethod: "DELETE", HTTPPath: "/shop/orders/:id",
+		}}}},
+	}
+	root := t.TempDir()
+	index, err := buildAPIIndex([]resourceManifest{m}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, m.Source)
+	body := renderAPI(m, index, path)
+	if !strings.Contains(body, `export function rpcDelete(req: Req)`) {
+		t.Fatalf("reserved method name not sanitized:\n%s", body)
+	}
+	if strings.Contains(body, `export function delete(`) {
+		t.Fatalf("invalid reserved function emitted:\n%s", body)
+	}
+}
+
+func TestRenderAPILocalEmptyMessage(t *testing.T) {
+	m := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages:  []manifestMessage{{GoName: "Empty", Fields: []manifestField{{Name: "name", Type: "string"}}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "GetEmpty", Request: "Empty", Response: "Empty",
+			RequestRef:  &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "Empty"},
+			ResponseRef: &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "Empty"},
+			HTTPMethod:  "GET", HTTPPath: "/shop/empty",
+		}}}},
+	}
+	root := t.TempDir()
+	index, err := buildAPIIndex([]resourceManifest{m}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, m.Source)
+	body := renderAPI(m, index, path)
+	for _, want := range []string{
+		`export interface Empty {`,
+		`export function getEmpty(req: Empty): Promise<Empty>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("api output missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestGenerateAPIFilesUpdatesGeneratedFile(t *testing.T) {
+	root := t.TempDir()
+	manifest := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages:  []manifestMessage{{GoName: "Req", Fields: []manifestField{{Name: "id", Type: "number"}}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "Get", Request: "Req", Response: "void",
+			RequestRef: &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "Req"},
+			HTTPMethod: "GET", HTTPPath: "/shop/order",
+		}}}},
+	}
+	if _, _, _, err := generateAPIFiles([]resourceManifest{manifest}, root, false); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Messages[0].Fields = append(manifest.Messages[0].Fields, manifestField{Name: "order_no", Type: "string"})
+	if written, _, _, err := generateAPIFiles([]resourceManifest{manifest}, root, false); err != nil {
+		t.Fatal(err)
+	} else if written != 1 {
+		t.Fatalf("written = %d, want 1", written)
+	}
+	path, _ := apiFilePath(root, manifest.Source)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "order_no?: string") {
+		t.Fatalf("generated TS was not refreshed:\n%s", body)
+	}
+}
+
+func TestGenerateAPIFilesCheckDetectsDrift(t *testing.T) {
+	root := t.TempDir()
+	manifest := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages:  []manifestMessage{{GoName: "Req", Fields: []manifestField{{Name: "id", Type: "number"}}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "Get", Request: "Req", Response: "void",
+			RequestRef: &manifestRef{Kind: "message", Package: "example.com/shop/v1", Name: "Req"},
+			HTTPMethod: "GET", HTTPPath: "/shop/order",
+		}}}},
+	}
+	if _, _, _, err := generateAPIFiles([]resourceManifest{manifest}, root, false); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, manifest.Source)
+	body, _ := os.ReadFile(path)
+	if err := os.WriteFile(path, append(body, []byte("\n// drift\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := generateAPIFiles([]resourceManifest{manifest}, root, true); err == nil ||
+		!strings.Contains(err.Error(), "out of date") {
+		t.Fatalf("check error = %v, want out of date", err)
+	}
+}
+
+func TestRenderAPIAliasesDuplicateImportedNames(t *testing.T) {
+	order := resourceManifest{
+		Source:    "shop/v1/order.proto",
+		GoPackage: "example.com/shop/v1",
+		Messages: []manifestMessage{{GoName: "OrderView", Fields: []manifestField{
+			{Name: "buyer", Type: "User", Ref: &manifestRef{Kind: "message", Package: "example.com/user/v1", Name: "User"}},
+			{Name: "seller", Type: "User", Ref: &manifestRef{Kind: "message", Package: "example.com/admin/v1", Name: "User"}},
+		}}},
+		Services: []manifestService{{GoName: "OrderService", Methods: []manifestMethod{{
+			GoName: "GetOrder", Request: "OrderView", Response: "OrderView",
+			HTTPMethod: "GET", HTTPPath: "/shop/order",
+		}}}},
+	}
+	user := resourceManifest{
+		Source:    "user/v1/user.proto",
+		GoPackage: "example.com/user/v1",
+		Messages:  []manifestMessage{{GoName: "User", Fields: []manifestField{{Name: "name", Type: "string"}}}},
+	}
+	adminUser := resourceManifest{
+		Source:    "admin/v1/user.proto",
+		GoPackage: "example.com/admin/v1",
+		Messages:  []manifestMessage{{GoName: "User", Fields: []manifestField{{Name: "name", Type: "string"}}}},
+	}
+	root := t.TempDir()
+	index, err := buildAPIIndex([]resourceManifest{order, user, adminUser}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := apiFilePath(root, order.Source)
+	body := renderAPI(order, index, path)
+	for _, want := range []string{
+		`buyer?: User`,
+		`seller?: User_2`,
+		`import type { User as User_2 } from '../../admin/v1/user'`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("api output missing %q\n%s", want, body)
+		}
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/rest/v3"
@@ -32,7 +34,11 @@ func pascalWords(s string) string {
 	})
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		out = append(out, strings.ToUpper(p[:1])+strings.ToLower(p[1:]))
+		if p == "" {
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(p)
+		out = append(out, string(unicode.ToUpper(r))+strings.ToLower(p[size:]))
 	}
 	return strings.Join(out, "")
 }

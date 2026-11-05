@@ -102,7 +102,8 @@ example at `proto/shop/v1/order.proto`:
    `web/src/views/shop/order/Index.vue` and
    `web/src/api/generated/shop/v1/order.ts` when they do not exist yet.
    The TS file includes proto enums, nested messages, cross-file imports
-   and custom-RPC wrappers.
+   and custom-RPC wrappers, and is refreshed on later runs when it still
+   carries the generated header.
    Use `--web-dir` / `--api-dir` to change the output directories, or
    `--no-web` / `--no-api` to skip frontend generation.
 

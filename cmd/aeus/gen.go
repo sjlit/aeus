@@ -60,6 +60,7 @@ type manifestModule struct {
 	Icon      string `json:"icon"`
 	Component string `json:"component"`
 	Sort      int64  `json:"sort"`
+	VarName   string `json:"var_name"`
 }
 
 type manifestEntity struct {
@@ -71,6 +72,7 @@ type manifestEntity struct {
 	Plural          string   `json:"plural"`
 	ViewPath        string   `json:"view_path"`
 	MenuName        string   `json:"menu_name"`
+	Component       string   `json:"component"`
 	Base            string   `json:"base"`
 	Scenarios       []string `json:"scenarios"`
 	PermissionGroup string   `json:"permission_group"`
@@ -217,6 +219,22 @@ func loadManifests(root string) ([]resourceManifest, error) {
 		if m.GoPackage == "" {
 			return fmt.Errorf("%s: go_package is empty", path)
 		}
+		source := filepath.Clean(filepath.FromSlash(m.Source))
+		if m.Source == "" || source == "." || filepath.IsAbs(source) ||
+			source == ".." || strings.HasPrefix(source, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("%s: invalid proto source %q", path, m.Source)
+		}
+		found := false
+		for _, base := range []string{root, filepath.Dir(root)} {
+			if _, err := os.Stat(filepath.Join(base, source)); err == nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("%s: stale manifest for %q (source not found under %s); rerun `make proto` or remove stale generated files",
+				path, m.Source, root)
+		}
 		manifests = append(manifests, m)
 		return nil
 	})
@@ -228,8 +246,9 @@ func loadManifests(root string) ([]resourceManifest, error) {
 }
 
 type genModule struct {
-	alias string
-	spec  *manifestModule
+	alias   string
+	varName string
+	spec    *manifestModule
 }
 
 type genEntity struct {
@@ -265,6 +284,7 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 		entities []genEntity
 		policies []genPolicy
 	)
+	usedPackages := map[string]bool{}
 	seenModule := map[string]bool{}
 	seenEntity := map[string]bool{}
 	seenPolicy := map[string]bool{}
@@ -277,7 +297,12 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 			}
 			if !seenModule[key] {
 				seenModule[key] = true
-				modules = append(modules, genModule{alias: alias, spec: m.Module})
+				varName := m.Module.VarName
+				if varName == "" {
+					varName = "Module"
+				}
+				modules = append(modules, genModule{alias: alias, varName: varName, spec: m.Module})
+				usedPackages[m.GoPackage] = true
 			}
 		}
 		for _, e := range m.Entities {
@@ -287,6 +312,7 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 			}
 			seenEntity[key] = true
 			entities = append(entities, genEntity{alias: alias, model: e.ModelName, name: e.GoName})
+			usedPackages[m.GoPackage] = true
 		}
 		for _, s := range m.Services {
 			if s.PoliciesVar == "" {
@@ -298,6 +324,7 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 			}
 			seenPolicy[key] = true
 			policies = append(policies, genPolicy{alias: alias, name: s.PoliciesVar, goName: s.GoName})
+			usedPackages[m.GoPackage] = true
 		}
 	}
 	sort.Slice(modules, func(i, j int) bool { return moduleKey(modules[i].spec) < moduleKey(modules[j].spec) })
@@ -317,8 +344,8 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 	}
 	fmt.Fprintln(&b, "\t\"github.com/sjlit/aeus/admin\"")
 	fmt.Fprintln(&b, "\t\"gorm.io/gorm\"")
-	paths := make([]string, 0, len(aliases))
-	for path := range aliases {
+	paths := make([]string, 0, len(usedPackages))
+	for path := range usedPackages {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
@@ -331,18 +358,18 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 	fmt.Fprintln(&b, "// and route permissions into the admin server. It is called after Setup.")
 	fmt.Fprintln(&b, "func RegisterGenerated(s *admin.Server, db *gorm.DB) error {")
 	for _, m := range modules {
-		fmt.Fprintf(&b, "\tif err := admin.EnsureModuleMenu(db, %s.Module); err != nil {\n", m.alias)
-		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(\"ensure module %s: %%w\", err)\n", m.spec.Name)
+		fmt.Fprintf(&b, "\tif err := admin.EnsureModuleMenu(db, %s.%s); err != nil {\n", m.alias, m.varName)
+		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(%q, err)\n", "ensure module "+m.spec.Name+": %w")
 		fmt.Fprintln(&b, "\t}")
 	}
 	for _, e := range entities {
 		fmt.Fprintf(&b, "\tif err := s.RegisterModel(&%s.%s{}); err != nil {\n", e.alias, e.model)
-		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(\"register %s: %%w\", err)\n", e.name)
+		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(%q, err)\n", "register "+e.name+": %w")
 		fmt.Fprintln(&b, "\t}")
 	}
 	for _, p := range policies {
 		fmt.Fprintf(&b, "\tif err := admin.EnsureEndpointPermissions(db, %s.%s...); err != nil {\n", p.alias, p.name)
-		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(\"register policies for %s: %%w\", err)\n", p.goName)
+		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(%q, err)\n", "register policies for "+p.goName+": %w")
 		fmt.Fprintln(&b, "\t}")
 	}
 	fmt.Fprintln(&b, "\treturn nil")

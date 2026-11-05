@@ -12,6 +12,9 @@ import (
 // business module generated from (aeus.module). It is idempotent and
 // never overwrites an operator's edits.
 func EnsureModuleMenu(db *gorm.DB, spec models.ModuleSpec) error {
+	if db == nil {
+		return errors.New("admin: EnsureModuleMenu requires a non-nil *gorm.DB")
+	}
 	if spec.Name == "" {
 		return fmt.Errorf("admin: module name is required")
 	}
