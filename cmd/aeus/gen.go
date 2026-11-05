@@ -109,9 +109,9 @@ type manifestPolicy struct {
 func runGen(args []string) error {
 	flags := flag.NewFlagSet("gen", flag.ContinueOnError)
 	protoDir := flags.String("proto-dir", "proto", "directory containing *_aeus.json manifests")
-	outDir := flags.String("out", "internal/bootstrap", "output directory")
-	pkg := flags.String("package", "bootstrap", "Go package name for the generated file")
-	name := flags.String("file", "generated.go", "generated file name")
+	outDir := flags.String("out", "internal/gen", "output directory")
+	pkg := flags.String("package", "gen", "Go package name for the generated file")
+	name := flags.String("file", "wiring.go", "generated file name")
 	webDir := flags.String("web-dir", "web/src/views", "Vue views directory")
 	apiDir := flags.String("api-dir", "web/src/api/generated", "TypeScript API output directory")
 	noWeb := flags.Bool("no-web", false, "skip Vue page generation")
@@ -354,9 +354,9 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 	}
 	fmt.Fprintln(&b, ")")
 	fmt.Fprintln(&b, "")
-	fmt.Fprintln(&b, "// RegisterGenerated wires proto-generated business models, module menus")
-	fmt.Fprintln(&b, "// and route permissions into the admin server. It is called after Setup.")
-	fmt.Fprintln(&b, "func RegisterGenerated(s *admin.Server, db *gorm.DB) error {")
+	fmt.Fprintln(&b, "// Register wires proto-generated business models, module menus and")
+	fmt.Fprintln(&b, "// route permissions into the admin server. It is called after Setup.")
+	fmt.Fprintln(&b, "func Register(s *admin.Server, db *gorm.DB) error {")
 	for _, m := range modules {
 		fmt.Fprintf(&b, "\tif err := admin.EnsureModuleMenu(db, %s.%s); err != nil {\n", m.alias, m.varName)
 		fmt.Fprintf(&b, "\t\treturn fmt.Errorf(%q, err)\n", "ensure module "+m.spec.Name+": %w")
@@ -375,8 +375,8 @@ func renderGenerated(pkg string, manifests []resourceManifest) ([]byte, error) {
 	fmt.Fprintln(&b, "\treturn nil")
 	fmt.Fprintln(&b, "}")
 	fmt.Fprintln(&b, "")
-	fmt.Fprintln(&b, "// MigrateGenerated creates the tables for proto-generated entities.")
-	fmt.Fprintln(&b, "func MigrateGenerated(db *gorm.DB) error {")
+	fmt.Fprintln(&b, "// Migrate creates the tables for proto-generated entities.")
+	fmt.Fprintln(&b, "func Migrate(db *gorm.DB) error {")
 	if len(entities) == 0 {
 		fmt.Fprintln(&b, "\treturn nil")
 	} else {

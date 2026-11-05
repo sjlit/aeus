@@ -1,41 +1,106 @@
 package main
 
 import (
-	"log"
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"runtime"
 
 	"github.com/sjlit/aeus"
 	ghttp "github.com/sjlit/aeus/transport/http"
 
-	"__AEUS_MODULE__/internal/bootstrap"
+	"__AEUS_MODULE__/internal/app"
 	"__AEUS_MODULE__/internal/config"
+	"__AEUS_MODULE__/internal/logging"
+)
+
+var (
+	appName   = "__AEUS_NAME__"
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
+var (
+	configFlag  = flag.String("config", "", "config file (default: configs/config.yaml when present)")
+	versionFlag = flag.Bool("version", false, "print build version and exit")
 )
 
 func main() {
-	cfg := config.Load()
-	scope := bootstrap.NewScope(cfg)
+	flag.Parse()
+	if *versionFlag {
+		fmt.Printf("%s %s (commit %s, built %s, %s)\n",
+			appName, version, commit, buildTime, runtime.Version())
+		return
+	}
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "server:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load(*configFlag)
+	if err != nil {
+		return err
+	}
+	lg, closer, err := logging.New(cfg.Log)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+
+	ctx := context.Background()
+	lg.Info(ctx, "build info",
+		"app", cfg.App.Name,
+		"version", version,
+		"commit", commit,
+		"build_time", buildTime,
+		"go", runtime.Version(),
+	)
+	for _, warning := range cfg.Warnings() {
+		lg.Warnf(ctx, "%s", warning)
+	}
 
 	httpOpts := []ghttp.Option{
-		ghttp.WithAddress(cfg.HTTPAddr),
+		ghttp.WithAddress(cfg.Server.HTTPAddr),
 		ghttp.WithEnableHealth(true),
+		ghttp.WithDebug(cfg.App.Debug),
+		ghttp.WithLogger(lg),
 	}
-	// Empty CORS_ORIGINS keeps the API same-origin: the built SPA is
-	// served by this binary. Set CORS_ORIGINS when the web app runs on a
-	// separate origin (for example the Vite dev server).
-	if len(cfg.CORSOrigins) > 0 {
+	// Empty server.cors.origins keeps the API same-origin: the built SPA
+	// is served by this binary. Set CORS origins when the web app runs on
+	// a separate origin (for example the Vite dev server).
+	if len(cfg.Server.CORS.Origins) > 0 {
 		httpOpts = append(httpOpts, ghttp.WithCORS(ghttp.CORSConfig{
-			AllowOrigins:     cfg.CORSOrigins,
-			AllowCredentials: cfg.CORSCredentials,
+			AllowOrigins:     cfg.Server.CORS.Origins,
+			AllowCredentials: cfg.Server.CORS.AllowCredentials,
 		}))
 	}
 
-	app := aeus.New(
-		aeus.WithName(cfg.AppName),
-		aeus.WithDebug(cfg.Debug),
-		aeus.WithServer(ghttp.New(httpOpts...)),
+	httpSrv := ghttp.New(httpOpts...)
+	scope := app.NewScope(cfg, lg, httpSrv)
+	loader := app.NewLoader(scope)
+
+	svc := aeus.New(
+		aeus.WithName(cfg.App.Name),
+		aeus.WithVersion(version),
+		aeus.WithMetadata(map[string]string{
+			"commit":     commit,
+			"build_time": buildTime,
+		}),
+		aeus.WithLogger(lg),
+		aeus.WithDebug(cfg.App.Debug),
+		aeus.WithServer(httpSrv),
 		aeus.WithScope(scope),
-		aeus.WithServiceLoader(bootstrap.NewLoader(scope)),
+		aeus.WithServiceLoader(loader),
 	)
-	if err := app.Run(); err != nil {
-		log.Fatal(err)
+	if err := svc.Run(); err != nil {
+		lg.Errorf(ctx, "service stopped: %v", err)
+		return err
 	}
+	return nil
 }

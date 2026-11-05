@@ -1,6 +1,8 @@
 /bin/
 /data/
-.env
+/logs/
+/.env
+/configs/config.yaml
 *.db
 *.sqlite
 web/node_modules/

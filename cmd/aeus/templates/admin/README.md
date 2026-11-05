@@ -25,28 +25,68 @@ exposing the service.
 
 ## Configuration
 
-Copy `.env.example` and export the values you need:
+Copy the example when you need file-based settings:
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `APP_NAME` | `__AEUS_NAME__` | service name |
-| `HTTP_ADDR` | `:8080` | HTTP listen address |
-| `DB_DSN` | `./data/aeus.db` | SQLite file (`:memory:` for tests) |
-| `JWT_SECRET` | `change-me` | HMAC signing key — replace in production |
-| `ADMIN_USER` | `admin` | seeded super user |
-| `ADMIN_PASSWORD` | `Admin123` | seeded password — replace after login |
-| `WEB_ROOT` | `./web/dist` | built SPA directory |
-| `DEBUG` | `true` | framework debug mode |
-| `MULTI_TENANT` | `false` | enable GORM tenant scoping and the tenant-management menu/REST resource |
-| `AUTO_MIGRATE` | `true` | boot-time table DDL |
-| `SEED_ON_START` | `true` | seed the admin/role/menu catalog on boot |
-| `CORS_ORIGINS` | empty | comma-separated allowed browser origins; empty = same-origin |
-| `CORS_ALLOW_CREDENTIALS` | `false` | allow cookies on cross-origin requests |
+```bash
+cp configs/config.example.yaml configs/config.yaml
+```
+
+The loader reads `configs/config.yaml` when present, then applies
+environment variables. Explicit `--config` and `CONFIG_FILE` paths must
+exist; the default development path is optional. `.env.example` documents
+the environment overrides.
+
+```yaml
+app:
+  name: __AEUS_NAME__
+  debug: true
+  multi_tenant: false
+server:
+  http_addr: ":8080"
+  web_root: "./web/dist"
+  cors:
+    origins: []
+    allow_credentials: false
+database:
+  dsn: "./data/aeus.db"
+auth:
+  jwt_secret: change-me
+  admin_user: admin
+  admin_password: Admin123
+bootstrap:
+  auto_migrate: true
+  seed_on_start: true
+log:
+  level: info
+  format: text      # text | json
+  output: stdout    # stdout | stderr | ./logs/app.log
+```
+
+Environment variables (`APP_NAME`, `HTTP_ADDR`, `DB_DSN`,
+`JWT_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`, `WEB_ROOT`, `DEBUG`,
+`MULTI_TENANT`, `AUTO_MIGRATE`, `SEED_ON_START`, `CORS_ORIGINS`,
+`CORS_ALLOW_CREDENTIALS`, `LOG_LEVEL`, `LOG_FORMAT`, `LOG_OUTPUT`)
+override the file. File output is not rotated; use external logrotate or
+container log collection.
+
+## Build and version
+
+`make build` injects the git version, commit and UTC build time through
+`-ldflags`. The same metadata appears in startup logs and the registry.
+
+```bash
+make build
+./bin/__AEUS_NAME__ -version
+./bin/__AEUS_NAME__ -config configs/config.yaml
+```
+
+`make run` also injects the build metadata, so the local version is not a
+static `dev` value.
 
 ## Production migration
 
-`AUTO_MIGRATE=true` is convenient in development but should be off in
-production:
+`bootstrap.auto_migrate=true` is convenient in development but should be
+off in production:
 
 ```bash
 make migrate                 # create/update the schema explicitly
@@ -66,6 +106,8 @@ make build     # build the SPA and bin/__AEUS_NAME__
 make test      # go test ./...
 make migrate   # explicit schema migration
 make seed      # explicit admin/role/menu seed
+make proto     # buf generate
+make gen       # aeus gen (after make proto)
 ```
 
 ## Layout
@@ -74,10 +116,17 @@ make seed      # explicit admin/role/menu seed
 cmd/server/          HTTP entrypoint + Golden Path smoke test
 cmd/seed/            one-off seed command
 cmd/migrate/         explicit schema migration
-internal/config/     environment-backed configuration
-internal/bootstrap/  DB, admin server, JWT/RBAC wiring
+internal/app/        Scope and Loader lifecycle; wiring in wire.go
+internal/config/     YAML + environment configuration
+internal/gen/        aeus gen output; do not edit
+internal/logging/    slog handler + infra/logger factory
+internal/store/      DB connection and catalog migration
+configs/             config.example.yaml (copy to config.yaml)
 web/                 Vue 3 + Element Plus + @sjlit/rest-ui
 ```
+
+`Loader.Run` is the place for future background work (queue consumers,
+cron jobs, watchers); `Loader.Init` owns startup wiring.
 
 ## Adding a business model
 
@@ -92,13 +141,13 @@ example at `proto/shop/v1/order.proto`:
    ```bash
    make proto
    go mod tidy
-   aeus gen
+   make gen
    # or: make proto PROTO_PATHS="shop warehouse"
    ```
 
    `aeus gen` reads the `_aeus.json` manifests and rewrites
-   `internal/bootstrap/generated.go`, registering module menus, models
-   and route policies. It also creates
+   `internal/gen/wiring.go`, registering module menus, models and route
+   policies. It also creates
    `web/src/views/shop/order/Index.vue` and
    `web/src/api/generated/shop/v1/order.ts` when they do not exist yet.
    The TS file includes proto enums, nested messages, cross-file imports
@@ -107,8 +156,8 @@ example at `proto/shop/v1/order.proto`:
    Use `--web-dir` / `--api-dir` to change the output directories, or
    `--no-web` / `--no-api` to skip frontend generation.
 
-4. `make migrate` uses the generated `bootstrap.MigrateGenerated`, so
-   generated entities are included automatically.
+4. `make migrate` calls `gen.Migrate`, so generated entities are included
+   automatically.
 5. Replace the generated placeholder view under
    `web/src/views/shop/order/Index.vue` when you need custom behavior.
    Later `aeus gen` runs never overwrite an existing view.

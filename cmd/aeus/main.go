@@ -51,9 +51,9 @@ Flags for new:
 
 Flags for gen:
   --proto-dir string   directory containing *_aeus.json (default "proto")
-  --out string         output directory (default "internal/bootstrap")
-  --package string     Go package name (default "bootstrap")
-  --file string        generated file name (default "generated.go")
+  --out string         output directory (default "internal/gen")
+  --package string     Go package name (default "gen")
+  --file string        generated file name (default "wiring.go")
   --web-dir string     Vue views directory (default "web/src/views")
   --api-dir string     TypeScript API directory (default "web/src/api/generated")
   --no-web             skip Vue page generation

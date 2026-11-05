@@ -1,9 +1,8 @@
-package bootstrap
+package app
 
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -14,49 +13,33 @@ import (
 	"github.com/sjlit/aeus/admin/service"
 	memcache "github.com/sjlit/aeus/infra/cache/memory"
 	mw "github.com/sjlit/aeus/middleware/auth"
+
+	"__AEUS_MODULE__/internal/gen"
 )
 
-// Loader wires the admin REST resources, auth RPCs, JWT middleware and
-// seed data. It implements aeus.ServiceLoader.
-type Loader struct {
-	scope *Scope
-}
-
-// NewLoader returns a loader bound to the scope built in cmd/server.
-func NewLoader(scope *Scope) *Loader {
-	return &Loader{scope: scope}
-}
-
-func (l *Loader) Init(ctx context.Context) error {
-	return l.scope.wire(ctx)
-}
-
-// Run is intentionally a no-op: seeding happens before the HTTP server
-// starts so the fail-closed permission checker has grants on the first
-// request.
-func (l *Loader) Run(context.Context) error { return nil }
-
-func (s *Scope) wire(ctx context.Context) error {
-	if s.Admin == nil {
-		return fmt.Errorf("bootstrap: admin server was not initialized")
+func (l *Loader) wire(ctx context.Context) error {
+	s := l.scope
+	if s.admin == nil {
+		return fmt.Errorf("app: admin server was not initialized")
 	}
-	if err := s.Admin.Setup(ctx); err != nil {
+	if err := s.admin.Setup(ctx); err != nil {
 		return fmt.Errorf("admin setup: %w", err)
 	}
 
-	secret := []byte(s.Cfg.JWTSecret)
-	httpSrv := s.HTTP
-	db := s.DB
+	secret := []byte(s.cfg.Auth.JWTSecret)
+	httpSrv := s.http
+	db := s.db
 
 	// Proto-generated business models, module menus and route policies.
-	// `aeus gen` rewrites generated.go; the checked-in version is a no-op.
-	if err := RegisterGenerated(s.Admin, db); err != nil {
+	// `aeus gen` rewrites internal/gen/wiring.go; the checked-in file is
+	// a no-op until the first proto resource is generated.
+	if err := gen.Register(s.admin, db); err != nil {
 		return fmt.Errorf("generated resources: %w", err)
 	}
 
 	pb.RegisterAuthServiceRouter(httpSrv, service.NewAuthService(
 		service.WithAuthServiceDB(db),
-		service.WithAuthSecret(s.Cfg.JWTSecret),
+		service.WithAuthSecret(s.cfg.Auth.JWTSecret),
 	))
 
 	sharedCache := memcache.NewCache()
@@ -110,18 +93,18 @@ func (s *Scope) wire(ctx context.Context) error {
 	))
 
 	// Seed is idempotent, but multi-instance production deployments
-	// should set SEED_ON_START=false and run cmd/seed as a one-off Job.
-	if s.Cfg.SeedOnStart {
-		if err := admin.Seed(db, s.Cfg.AdminUser, s.Cfg.AdminPassword); err != nil {
+	// should set bootstrap.seed_on_start=false and run cmd/seed as a one-off Job.
+	if s.cfg.Bootstrap.SeedOnStart {
+		if err := admin.Seed(db, s.cfg.Auth.AdminUser, s.cfg.Auth.AdminPassword); err != nil {
 			return fmt.Errorf("seed admin: %w", err)
 		}
 	}
 
-	if s.Cfg.WebRoot != "" {
-		if info, err := os.Stat(s.Cfg.WebRoot); err == nil && info.IsDir() {
-			httpSrv.Webroot("/", true, http.Dir(s.Cfg.WebRoot))
+	if s.cfg.Server.WebRoot != "" {
+		if info, err := os.Stat(s.cfg.Server.WebRoot); err == nil && info.IsDir() {
+			httpSrv.Webroot("/", true, http.Dir(s.cfg.Server.WebRoot))
 		} else {
-			log.Printf("warning: web root %s not found; serving API only (run `make web`)", s.Cfg.WebRoot)
+			s.log.Warnf(ctx, "web root %s not found; serving API only (run `make web`)", s.cfg.Server.WebRoot)
 		}
 	}
 	return nil

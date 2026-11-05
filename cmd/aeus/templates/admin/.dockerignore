@@ -1,0 +1,9 @@
+.git
+.env
+.env.*
+/bin/
+/data/
+/logs/
+/configs/config.yaml
+web/node_modules/
+web/dist/

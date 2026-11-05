@@ -1,0 +1,30 @@
+# Copy to configs/config.yaml for local overrides.
+# Environment variables always win over these values; see .env.example.
+app:
+  name: __AEUS_NAME__
+  debug: true
+  multi_tenant: false
+
+server:
+  http_addr: ":8080"
+  web_root: "./web/dist"
+  cors:
+    origins: []
+    allow_credentials: false
+
+database:
+  dsn: "./data/aeus.db"
+
+auth:
+  jwt_secret: change-me
+  admin_user: admin
+  admin_password: Admin123
+
+bootstrap:
+  auto_migrate: true
+  seed_on_start: true
+
+log:
+  level: info
+  format: text      # text | json
+  output: stdout    # stdout | stderr | ./logs/app.log

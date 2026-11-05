@@ -1,0 +1,13 @@
+# Copy to configs/config.yaml for local overrides.
+# Environment variables always win over these values; see .env.example.
+app:
+  name: __AEUS_NAME__
+  debug: true
+
+server:
+  http_addr: ":8080"
+
+log:
+  level: info
+  format: text      # text | json
+  output: stdout    # stdout | stderr | ./logs/app.log

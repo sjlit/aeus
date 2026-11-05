@@ -12,9 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sjlit/aeus/infra/logger"
 	ghttp "github.com/sjlit/aeus/transport/http"
 
-	"__AEUS_MODULE__/internal/bootstrap"
+	"__AEUS_MODULE__/internal/app"
 	"__AEUS_MODULE__/internal/config"
 )
 
@@ -38,31 +39,30 @@ func TestGoldenPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(webRoot, "assets", "app.js"), []byte("smoke-asset"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config.Config{
-		AppName:       "smoke",
-		HTTPAddr:      "127.0.0.1:0",
-		DBDSN:         ":memory:",
-		JWTSecret:     "test-secret",
-		AdminUser:     "admin",
-		AdminPassword: "Admin123",
-		WebRoot:       webRoot,
-		Debug:         false,
-		AutoMigrate:   true,
-		SeedOnStart:   true,
-	}
+	cfg := config.Default()
+	cfg.App.Name = "smoke"
+	cfg.App.Debug = false
+	cfg.Server.HTTPAddr = "127.0.0.1:0"
+	cfg.Server.WebRoot = webRoot
+	cfg.Database.DSN = ":memory:"
+	cfg.Auth.JWTSecret = "test-secret"
+	cfg.Auth.AdminUser = "admin"
+	cfg.Auth.AdminPassword = "Admin123"
+	cfg.Bootstrap.AutoMigrate = true
+	cfg.Bootstrap.SeedOnStart = true
+
 	httpSrv := ghttp.New(
-		ghttp.WithAddress(cfg.HTTPAddr),
+		ghttp.WithAddress(cfg.Server.HTTPAddr),
 		ghttp.WithEnableHealth(true),
 	)
-	scope := bootstrap.NewScope(cfg)
-	scope.HTTP = httpSrv
+	scope := app.NewScope(cfg, logger.Default(), httpSrv)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if err := scope.Init(ctx); err != nil {
 		t.Fatalf("scope init: %v", err)
 	}
-	if err := bootstrap.NewLoader(scope).Init(ctx); err != nil {
+	if err := app.NewLoader(scope).Init(ctx); err != nil {
 		t.Fatalf("loader init: %v", err)
 	}
 	go func() { _ = httpSrv.Start(ctx) }()

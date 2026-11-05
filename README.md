@@ -121,7 +121,7 @@ go mod tidy
 aeus gen
 ```
 
-`aeus gen` 读取 `_aeus.json` manifest，自动生成 bootstrap 注册和迁移接线。详见
+`aeus gen` 读取 `_aeus.json` manifest，自动生成 `internal/gen` 注册和迁移接线。详见
 [业务 Proto-First](docs/guide/proto-first.md)。
 
 手工组装 `Service` 仍然可用：

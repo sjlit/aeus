@@ -167,7 +167,7 @@ service OrderService {
 *_http.pb.go      HTTP 接口 + wrapper + RegisterXxxRouter + UnimplementedXxxServer
 *_policy.pb.go    路由权限清单（policy.Policy）
 *_module.pb.go    模块分区菜单（models.ModuleSpec）
-*_aeus.json       供 `aeus gen` 生成 bootstrap/migration 接线的 manifest
+*_aeus.json       供 `aeus gen` 生成 registration/migration 接线的 manifest
 ```
 
 ## 注册业务模型
@@ -177,13 +177,13 @@ service OrderService {
 ```bash
 make proto
 go mod tidy
-aeus gen
+make gen
 ```
 
-`aeus gen` 读取 manifest，重写 `internal/bootstrap/generated.go`：
+`aeus gen` 读取 manifest，重写 `internal/gen/wiring.go`：
 
 ```go
-func RegisterGenerated(s *admin.Server, db *gorm.DB) error {
+func Register(s *admin.Server, db *gorm.DB) error {
     if err := admin.EnsureModuleMenu(db, shopv1.ShopModule); err != nil { ... }
     if err := s.RegisterModel(&shopv1.OrderModel{}); err != nil { ... }
     if err := admin.EnsureEndpointPermissions(db, shopv1.OrderServicePolicies...); err != nil { ... }
@@ -191,10 +191,10 @@ func RegisterGenerated(s *admin.Server, db *gorm.DB) error {
 }
 ```
 
-模板的 `internal/bootstrap/loader.go` 已经在 `admin.Setup` 之后调用
-`RegisterGenerated`，因此不需要再手写注册代码。`cmd/migrate` 调用
-`MigrateGenerated` 自动包含生成实体，`cmd/seed` 也会先调用
-`RegisterGenerated` 再 Seed。通用 CRUD 路由、菜单、权限目录由
+模板的 `internal/app/wire.go` 已经在 `admin.Setup` 之后调用
+`gen.Register`，因此不需要再手写注册代码。`cmd/migrate` 调用
+`gen.Migrate` 自动包含生成实体，`cmd/seed` 也会先调用
+`gen.Register` 再 Seed。通用 CRUD 路由、菜单、权限目录由
 `RegisterModel` 自动处理。
 
 `aeus gen` 同时生成前端产物：

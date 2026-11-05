@@ -1,40 +1,56 @@
 package main
 
 import (
-	"log"
+	"context"
+	"flag"
+	"fmt"
+	"os"
 
-	"github.com/sjlit/aeus/admin/models"
-	"github.com/sjlit/rest/v3/schema"
-
-	"__AEUS_MODULE__/internal/bootstrap"
 	"__AEUS_MODULE__/internal/config"
+	"__AEUS_MODULE__/internal/gen"
+	"__AEUS_MODULE__/internal/logging"
+	"__AEUS_MODULE__/internal/store"
 )
 
+var configFlag = flag.String("config", "", "config file (default: configs/config.yaml when present)")
+
 // migrate applies the schema explicitly so production can run with
-// AUTO_MIGRATE=false. Add application models to the AutoMigrate call
-// below as you introduce them.
+// bootstrap.auto_migrate=false.
 func main() {
-	cfg := config.Load()
-	db, err := bootstrap.OpenDB(cfg)
+	flag.Parse()
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "migrate:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load(*configFlag)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	if err := db.AutoMigrate(
-		&schema.Schema{},
-		&models.Tenant{},
-		&models.Menu{},
-		&models.Permission{},
-		&models.Role{},
-		&models.RolePermission{},
-		&models.User{},
-		&models.Department{},
-		&models.Audit{},
-		&models.LoginLog{},
-	); err != nil {
-		log.Fatal(err)
+	lg, closer, err := logging.New(cfg.Log)
+	if err != nil {
+		return err
 	}
-	if err := bootstrap.MigrateGenerated(db); err != nil {
-		log.Fatal(err)
+	if closer != nil {
+		defer closer.Close()
 	}
-	log.Print("migration complete")
+
+	ctx := context.Background()
+	for _, warning := range cfg.Warnings() {
+		lg.Warnf(ctx, "%s", warning)
+	}
+	db, err := store.Open(cfg.Database.DSN, lg, cfg.Log.Level == "debug")
+	if err != nil {
+		return err
+	}
+	if err := store.AutoMigrateCatalog(db); err != nil {
+		return err
+	}
+	if err := gen.Migrate(db); err != nil {
+		return err
+	}
+	lg.Info(ctx, "migration complete")
+	return nil
 }

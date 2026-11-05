@@ -1,87 +1,128 @@
 package config
 
 import (
-	"log"
-	"os"
-	"strconv"
+	"fmt"
 	"strings"
 )
 
-// Config holds the runnable admin starter settings. Values are read
-// from the environment; .env.example documents every key.
+// Config is grouped by concern so the YAML file and Go code read the
+// same way. Environment variables override values loaded from the file;
+// see load.go and .env.example.
 type Config struct {
-	AppName         string
-	HTTPAddr        string
-	DBDSN           string
-	JWTSecret       string
-	AdminUser       string
-	AdminPassword   string
-	WebRoot         string
-	Debug           bool
-	MultiTenant     bool
-	AutoMigrate     bool
-	SeedOnStart     bool
-	CORSOrigins     []string
-	CORSCredentials bool
+	App       AppConfig       `yaml:"app"`
+	Server    ServerConfig    `yaml:"server"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Auth      AuthConfig      `yaml:"auth"`
+	Bootstrap BootstrapConfig `yaml:"bootstrap"`
+	Log       LogConfig       `yaml:"log"`
 }
 
-// Load applies development defaults and warns when a production
-// secret is still at its sample value.
-func Load() Config {
-	cfg := Config{
-		AppName:         env("APP_NAME", "__AEUS_NAME__"),
-		HTTPAddr:        env("HTTP_ADDR", ":8080"),
-		DBDSN:           env("DB_DSN", "./data/aeus.db"),
-		JWTSecret:       env("JWT_SECRET", "change-me"),
-		AdminUser:       env("ADMIN_USER", "admin"),
-		AdminPassword:   env("ADMIN_PASSWORD", "Admin123"),
-		WebRoot:         env("WEB_ROOT", "./web/dist"),
-		Debug:           envBool("DEBUG", true),
-		MultiTenant:     envBool("MULTI_TENANT", false),
-		AutoMigrate:     envBool("AUTO_MIGRATE", true),
-		SeedOnStart:     envBool("SEED_ON_START", true),
-		CORSOrigins:     envList("CORS_ORIGINS"),
-		CORSCredentials: envBool("CORS_ALLOW_CREDENTIALS", false),
-	}
-	if cfg.JWTSecret == "change-me" {
-		log.Print("warning: JWT_SECRET is the development default; set a strong secret before exposing this service")
-	}
-	if cfg.AdminPassword == "Admin123" {
-		log.Print("warning: ADMIN_PASSWORD is the development default; change it after the first login")
-	}
-	return cfg
+type AppConfig struct {
+	Name        string `yaml:"name"`
+	Debug       bool   `yaml:"debug"`
+	MultiTenant bool   `yaml:"multi_tenant"`
 }
 
-func env(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
+type ServerConfig struct {
+	HTTPAddr string     `yaml:"http_addr"`
+	WebRoot  string     `yaml:"web_root"`
+	CORS     CORSConfig `yaml:"cors"`
 }
 
-func envBool(key string, fallback bool) bool {
-	value := os.Getenv(key)
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return fallback
-	}
-	return parsed
+type CORSConfig struct {
+	Origins          []string `yaml:"origins"`
+	AllowCredentials bool     `yaml:"allow_credentials"`
 }
 
-func envList(key string) []string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return nil
+type DatabaseConfig struct {
+	DSN string `yaml:"dsn"`
+}
+
+type AuthConfig struct {
+	JWTSecret     string `yaml:"jwt_secret"`
+	AdminUser     string `yaml:"admin_user"`
+	AdminPassword string `yaml:"admin_password"`
+}
+
+type BootstrapConfig struct {
+	AutoMigrate bool `yaml:"auto_migrate"`
+	SeedOnStart bool `yaml:"seed_on_start"`
+}
+
+type LogConfig struct {
+	Level  string `yaml:"level"`  // debug | info | warn | error
+	Format string `yaml:"format"` // text | json
+	Output string `yaml:"output"` // stdout | stderr | file path
+}
+
+// Default returns the development baseline. Load applies the optional
+// config file and environment on top of it.
+func Default() Config {
+	return Config{
+		App: AppConfig{
+			Name:  "__AEUS_NAME__",
+			Debug: true,
+		},
+		Server: ServerConfig{
+			HTTPAddr: ":8080",
+			WebRoot:  "./web/dist",
+		},
+		Database: DatabaseConfig{
+			DSN: "./data/aeus.db",
+		},
+		Auth: AuthConfig{
+			JWTSecret:     "change-me",
+			AdminUser:     "admin",
+			AdminPassword: "Admin123",
+		},
+		Bootstrap: BootstrapConfig{
+			AutoMigrate: true,
+			SeedOnStart: true,
+		},
+		Log: LogConfig{
+			Level:  "info",
+			Format: "text",
+			Output: "stdout",
+		},
 	}
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part = strings.TrimSpace(part); part != "" {
-			out = append(out, part)
-		}
+}
+
+// Validate fails fast on values the process cannot meaningfully use.
+func (c Config) Validate() error {
+	if strings.TrimSpace(c.App.Name) == "" {
+		return fmt.Errorf("app.name is empty")
 	}
-	return out
+	if strings.TrimSpace(c.Server.HTTPAddr) == "" {
+		return fmt.Errorf("server.http_addr is empty")
+	}
+	if strings.TrimSpace(c.Database.DSN) == "" {
+		return fmt.Errorf("database.dsn is empty")
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Log.Level)) {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("log.level %q is invalid (want debug, info, warn or error)", c.Log.Level)
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Log.Format)) {
+	case "text", "json":
+	default:
+		return fmt.Errorf("log.format %q is invalid (want text or json)", c.Log.Format)
+	}
+	if strings.TrimSpace(c.Log.Output) == "" {
+		return fmt.Errorf("log.output is empty")
+	}
+	return nil
+}
+
+// Warnings reports development defaults that must not reach production.
+// Callers log them after the configured logger is initialized.
+func (c Config) Warnings() []string {
+	var warnings []string
+	if c.Auth.JWTSecret == "change-me" {
+		warnings = append(warnings, "JWT_SECRET is the development default; set a strong secret before exposing this service")
+	}
+	if c.Auth.AdminPassword == "Admin123" {
+		warnings = append(warnings, "ADMIN_PASSWORD is the development default; change it after the first login")
+	}
+	return warnings
 }

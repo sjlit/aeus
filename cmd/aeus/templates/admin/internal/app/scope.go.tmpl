@@ -1,0 +1,58 @@
+package app
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/sjlit/aeus/admin"
+	"github.com/sjlit/aeus/infra/logger"
+	ghttp "github.com/sjlit/aeus/transport/http"
+	"gorm.io/gorm"
+
+	"__AEUS_MODULE__/internal/config"
+	"__AEUS_MODULE__/internal/store"
+)
+
+// Scope owns the long-lived process resources. Init only constructs
+// them; route registration, middleware and seeding belong to Loader.Init.
+type Scope struct {
+	cfg   config.Config
+	log   logger.Logger
+	http  *ghttp.Server
+	db    *gorm.DB
+	admin *admin.Server
+}
+
+// NewScope receives its dependencies explicitly so cmd/server and tests
+// do not need reflection-based field injection.
+func NewScope(cfg config.Config, lg logger.Logger, httpSrv *ghttp.Server) *Scope {
+	if lg == nil {
+		lg = logger.Default()
+	}
+	return &Scope{cfg: cfg, log: lg, http: httpSrv}
+}
+
+func (s *Scope) Init(context.Context) error {
+	if s.http == nil {
+		return fmt.Errorf("app: HTTP server is nil")
+	}
+	db, err := store.Open(s.cfg.Database.DSN, s.log, s.cfg.Log.Level == "debug")
+	if err != nil {
+		return err
+	}
+	s.db = db
+
+	opts := []admin.Option{
+		admin.WithDB(db),
+		admin.WithRouter(s.http),
+		admin.WithLogger(s.log),
+		admin.WithOpenAPI(true),
+		admin.WithAudit(true),
+		admin.WithAutoMigrate(s.cfg.Bootstrap.AutoMigrate),
+	}
+	if s.cfg.App.MultiTenant {
+		opts = append(opts, admin.WithMultiTenant(true))
+	}
+	s.admin = admin.New(opts...)
+	return nil
+}

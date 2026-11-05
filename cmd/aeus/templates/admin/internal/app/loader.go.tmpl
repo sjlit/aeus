@@ -1,0 +1,26 @@
+package app
+
+import "context"
+
+// Loader wires application resources during Init and hosts long-running
+// background work in Run. Keeping both here means new consumers, cron
+// jobs or watchers do not need another lifecycle component.
+type Loader struct {
+	scope *Scope
+}
+
+func NewLoader(scope *Scope) *Loader {
+	return &Loader{scope: scope}
+}
+
+func (l *Loader) Init(ctx context.Context) error {
+	return l.wire(ctx)
+}
+
+// Run is the extension point for background tasks. The generated
+// project has none yet, so wait for shutdown to keep the lifecycle
+// explicit; replace the wait with consumers or schedulers as needed.
+func (l *Loader) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return nil
+}

@@ -70,4 +70,23 @@ func TestRenderTemplateReplacesPlaceholders(t *testing.T) {
 	if strings.Contains(string(main), "__AEUS_") {
 		t.Fatalf("placeholder left in main.go:\n%s", main)
 	}
+	if _, err := os.Stat(filepath.Join(target, "configs", "config.example.yaml")); err != nil {
+		t.Fatalf("config example missing: %v", err)
+	}
+	err = filepath.WalkDir(target, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(data), "__AEUS_") {
+			t.Errorf("unreplaced placeholder in %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk generated project: %v", err)
+	}
 }

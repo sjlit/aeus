@@ -1,0 +1,56 @@
+package logging
+
+import (
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/sjlit/aeus/infra/logger"
+
+	"__AEUS_MODULE__/internal/config"
+)
+
+// New builds the process logger from config. It deliberately does not
+// implement rotation: point output at stdout/stderr in containers, or
+// let an external logrotate manage a file path.
+func New(cfg config.LogConfig) (logger.Logger, io.Closer, error) {
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(cfg.Level)); err != nil {
+		return nil, nil, fmt.Errorf("parse log level %q: %w", cfg.Level, err)
+	}
+
+	var (
+		writer io.Writer
+		closer io.Closer
+	)
+	switch strings.ToLower(cfg.Output) {
+	case "", "stdout":
+		writer = os.Stdout
+	case "stderr":
+		writer = os.Stderr
+	default:
+		if dir := filepath.Dir(cfg.Output); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("create log directory: %w", err)
+			}
+		}
+		file, err := os.OpenFile(cfg.Output, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open log file %s: %w", cfg.Output, err)
+		}
+		writer = file
+		closer = file
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if strings.ToLower(cfg.Format) == "json" {
+		handler = slog.NewJSONHandler(writer, opts)
+	} else {
+		handler = slog.NewTextHandler(writer, opts)
+	}
+	return logger.New(slog.New(handler)), closer, nil
+}

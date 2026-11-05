@@ -1,4 +1,6 @@
 /bin/
-.env
+/logs/
+/.env
+/configs/config.yaml
 *.db
 *.sqlite

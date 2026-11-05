@@ -1,26 +1,132 @@
 package main
 
 import (
-	"log"
+	"context"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/sjlit/aeus"
+	"github.com/sjlit/aeus/infra/logger"
 	ghttp "github.com/sjlit/aeus/transport/http"
 
 	"__AEUS_MODULE__/internal/config"
 )
 
-func main() {
-	cfg := config.Load()
+var (
+	appName   = "__AEUS_NAME__"
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
 
-	app := aeus.New(
-		aeus.WithName(cfg.AppName),
-		aeus.WithDebug(cfg.Debug),
-		aeus.WithServer(ghttp.New(
-			ghttp.WithAddress(cfg.HTTPAddr),
-			ghttp.WithEnableHealth(true),
-		)),
-	)
-	if err := app.Run(); err != nil {
-		log.Fatal(err)
+var (
+	configFlag  = flag.String("config", "", "config file (default: configs/config.yaml when present)")
+	versionFlag = flag.Bool("version", false, "print build version and exit")
+)
+
+func main() {
+	flag.Parse()
+	if *versionFlag {
+		fmt.Printf("%s %s (commit %s, built %s, %s)\n",
+			appName, version, commit, buildTime, runtime.Version())
+		return
 	}
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "server:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load(*configFlag)
+	if err != nil {
+		return err
+	}
+	lg, closer, err := newLogger(cfg.Log)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+
+	ctx := context.Background()
+	lg.Info(ctx, "build info",
+		"app", cfg.App.Name,
+		"version", version,
+		"commit", commit,
+		"build_time", buildTime,
+		"go", runtime.Version(),
+	)
+
+	httpSrv := ghttp.New(
+		ghttp.WithAddress(cfg.Server.HTTPAddr),
+		ghttp.WithEnableHealth(true),
+		ghttp.WithDebug(cfg.App.Debug),
+		ghttp.WithLogger(lg),
+	)
+	svc := aeus.New(
+		aeus.WithName(cfg.App.Name),
+		aeus.WithVersion(version),
+		aeus.WithMetadata(map[string]string{
+			"commit":     commit,
+			"build_time": buildTime,
+		}),
+		aeus.WithLogger(lg),
+		aeus.WithDebug(cfg.App.Debug),
+		aeus.WithServer(httpSrv),
+	)
+	if err := svc.Run(); err != nil {
+		lg.Errorf(ctx, "service stopped: %v", err)
+		return err
+	}
+	return nil
+}
+
+// newLogger builds the process logger from config. It does not implement
+// rotation: use stdout/stderr in containers or external logrotate for a
+// file path.
+func newLogger(cfg config.LogConfig) (logger.Logger, io.Closer, error) {
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(cfg.Level)); err != nil {
+		return nil, nil, fmt.Errorf("parse log level %q: %w", cfg.Level, err)
+	}
+
+	var (
+		writer io.Writer
+		closer io.Closer
+	)
+	switch strings.ToLower(cfg.Output) {
+	case "", "stdout":
+		writer = os.Stdout
+	case "stderr":
+		writer = os.Stderr
+	default:
+		if dir := filepath.Dir(cfg.Output); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("create log directory: %w", err)
+			}
+		}
+		file, err := os.OpenFile(cfg.Output, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, nil, fmt.Errorf("open log file %s: %w", cfg.Output, err)
+		}
+		writer = file
+		closer = file
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if strings.ToLower(cfg.Format) == "json" {
+		handler = slog.NewJSONHandler(writer, opts)
+	} else {
+		handler = slog.NewTextHandler(writer, opts)
+	}
+	return logger.New(slog.New(handler)), closer, nil
 }

@@ -2,20 +2,49 @@ package main
 
 import (
 	"context"
-	"log"
+	"flag"
+	"fmt"
+	"os"
 
 	"github.com/sjlit/aeus/admin"
 	ghttp "github.com/sjlit/aeus/transport/http"
 
-	"__AEUS_MODULE__/internal/bootstrap"
 	"__AEUS_MODULE__/internal/config"
+	"__AEUS_MODULE__/internal/gen"
+	"__AEUS_MODULE__/internal/logging"
+	"__AEUS_MODULE__/internal/store"
 )
 
+var configFlag = flag.String("config", "", "config file (default: configs/config.yaml when present)")
+
 func main() {
-	cfg := config.Load()
-	db, err := bootstrap.OpenDB(cfg)
+	flag.Parse()
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "seed:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	cfg, err := config.Load(*configFlag)
 	if err != nil {
-		log.Fatal(err)
+		return err
+	}
+	lg, closer, err := logging.New(cfg.Log)
+	if err != nil {
+		return err
+	}
+	if closer != nil {
+		defer closer.Close()
+	}
+
+	ctx := context.Background()
+	for _, warning := range cfg.Warnings() {
+		lg.Warnf(ctx, "%s", warning)
+	}
+	db, err := store.Open(cfg.Database.DSN, lg, cfg.Log.Level == "debug")
+	if err != nil {
+		return err
 	}
 
 	// Setup derives the menu and permission catalog from the registered
@@ -24,20 +53,22 @@ func main() {
 	seedOpts := []admin.Option{
 		admin.WithDB(db),
 		admin.WithRouter(ghttp.New()),
-		admin.WithAutoMigrate(cfg.AutoMigrate),
+		admin.WithLogger(lg),
+		admin.WithAutoMigrate(cfg.Bootstrap.AutoMigrate),
 	}
-	if cfg.MultiTenant {
+	if cfg.App.MultiTenant {
 		seedOpts = append(seedOpts, admin.WithMultiTenant(true))
 	}
 	srv := admin.New(seedOpts...)
-	if err := srv.Setup(context.Background()); err != nil {
-		log.Fatal(err)
+	if err := srv.Setup(ctx); err != nil {
+		return err
 	}
-	if err := bootstrap.RegisterGenerated(srv, db); err != nil {
-		log.Fatal(err)
+	if err := gen.Register(srv, db); err != nil {
+		return err
 	}
-	if err := admin.Seed(db, cfg.AdminUser, cfg.AdminPassword); err != nil {
-		log.Fatal(err)
+	if err := admin.Seed(db, cfg.Auth.AdminUser, cfg.Auth.AdminPassword); err != nil {
+		return err
 	}
-	log.Printf("seeded admin user %q", cfg.AdminUser)
+	lg.Infof(ctx, "seeded admin user %q", cfg.Auth.AdminUser)
+	return nil
 }

@@ -1,0 +1,70 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/sjlit/aeus/infra/logger"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
+)
+
+// gormLogger routes GORM's print-style logger through the AEUS logger so
+// SQL diagnostics honour log.level, log.format and log.output.
+type gormLogger struct {
+	log   logger.Logger
+	level gormlogger.LogLevel
+}
+
+func newGormLogger(lg logger.Logger, debug bool) gormlogger.Interface {
+	level := gormlogger.Warn
+	if debug {
+		level = gormlogger.Info
+	}
+	if lg == nil {
+		lg = logger.Default()
+	}
+	return &gormLogger{log: lg, level: level}
+}
+
+func (l *gormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
+	clone := *l
+	clone.level = level
+	return &clone
+}
+
+func (l *gormLogger) Info(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Info {
+		l.log.Infof(ctx, msg, args...)
+	}
+}
+
+func (l *gormLogger) Warn(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Warn {
+		l.log.Warnf(ctx, msg, args...)
+	}
+}
+
+func (l *gormLogger) Error(ctx context.Context, msg string, args ...any) {
+	if l.level >= gormlogger.Error {
+		l.log.Errorf(ctx, msg, args...)
+	}
+}
+
+func (l *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if l.level <= gormlogger.Silent {
+		return
+	}
+	elapsed := time.Since(begin)
+	ms := float64(elapsed.Nanoseconds()) / 1e6
+	sql, rows := fc()
+	switch {
+	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
+		l.log.Errorf(ctx, "sql error: %v [%.3fms] [rows:%d] %s", err, ms, rows, sql)
+	case elapsed > time.Second && l.level >= gormlogger.Warn:
+		l.log.Warnf(ctx, "slow sql [%.3fms] [rows:%d] %s", ms, rows, sql)
+	case l.level >= gormlogger.Info:
+		l.log.Debugf(ctx, "sql [%.3fms] [rows:%d] %s", ms, rows, sql)
+	}
+}

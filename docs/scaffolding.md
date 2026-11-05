@@ -38,7 +38,7 @@ aeus new my-admin --template=admin --module=github.com/acme/my-admin
 
 ### minimal
 
-- HTTP transport、配置、健康检查、优雅退出
+- HTTP transport、YAML + 环境变量配置、日志配置、健康检查、优雅退出
 - 一个 smoke test
 - 不依赖 admin、GORM、MCP SDK
 
@@ -51,6 +51,36 @@ aeus new my-admin --template=admin --module=github.com/acme/my-admin
 - `make web` 构建前端；`make run` 启动后端
 - `proto/` + `buf` + `make proto`：业务资源走 proto-first，生成实体、HTTP、权限清单与菜单元数据
 - `proto/shop/v1/order.proto` 是一个可直接运行的业务示例
+- `internal/app` 负责 Scope/Loader 生命周期，`internal/gen` 只放 `aeus gen` 生成物
+
+admin 模板目录：
+
+```text
+cmd/
+  server/          # HTTP 入口 + smoke test + -version/-config flag
+  migrate/         # 显式迁移
+  seed/            # 一次性 Seed
+internal/
+  app/             # Scope/Loader 生命周期；wire.go 负责装配
+  config/          # YAML + 环境变量配置
+  gen/             # aeus gen 生成物，不手改
+  logging/         # slog handler + infra/logger 工厂
+  store/           # DB 连接、catalog 迁移、GORM logger 适配
+configs/
+  config.example.yaml
+proto/             # buf workspace、pb.go 与 _aeus.json
+web/               # Vue 3 管理台
+```
+
+`Loader.Init` 负责注册路由、JWT、中间件与 Seed；`Loader.Run` 留给后续
+queue consumer、cron、watcher 等后台任务。
+
+模板统一支持：
+
+- `configs/config.example.yaml` + 环境变量覆盖；`configs/config.yaml` 默认被 gitignore
+- `--config` / `CONFIG_FILE` 选择配置文件，显式路径不存在时启动失败
+- `log.level` / `log.format` / `log.output` 日志配置；文件输出不做轮转
+- Makefile 通过 `-ldflags` 注入 git 版本、commit 与 UTC 构建时间，`-version` 可直接查看
 
 ## 业务 Proto-First
 
@@ -65,12 +95,12 @@ vim proto/shop/v1/order.proto
 make proto
 go mod tidy
 
-# 3. 读取 *_aeus.json，自动生成 internal/bootstrap/generated.go
+# 3. 读取 *_aeus.json，自动生成 internal/gen/wiring.go
 #    以及 web/src/views/<module>/<singular>/Index.vue
 #        web/src/api/generated/<proto-path>.ts
-aeus gen
+make gen
 
-# 4. make migrate 会自动包含生成的实体（bootstrap.MigrateGenerated）
+# 4. make migrate 会自动包含生成的实体（gen.Migrate）
 ```
 
 完整注解说明见 [业务 Proto-First](./guide/proto-first.md)。

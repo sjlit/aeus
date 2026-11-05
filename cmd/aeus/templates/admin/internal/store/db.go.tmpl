@@ -1,0 +1,36 @@
+package store
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/glebarez/sqlite"
+	"github.com/sjlit/aeus/infra/logger"
+	"gorm.io/gorm"
+)
+
+// Open opens the SQLite database and creates its parent directory.
+// ":memory:" is kept single-connection so tests and local runs see one
+// consistent in-memory database.
+func Open(dsn string, lg logger.Logger, debug bool) (*gorm.DB, error) {
+	if dsn != ":memory:" {
+		if dir := filepath.Dir(dsn); dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("create database directory: %w", err)
+			}
+		}
+	}
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: newGormLogger(lg, debug),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	if dsn == ":memory:" {
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.SetMaxOpenConns(1)
+		}
+	}
+	return db, nil
+}

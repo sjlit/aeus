@@ -24,7 +24,7 @@ func TestRenderGenerated(t *testing.T) {
 			GoName: "OrderService", PoliciesVar: "OrderServicePolicies",
 		}},
 	}}
-	src, err := renderGenerated("bootstrap", manifests)
+	src, err := renderGenerated("gen", manifests)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestRenderGenerated(t *testing.T) {
 }
 
 func TestRenderGeneratedNoManifests(t *testing.T) {
-	src, err := renderGenerated("bootstrap", nil)
+	src, err := renderGenerated("gen", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,11 +56,11 @@ func TestRenderGeneratedNoManifests(t *testing.T) {
 		t.Fatalf("gofmt: %v\n%s", err, src)
 	}
 	got := string(formatted)
-	if !strings.Contains(got, "func RegisterGenerated(s *admin.Server, db *gorm.DB) error {") {
-		t.Errorf("no-op RegisterGenerated missing:\n%s", got)
+	if !strings.Contains(got, "func Register(s *admin.Server, db *gorm.DB) error {") {
+		t.Errorf("no-op Register missing:\n%s", got)
 	}
-	if !strings.Contains(got, "func MigrateGenerated(db *gorm.DB) error {") {
-		t.Errorf("no-op MigrateGenerated missing:\n%s", got)
+	if !strings.Contains(got, "func Migrate(db *gorm.DB) error {") {
+		t.Errorf("no-op Migrate missing:\n%s", got)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestLoadManifests(t *testing.T) {
 }
 
 func TestRenderGeneratedTypeOnlyDoesNotImportPackage(t *testing.T) {
-	src, err := renderGenerated("bootstrap", []resourceManifest{{
+	src, err := renderGenerated("gen", []resourceManifest{{
 		Source:        "user/v1/user.proto",
 		GoPackage:     "example.com/user/v1",
 		GoPackageName: "userv1",

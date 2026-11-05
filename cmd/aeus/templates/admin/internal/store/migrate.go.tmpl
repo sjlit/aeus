@@ -1,0 +1,24 @@
+package store
+
+import (
+	"github.com/sjlit/aeus/admin/models"
+	"github.com/sjlit/rest/v3/schema"
+	"gorm.io/gorm"
+)
+
+// AutoMigrateCatalog applies the admin framework schema. Application
+// models are migrated separately by the generated gen.Migrate function.
+func AutoMigrateCatalog(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&schema.Schema{},
+		&models.Tenant{},
+		&models.Menu{},
+		&models.Permission{},
+		&models.Role{},
+		&models.RolePermission{},
+		&models.User{},
+		&models.Department{},
+		&models.Audit{},
+		&models.LoginLog{},
+	)
+}

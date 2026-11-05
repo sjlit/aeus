@@ -28,7 +28,7 @@ aeus gen --check   # CI drift check
 ```
 
 `aeus gen` reads `_aeus.json` manifests under `proto/`, rewrites
-`internal/bootstrap/generated.go`, creates missing
+`internal/gen/wiring.go`, creates missing
 `web/src/views/<module>/<singular>/Index.vue` placeholder pages, and
 generates TypeScript interfaces plus custom-RPC wrappers under
 `web/src/api/generated/`. TS generation covers enums, nested messages,
@@ -41,9 +41,9 @@ survive.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--proto-dir` | `proto` | manifest directory |
-| `--out` | `internal/bootstrap` | generated Go directory |
-| `--package` | `bootstrap` | generated Go package |
-| `--file` | `generated.go` | generated Go file |
+| `--out` | `internal/gen` | generated Go directory |
+| `--package` | `gen` | generated Go package |
+| `--file` | `wiring.go` | generated Go file |
 | `--web-dir` | `web/src/views` | Vue views directory |
 | `--api-dir` | `web/src/api/generated` | TypeScript API directory |
 | `--no-web` | false | skip Vue page generation |
@@ -52,11 +52,12 @@ survive.
 
 ## Templates
 
-- `templates/minimal`: HTTP + config + health + graceful shutdown.
+- `templates/minimal`: HTTP + config + logging + health + graceful shutdown.
 - `templates/admin`: minimal + GORM/SQLite + admin REST/RPC + JWT/RBAC
   + Seed + Vue 3 management console. It also ships `proto/`, `buf`
   configuration and a `proto/shop/v1/order.proto` business example so
-  new resources can be generated with `make proto`.
+  new resources can be generated with `make proto`. Startup code lives
+  in `internal/app`; generated wiring lives in `internal/gen`.
 
 Template files use `__AEUS_*__` placeholders. Files ending in `.tmpl`
 are written without that suffix (notably `go.mod` and the Go sources,

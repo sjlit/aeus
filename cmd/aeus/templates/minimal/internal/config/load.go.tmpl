@@ -1,0 +1,89 @@
+package config
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+const defaultConfigPath = "configs/config.yaml"
+
+// Load builds the configuration from defaults, an optional YAML file and
+// environment overrides, in that order. An explicitly selected file
+// (--config or CONFIG_FILE) must exist; the default development path is
+// optional so a fresh checkout runs with its built-in defaults.
+func Load(path string) (Config, error) {
+	cfg := Default()
+
+	selected := strings.TrimSpace(path)
+	explicit := selected != ""
+	if selected == "" {
+		selected = strings.TrimSpace(os.Getenv("CONFIG_FILE"))
+		explicit = selected != ""
+	}
+	if selected == "" {
+		selected = defaultConfigPath
+	}
+
+	data, err := os.ReadFile(selected)
+	switch {
+	case err == nil:
+		if len(bytes.TrimSpace(data)) > 0 {
+			decoder := yaml.NewDecoder(bytes.NewReader(data))
+			decoder.KnownFields(true)
+			if err := decoder.Decode(&cfg); err != nil {
+				return Config{}, fmt.Errorf("parse %s: %w", selected, err)
+			}
+		}
+	case os.IsNotExist(err) && !explicit:
+		// The development config file is optional.
+	default:
+		return Config{}, fmt.Errorf("read %s: %w", selected, err)
+	}
+
+	if err := applyEnv(&cfg); err != nil {
+		return Config{}, err
+	}
+	cfg.Log.Level = strings.ToLower(strings.TrimSpace(cfg.Log.Level))
+	cfg.Log.Format = strings.ToLower(strings.TrimSpace(cfg.Log.Format))
+	cfg.Log.Output = strings.TrimSpace(cfg.Log.Output)
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
+}
+
+func applyEnv(cfg *Config) error {
+	envString("APP_NAME", &cfg.App.Name)
+	if err := envBool("DEBUG", &cfg.App.Debug); err != nil {
+		return err
+	}
+	envString("HTTP_ADDR", &cfg.Server.HTTPAddr)
+	envString("LOG_LEVEL", &cfg.Log.Level)
+	envString("LOG_FORMAT", &cfg.Log.Format)
+	envString("LOG_OUTPUT", &cfg.Log.Output)
+	return nil
+}
+
+func envString(key string, dst *string) {
+	if value, ok := os.LookupEnv(key); ok {
+		*dst = value
+	}
+}
+
+func envBool(key string, dst *bool) error {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("%s=%q: %w", key, value, err)
+	}
+	*dst = parsed
+	return nil
+}
