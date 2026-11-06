@@ -183,3 +183,48 @@ admin 模块所有业务 RPC 遵循同一规则:
 | PermissionChecker claims 类型不符 | `4005` | — |
 | TenantService.Tenant 未找到 | `4004` | — |
 | MenuBreadcrumb 未找到 | `4004` | `menu N not found` |
+## 1.10 工作台概览
+
+`GET /dashboard/overview` 是登录后的工作台聚合读接口,由 `Server.Setup` 自动挂载。它属于自助路由(在 `NewPermissionChecker` 的内置 allowlist 中),但返回内容按调用者角色裁剪:
+
+- `scope="admin"`:调用者角色 `is_super=true`。返回系统计数、近 7 天登录趋势、今日操作数和最近 6 条操作日志。租户相关计数通过 GORM 租户回调自动限定在当前租户;`menus` / `permissions` 是全局目录表。
+- `scope="personal"`:普通角色。只返回 `scope` 与 `generated_at`,前端据此隐藏系统概览卡,只展示“继续工作/常用入口”。
+
+```json
+{
+  "code": 0,
+  "message": "",
+  "data": {
+    "scope": "admin",
+    "counts": {
+      "users": 2,
+      "roles": 1,
+      "departments": 1,
+      "menus": 13,
+      "permissions": 59,
+      "tenants": 1
+    },
+    "logins": {
+      "today": 3,
+      "yesterday": 1,
+      "trend": [{ "date": "2026-10-31", "count": 0 }]
+    },
+    "audits": {
+      "today": 1,
+      "recent": [
+        {
+          "id": 1,
+          "uid": "admin",
+          "action": "create",
+          "module": "system",
+          "table": "sys_departments",
+          "created_at": 1762397952
+        }
+      ]
+    },
+    "generated_at": 1762397952
+  }
+}
+```
+
+时间字段与趋势日期均按服务端本地时区计算;`generated_at` / `created_at` 是 Unix 秒。数据库查询失败时统一返回 `1005` + `dashboard overview unavailable`,不向客户端暴露 SQL 细节。

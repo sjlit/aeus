@@ -227,7 +227,7 @@ onBeforeUnmount(() => {
 }
 
 .p-icon {
-    font-size: 16px;
+    font-size: var(--fs-md);
     color: var(--ink-3);
     flex-shrink: 0;
 }
@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
     outline: none;
     background: transparent;
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--fs-base);
     color: var(--ink);
 }
 
@@ -250,7 +250,7 @@ onBeforeUnmount(() => {
 .p-kbd,
 .palette-foot kbd {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
     background: var(--glass-soft);
     border: 1px solid var(--glass-border);
@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
 }
 
 .palette-group {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     color: var(--ink-3);
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
     padding: 9px 10px;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
     transition: background 0.14s, color 0.14s;
 }
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
 }
 
 .p-item-icon {
-    font-size: 14px;
+    font-size: var(--fs-base);
     color: var(--ink-3);
     flex-shrink: 0;
 }
@@ -310,7 +310,7 @@ onBeforeUnmount(() => {
 .p-item-uri {
     margin-left: auto;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
     opacity: 0.7;
     white-space: nowrap;
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
 .palette-empty {
     padding: 28px 16px;
     text-align: center;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
 }
 
@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
     gap: 16px;
     padding: 10px 16px;
     border-top: 1px dashed rgba(30, 90, 90, 0.15);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
 }
 

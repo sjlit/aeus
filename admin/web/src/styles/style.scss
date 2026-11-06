@@ -49,10 +49,27 @@
   --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.15);
   --ring: 0 0 0 3px rgba(108, 197, 168, 0.2);
   /* 字体由 @fontsource-variable 自托管(main.ts 引入),族名带 "Variable" 后缀。
-     西文走自托管字体,中文回退到系统中文字体(苹方/雅黑/思源)。 */
-  --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --body: 'Inter Tight Variable', 'Inter Tight', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
-  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+     西文走自托管字体,中文回退到系统中文字体(苹方/雅黑/思源)。
+     mono 也补上 CJK 回退:当前 mono 只用于 Latin,但避免以后中文误落进
+     generic monospace 时被渲染成宋体。 */
+  --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
+  --body: 'Inter Tight Variable', 'Inter Tight', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', monospace;
+
+  /* ---- 字号 ----
+     常规档:11/12/13/14/16/20;展示档:22/32/36/64。
+     11px 只用于 Latin/mono 辅助信息、kbd、图表刻度和小图标,中文正文最小 12px。
+     小图标沿用最近的档位;15/18/21/22 等装饰性大图标保留裸值。 */
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 22px;
+  --fs-2xl: 32px;
+  --fs-display: 36px;
+  --fs-hero: 64px;
 
   /* ---- 几何 ---- */
   --r-lg: 24px;
@@ -67,6 +84,16 @@
   padding: 0;
 }
 
+// 原生表单控件默认不继承 font-family(Chrome/Linux 下按钮、输入框会落到
+// Arial),这里只继承字体,不动 font-size/line-height,避免影响 Element
+// Plus 的尺寸与行高。
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 // body 只放底色与基础排版;极光渐变与点阵装饰放到独立的 ::before 层,
 // 用 absolute 定位 + z-index:-1,避免 background-attachment: fixed 与
 // 固定定位 ::before 在滚动时强制重绘整个视口。
@@ -75,7 +102,8 @@ body {
   background: var(--bg-base);
   color: var(--ink);
   font-family: var(--body);
-  font-size: 14px;
+  font-size: var(--fs-base);
+  line-height: 1.5;
   position: relative;
   isolation: isolate;          // 独立堆叠上下文,装饰层被推到 body 内容之下
 }

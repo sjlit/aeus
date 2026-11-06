@@ -394,6 +394,7 @@ var _endpointPermissionCodes = []struct {
 	{"GET /rest/model-types/:module/:table", "选项查询 元数据下拉", "系统"},
 	{"GET /rest/model-tiers/:module/:table", "层级查询 树形选择", "系统"},
 	{"GET /schema/:module/:table", "Schema 元数据", "系统"},
+	{"GET /dashboard/overview", "查询 工作台概览", "工作台"},
 
 	// Business RPCs. Self-service reads/writes (profile, menu, password,
 	// avatar) are also in the checker's built-in allowlist; cataloging

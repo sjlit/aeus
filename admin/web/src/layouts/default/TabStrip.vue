@@ -375,7 +375,7 @@ watch(
     border-radius: 8px;
     cursor: pointer;
     color: var(--ink-2);
-    font-size: 13.5px;
+    font-size: var(--fs-sm);
     font-weight: 400;
     letter-spacing: 0.01em;
     white-space: nowrap;
@@ -429,7 +429,7 @@ watch(
 }
 
 .tab-icon {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     flex-shrink: 0;
     color: var(--ink-3);
     transition: color 0.18s ease;
@@ -462,7 +462,7 @@ watch(
     border-radius: 4px;
     cursor: pointer;
     color: var(--ink-3);
-    font-size: 12px;
+    font-size: var(--fs-xs);
     flex-shrink: 0;
     padding: 0;
     font-family: inherit;
@@ -502,7 +502,7 @@ watch(
     border-radius: 6px;
     cursor: pointer;
     color: var(--ink-2);
-    font-size: 13px;
+    font-size: var(--fs-sm);
     padding: 0;
     font-family: inherit;
     flex-shrink: 0;
@@ -538,7 +538,7 @@ watch(
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-2);
     cursor: pointer;
     border-radius: 6px;
@@ -563,7 +563,7 @@ watch(
 }
 
 .menu-item .el-icon {
-    font-size: 14px;
+    font-size: var(--fs-base);
 }
 
 .menu-divider {
@@ -582,7 +582,7 @@ watch(
 
     /* 移动端下拉:与放大后的顶栏(60px)匹配,EP 默认 32px 太矮 */
     --el-select-input-height: 40px;
-    --el-select-input-font-size: 14px;
+    --el-select-input-font-size: var(--fs-base);
 }
 
 .option-label {
@@ -592,7 +592,7 @@ watch(
 }
 
 .option-icon {
-    font-size: 14px;
+    font-size: var(--fs-base);
 }
 
 /* ── 响应式 ── */

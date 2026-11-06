@@ -1,667 +1,504 @@
 <script setup lang="ts">
-// 与 router/index.ts 里这条静态路由的 meta.componentName (= deriveComponentName
-// '@/views/dashboard/Index.vue') 对齐。keep-alive :include=tabs.cachedViews
-// 要求稳定可匹配的 name,异步组件包装层一旦丢失 name 就会让缓存失效。
+// 与 router/index.ts 里这条静态路由的 meta.componentName 对齐。
 defineOptions({ name: 'DashboardIndex' })
 
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
+import {
+  Key,
+  Refresh,
+  Search,
+  Tickets,
+  User,
+  UserFilled,
+  WarningFilled,
+} from '@element-plus/icons-vue'
+import type { Component } from 'vue'
+import PageHeader from '@/components/layout/PageHeader.vue'
+import PageShell from '@/components/layout/PageShell.vue'
+import ActivityFeed from './components/ActivityFeed.vue'
+import LoginTrend from './components/LoginTrend.vue'
+import QuickAccessDialog from './components/QuickAccessDialog.vue'
+import QuickActions from './components/QuickActions.vue'
+import RecentVisits from './components/RecentVisits.vue'
+import StatCard from './components/StatCard.vue'
+import { DASHBOARD_PATH } from '@/router'
+import { usePageTitle } from '@/composables/usePageTitle'
 import { useAuthStore } from '@/stores/auth'
 import { useMenuStore } from '@/stores/menu'
-import { useTabsStore } from '@/stores/tabs'
 import { useUiStore } from '@/stores/ui'
-import { usePageTitle } from '@/composables/usePageTitle'
-import { resolveIcon } from '@/utils/icons'
+import { useWorkspaceStore, type WorkspaceLink } from '@/stores/workspace'
+import { fetchDashboardOverview, type DashboardOverview } from '@/api/dashboard'
+import { menuIconName } from '@/utils/icons'
+import { formatRelativeTime, formatUpdatedAt } from '@/utils/time'
+
+interface KpiCard {
+  id: string
+  label: string
+  value: number
+  hint: string
+  icon: Component
+  tone?: 'default' | 'up' | 'down'
+  to: string
+}
 
 const title = usePageTitle('工作台')
-const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const menu = useMenuStore()
-const tabs = useTabsStore()
 const ui = useUiStore()
+const workspace = useWorkspaceStore()
 
-/** 按时间段问候。 */
+const overview = ref<DashboardOverview | null>(null)
+const loading = ref(true)
+const refreshing = ref(false)
+const overviewError = ref(false)
+const loadedAt = ref(0)
+const quickDialogOpen = ref(false)
+
+// 日期/问候/相对时间共用一个分钟级时钟;页面被 keep-alive 缓存时停掉。
+const now = ref(new Date())
+let clockTimer: number | undefined
+
+function startClock(): void {
+  stopClock()
+  now.value = new Date()
+  clockTimer = window.setInterval(() => {
+    now.value = new Date()
+  }, 60_000)
+}
+
+function stopClock(): void {
+  if (clockTimer !== undefined) {
+    window.clearInterval(clockTimer)
+    clockTimer = undefined
+  }
+}
+
+onMounted(() => {
+  startClock()
+  void loadOverview()
+})
+onActivated(() => {
+  startClock()
+  if (loadedAt.value > 0 && Date.now() - loadedAt.value > 60_000) {
+    void loadOverview(true)
+  }
+})
+onDeactivated(stopClock)
+onUnmounted(stopClock)
+
+async function loadOverview(silent = false): Promise<void> {
+  if (!silent) loading.value = true
+  refreshing.value = true
+  try {
+    overview.value = await fetchDashboardOverview()
+    loadedAt.value = Date.now()
+    overviewError.value = false
+  } catch {
+    // 概览失败不能拖垮启动台:继续展示最近访问/常用入口。
+    overviewError.value = true
+  } finally {
+    loading.value = false
+    refreshing.value = false
+  }
+}
+
+const isAdmin = computed(() => overview.value?.scope === 'admin')
+const counts = computed(() => overview.value?.counts)
+const loginSummary = computed(() => overview.value?.logins)
+const auditSummary = computed(() => overview.value?.audits)
+const trend = computed(() => loginSummary.value?.trend ?? [])
+const recentAudits = computed(() => auditSummary.value?.recent ?? [])
+const auditsToday = computed(() => auditSummary.value?.today ?? 0)
+const todayLogins = computed(() => loginSummary.value?.today ?? 0)
+const yesterdayLogins = computed(() => loginSummary.value?.yesterday ?? 0)
+
 const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 6) return '夜深了'
-  if (h < 12) return '早上好'
-  if (h < 14) return '中午好'
-  if (h < 18) return '下午好'
+  const hour = now.value.getHours()
+  if (hour < 6) return '夜深了'
+  if (hour < 12) return '早上好'
+  if (hour < 14) return '中午好'
+  if (hour < 18) return '下午好'
   return '晚上好'
 })
 
-/** 实时时钟(mono 字体,秒级跳动)。 */
-const now = ref(new Date())
-let timer: number | undefined
-onMounted(() => {
-  timer = window.setInterval(() => { now.value = new Date() }, 1000)
-})
-onUnmounted(() => { if (timer !== undefined) window.clearInterval(timer) })
-
-const clock = computed(() =>
-  now.value.toLocaleTimeString('zh-CN', { hour12: false }),
-)
 const dateLine = computed(() =>
   new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'long',
   }).format(now.value),
 )
 
-/**
- * 快捷导航:按所属节(菜单一级分组)聚合全部可路由节点。
- * 直接消费 flatIndex + sectionsByUri 两个现成快照,不依赖具体业务模块,
- * 菜单变化时本页自动跟着变 —— 这是「通用」的关键。
- */
-interface NavItem {
-  uri: string
-  title: string
-  icon: string
-}
-
-interface NavGroup {
-  name: string
-  items: NavItem[]
-}
-
-const navGroups = computed<NavGroup[]>(() => {
-  const bySection = new Map<string, NavItem[]>()
-  const idx = menu.flatIndex
-  for (const uri of idx.uris) {
-    const sec = menu.sectionsByUri.get(uri) || '其他'
-    let items = bySection.get(sec)
-    if (!items) {
-      items = []
-      bySection.set(sec, items)
-    }
-    items.push({
-      uri,
-      title: idx.titlesByUri.get(uri) ?? uri,
-      icon: idx.iconsByUri.get(uri) ?? '',
-    })
-  }
-  return [...bySection.entries()]
-    .map(([name, items]) => ({ name, items }))
-})
-
-/** 可路由页面总数(状态条读数)。 */
-const pageCount = computed(() => menu.flatIndex.uris.length)
-
-/** 最近访问:当前打开的业务标签页(排除落地页自身与不可关的常驻页)。 */
-const recentTabs = computed(() =>
-  tabs.tabs.filter(t => t.closable && t.path !== route.path).slice(0, 6),
+const displayName = computed(() =>
+  auth.displayName && auth.displayName !== '—' ? auth.displayName : '',
 )
 
-/** 个人资料页入口:按 view_path 含 profile 反查 uri;菜单里没有就隐藏入口。 */
-const profileUri = computed(() => {
-  for (const [uri, view] of menu.flatIndex.viewsByUri) {
-    if (view.includes('profile')) return uri
-  }
-  return ''
+const subtitle = computed(
+  () => `${greeting.value}${displayName.value ? `，${displayName.value}` : ''} · ${dateLine.value}`,
+)
+
+const menuLinks = computed<WorkspaceLink[]>(() => {
+  const index = menu.flatIndex
+  return index.uris.map((uri) => ({
+    path: uri,
+    title: index.titlesByUri.get(uri) ?? uri,
+    icon: menuIconName(
+      index.iconsByUri.get(uri),
+      index.componentsByUri.get(uri),
+    ),
+    section: menu.groupTitlesByUri.get(uri) ?? '',
+  }))
 })
 
-/** 租户名只在登录瞬态(LoginResponse)里有,刷新后拿不到就隐藏该格。 */
-const tenantName = computed(() => {
-  const c = auth.currentUser as Partial<{ tenant_name: string }> | null
-  return c?.tenant_name ?? ''
+const menuByPath = computed(() => {
+  const map = new Map<string, WorkspaceLink>()
+  for (const item of menuLinks.value) map.set(item.path, item)
+  return map
 })
+
+const uriByComponent = computed(() => {
+  const map = new Map<string, string>()
+  for (const [uri, component] of menu.flatIndex.componentsByUri) {
+    map.set(component, uri)
+  }
+  return map
+})
+
+function isKnownRoute(path: string): boolean {
+  return router.resolve(path).matched.some((record) => record.name !== 'not-found')
+}
+
+const recentVisits = computed(() =>
+  workspace.visits
+    .filter((item) => item.path !== DASHBOARD_PATH && isKnownRoute(item.path))
+    .slice(0, 6)
+    .map((item) => {
+      const fresh = menuByPath.value.get(item.path)
+      if (!fresh) return item
+      return {
+        ...item,
+        title: fresh.title || item.title,
+        icon: item.icon || fresh.icon,
+        section: fresh.section || item.section,
+      }
+    }),
+)
+
+const favoriteItems = computed(() =>
+  workspace.favorites
+    .map((item) => menuByPath.value.get(item.path))
+    .filter((item): item is WorkspaceLink => Boolean(item))
+    .slice(0, 6),
+)
+
+const frequentItems = computed(() => {
+  const stats = new Map<string, { item: WorkspaceLink; count: number; last: number }>()
+  for (const visit of workspace.visits) {
+    const item = menuByPath.value.get(visit.path)
+    if (!item) continue
+    const current = stats.get(visit.path)
+    if (current) {
+      current.count++
+      current.last = Math.max(current.last, visit.visitedAt)
+    } else {
+      stats.set(visit.path, { item, count: 1, last: visit.visitedAt })
+    }
+  }
+  return [...stats.values()]
+    .sort((a, b) => b.count - a.count || b.last - a.last)
+    .map((entry) => entry.item)
+    .slice(0, 6)
+})
+
+const recommendedItems = computed(() => {
+  const preferred = [
+    'SystemSysUsers',
+    'SystemSysRoles',
+    'SystemSysMenus',
+    'SystemSysAudits',
+    'SystemSysLoginLogs',
+    'SystemSysPermissions',
+    'SystemSysTenants',
+  ]
+  const byComponent = new Map<string, WorkspaceLink>()
+  for (const item of menuLinks.value) {
+    const component = menu.flatIndex.componentsByUri.get(item.path)
+    if (component) byComponent.set(component, item)
+  }
+  const picked = preferred
+    .map((component) => byComponent.get(component))
+    .filter((item): item is WorkspaceLink => Boolean(item))
+  return picked.length > 0 ? picked.slice(0, 6) : menuLinks.value.slice(0, 6)
+})
+
+const quickItems = computed(() => {
+  if (favoriteItems.value.length > 0) return favoriteItems.value
+  if (frequentItems.value.length > 0) return frequentItems.value
+  return recommendedItems.value
+})
+
+const quickMode = computed<'favorites' | 'frequent' | 'recommended'>(() => {
+  if (favoriteItems.value.length > 0) return 'favorites'
+  if (frequentItems.value.length > 0) return 'frequent'
+  return 'recommended'
+})
+
+const kpis = computed<KpiCard[]>(() => {
+  if (!isAdmin.value || !counts.value) return []
+  const delta = todayLogins.value - yesterdayLogins.value
+  const latestAudit = recentAudits.value[0]
+  return [
+    {
+      id: 'users',
+      label: '用户',
+      value: counts.value.users,
+      hint: '当前租户账号',
+      icon: User,
+      to: uriByComponent.value.get('SystemSysUsers') ?? '',
+    },
+    {
+      id: 'roles',
+      label: '角色',
+      value: counts.value.roles,
+      hint: '角色总数',
+      icon: UserFilled,
+      to: uriByComponent.value.get('SystemSysRoles') ?? '',
+    },
+    {
+      id: 'logins',
+      label: '今日登录',
+      value: todayLogins.value,
+      hint: delta === 0 ? '与昨日持平' : `较昨日 ${delta > 0 ? '+' : ''}${delta}`,
+      icon: Key,
+      tone: delta > 0 ? 'up' : delta < 0 ? 'down' : 'default',
+      to: uriByComponent.value.get('SystemSysLoginLogs') ?? '',
+    },
+    {
+      id: 'audits',
+      label: '今日操作',
+      value: auditsToday.value,
+      hint: latestAudit
+        ? `最近 ${formatRelativeTime(latestAudit.created_at * 1000, now.value.getTime())}`
+        : '暂无操作',
+      icon: Tickets,
+      to: uriByComponent.value.get('SystemSysAudits') ?? '',
+    },
+  ]
+})
+
+const overviewMeta = computed(() => {
+  const value = counts.value
+  if (!value) return ''
+  const items = [
+    `部门 ${value.departments}`,
+    `菜单 ${value.menus}`,
+    `权限 ${value.permissions}`,
+  ]
+  if (value.tenants) items.push(`租户 ${value.tenants}`)
+  return items.join(' · ')
+})
+
+const updatedText = computed(() => {
+  const generated = overview.value?.generated_at
+  const timestamp = generated ? generated * 1000 : loadedAt.value
+  return formatUpdatedAt(timestamp, now.value.getTime())
+})
+
+async function clearVisits(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      '清空后无法恢复,确定清空最近访问吗?',
+      '清空最近访问',
+      {
+        type: 'warning',
+        confirmButtonText: '清空',
+        cancelButtonText: '取消',
+      },
+    )
+    workspace.clearVisits()
+  } catch {
+    // 用户取消
+  }
+}
+
+function browseAll(): void {
+  ui.openPalette()
+}
+
+function viewAllAudits(): void {
+  const uri = uriByComponent.value.get('SystemSysAudits')
+  if (uri) {
+    void router.push(uri)
+    return
+  }
+  ui.openPalette()
+}
 </script>
 
 <template>
-  <div class="dash">
-    <!-- DECK · 状态甲板:问候 + 搜索/时钟,下方一行会话状态读数 -->
-    <section class="deck glass rise-in" data-i="0">
-      <span class="corner c-tl"></span>
-      <span class="corner c-tr"></span>
-      <span class="corner c-bl"></span>
-      <span class="corner c-br"></span>
+  <PageShell class="dashboard-shell">
+    <PageHeader :title="title" :subtitle="subtitle">
+      <template #actions>
+        <el-button :icon="Search" @click="browseAll">搜索页面</el-button>
+        <el-button :icon="Refresh" :loading="refreshing" @click="loadOverview()">
+          刷新
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <div class="deck-main">
-        <div class="deck-left">
-          <h1 class="greet">
-            {{ greeting }},<span class="text-gradient">{{ auth.displayName }}</span>
-          </h1>
-          <p class="date-line">{{ dateLine }}</p>
-        </div>
+    <div v-if="overviewError" class="overview-error" role="status">
+      <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+      <span>系统概览暂时不可用,启动台仍可正常使用。</span>
+      <button type="button" class="error-retry" @click="loadOverview()">重试</button>
+    </div>
 
-        <div class="deck-right">
-          <button class="search-pill" type="button" @click="ui.openPalette()">
-            <el-icon><Search /></el-icon>
-            <span>搜索菜单</span>
-            <kbd>Ctrl K</kbd>
-          </button>
-          <span class="clock">{{ clock }}</span>
-        </div>
+    <section v-if="isAdmin" class="overview" aria-label="系统概览">
+      <div class="stat-grid">
+        <StatCard
+          v-for="kpi in kpis"
+          :key="kpi.id"
+          :label="kpi.label"
+          :value="kpi.value"
+          :hint="kpi.hint"
+          :icon="kpi.icon"
+          :tone="kpi.tone"
+          :to="kpi.to"
+          :loading="loading && !overview"
+        />
       </div>
-
-      <div class="deck-status">
-        <span class="status-cell">
-          <span class="dot-attention dot-attention--ok"></span>
-          系统正常
-        </span>
-        <span v-if="tenantName" class="status-cell">
-          <span class="status-key">租户</span>{{ tenantName }}
-        </span>
-        <span class="status-cell">
-          <span class="status-key">菜单</span>{{ navGroups.length }} 组 · {{ pageCount }} 页
-        </span>
-        <span class="status-cell">
-          <span class="status-key">页签</span>{{ tabs.tabs.length }} 个打开
-        </span>
-      </div>
+      <p class="overview-meta">
+        <span>{{ overviewMeta }}</span>
+        <span>更新于 {{ updatedText }}</span>
+      </p>
     </section>
 
-    <div class="grid">
-      <!-- NAVIGATION · 快捷导航:按菜单节分组,芯片网格 -->
-      <section class="glass panel panel-nav rise-in" data-i="1">
-        <h2 class="panel-title"><span class="title-bar"></span>NAVIGATION</h2>
-        <div v-if="navGroups.length > 0" class="nav-groups">
-          <div
-            v-for="g in navGroups"
-            :key="g.name"
-            class="nav-group"
-          >
-            <h3 class="nav-group-title">
-              {{ g.name }}<span class="nav-count">{{ g.items.length }}</span>
-            </h3>
-            <nav class="nav-chips">
-              <router-link
-                v-for="item in g.items"
-                :key="item.uri"
-                :to="item.uri"
-                class="nav-chip"
-              >
-                <el-icon v-if="resolveIcon(item.icon)" class="chip-icon">
-                  <component :is="resolveIcon(item.icon)" />
-                </el-icon>
-                <span>{{ item.title }}</span>
-              </router-link>
-            </nav>
-          </div>
-        </div>
-        <p v-else class="nav-empty">菜单为空,请联系管理员分配权限。</p>
-      </section>
-
-      <div class="side">
-        <!-- OPERATOR · 当前操作员档案 -->
-        <section class="glass panel rise-in" data-i="2">
-          <h2 class="panel-title"><span class="title-bar"></span>OPERATOR</h2>
-          <div class="operator">
-            <img
-              v-if="auth.userProfile?.avatar"
-              class="avatar"
-              :src="auth.userProfile.avatar"
-              alt=""
-            >
-            <span v-else class="avatar avatar-fallback">{{ auth.initials }}</span>
-            <div class="operator-meta">
-              <p class="operator-name">{{ auth.displayName }}</p>
-              <p class="operator-sub">{{ auth.userProfile?.email || '—' }}</p>
-            </div>
-          </div>
-          <dl class="operator-rows">
-            <div class="op-row">
-              <dt>角色</dt>
-              <dd>{{ auth.userProfile?.role || '—' }}</dd>
-            </div>
-            <div class="op-row">
-              <dt>UID</dt>
-              <dd class="op-mono">{{ auth.currentUser?.uid || '—' }}</dd>
-            </div>
-          </dl>
-          <router-link
-            v-if="profileUri"
-            :to="profileUri"
-            class="profile-link"
-          >
-            编辑个人资料 →
-          </router-link>
-        </section>
-
-        <!-- RECENT · 最近访问;没有打开的页签时整卡隐藏 -->
-        <section v-if="recentTabs.length > 0" class="glass panel rise-in" data-i="3">
-          <h2 class="panel-title"><span class="title-bar"></span>RECENT</h2>
-          <nav class="recent-list">
-            <router-link
-              v-for="t in recentTabs"
-              :key="t.path"
-              :to="{ path: t.path, query: t.query }"
-              class="recent-item"
-            >
-              <el-icon v-if="resolveIcon(t.icon ?? '')" class="recent-icon">
-                <component :is="resolveIcon(t.icon ?? '')" />
-              </el-icon>
-              <span>{{ t.title }}</span>
-            </router-link>
-          </nav>
-        </section>
-      </div>
+    <div class="workspace-grid">
+      <RecentVisits
+        :items="recentVisits"
+        :now="now.getTime()"
+        @clear="clearVisits"
+        @browse="browseAll"
+      />
+      <QuickActions
+        :items="quickItems"
+        :mode="quickMode"
+        @manage="quickDialogOpen = true"
+        @browse="browseAll"
+      />
     </div>
-  </div>
+
+    <section v-if="isAdmin" class="insight-grid" aria-label="系统动态">
+      <LoginTrend
+        :points="trend"
+        :today="todayLogins"
+        :yesterday="yesterdayLogins"
+      />
+      <ActivityFeed
+        :items="recentAudits"
+        :today="auditsToday"
+        :now="now.getTime()"
+        @view-all="viewAllAudits"
+      />
+    </section>
+
+    <QuickAccessDialog v-model="quickDialogOpen" />
+  </PageShell>
 </template>
 
-<style scoped lang="scss">
-.dash {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+<style scoped>
+.dashboard-shell {
   width: 100%;
-  min-height: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
 }
 
-/* ---- DECK · 状态甲板 ----
- * 四角 HUD 括号 + 渐隐网格纹理铺科技底色;
- * 上区问候/时钟,下区一行会话状态读数(mono 分隔)。 */
-.deck {
-  position: relative;
-  padding: 26px 28px 0;
-  overflow: hidden;
-}
-
-/* 细网格纹理:薄荷细线 28px 栅格,向下渐隐;
- * 颜色取 --acc-mint 的 rgb 值,透明度压到 ~0.055 只做底纹不抢戏 */
-.deck::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(108, 197, 168, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(108, 197, 168, 0.055) 1px, transparent 1px);
-  background-size: 28px 28px;
-  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 80%);
-  mask-image: linear-gradient(to bottom, #000, transparent 80%);
-  pointer-events: none;
-}
-
-/* 四角括号:1px 薄荷描边的 L 形,内缩 10px 落在玻璃卡圆角之内 */
-.corner {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border: 1px solid var(--acc-mint);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.c-tl { top: 10px; left: 10px; border-right: none; border-bottom: none; }
-.c-tr { top: 10px; right: 10px; border-left: none; border-bottom: none; }
-.c-bl { bottom: 10px; left: 10px; border-right: none; border-top: none; }
-.c-br { bottom: 10px; right: 10px; border-left: none; border-top: none; }
-
-.deck-main {
-  position: relative;
+.overview-error {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.greet {
-  font-family: var(--display);
-  font-size: clamp(22px, 2.4vw, 30px);
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.date-line {
-  margin-top: 8px;
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-}
-
-.deck-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.search-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 16px;
-  border: 1px solid rgba(30, 90, 90, 0.14);
-  border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--ink-2);
-  font-size: 13px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.1s ease;
-
-  kbd {
-    padding: 1px 7px;
-    border-radius: 6px;
-    border: 1px solid rgba(30, 90, 90, 0.18);
-    background: rgba(255, 255, 255, 0.7);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--ink-3);
-  }
-
-  &:hover {
-    border-color: var(--acc-mint);
-    color: var(--acc-mint-deeper);
-    box-shadow: var(--ring-soft);
-  }
-
-  &:active {
-    transform: translateY(1px);
-  }
-}
-
-.clock {
-  font-family: var(--mono);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--acc-mint-deep);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 状态条:点线分隔的会话读数行 */
-.deck-status {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 22px;
-  padding: 12px 0;
-  border-top: 1px dashed rgba(30, 90, 90, 0.15);
-}
-
-.status-cell {
-  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
-
-  &:first-child { padding-left: 0; }
-  &:not(:last-child) { border-right: 1px solid rgba(30, 90, 90, 0.1); }
-
-  .status-key {
-    font-size: 11px;
-    font-weight: 400;
-    letter-spacing: 0.04em;
-    color: var(--ink-2);
-  }
+  padding: 10px 14px;
+  border: 1px solid rgba(154, 101, 22, 0.18);
+  border-radius: var(--r-sm);
+  background: rgba(212, 160, 74, 0.08);
+  color: var(--el-color-warning);
+  font-size: var(--fs-sm);
 }
 
-/* ---- 主区网格:左导航(2 份) / 右列档案+最近(1 份) ---- */
-.grid {
+.error-retry {
+  margin-left: auto;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-color-warning);
+  font-family: var(--body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stat-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.overview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
   gap: 16px;
   align-items: start;
 }
 
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.panel {
-  padding: 20px 22px;
-}
-
-/* 面板标题:渐变竖条 + mono 大写字距 */
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  color: var(--ink-3);
-}
-
-.title-bar {
-  width: 3px;
-  height: 12px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, var(--acc-mint), var(--acc-lilac));
-  flex-shrink: 0;
-}
-
-/* ---- NAVIGATION ---- */
-.nav-groups {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.nav-group-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--acc-mint-deeper);
-}
-
-.nav-count {
-  padding: 0 7px;
-  border-radius: var(--r-pill);
-  border: 1px solid rgba(30, 90, 90, 0.12);
-  background: var(--glass-soft);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 16px;
-  color: var(--ink-2);
-}
-
-.nav-chips {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.nav-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid rgba(30, 90, 90, 0.1);
-  border-radius: var(--r-sm);
-  background: var(--glass-soft);
-  color: var(--ink-2);
-  font-size: 13px;
-  text-decoration: none;
-  transition: all 0.15s ease;
-
-  .chip-icon {
-    font-size: 14px;
-    color: var(--acc-mint-deep);
-    flex-shrink: 0;
+@media (max-width: 1180px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  &:hover {
-    background: var(--menu-active-tint);
-    border-color: rgba(108, 197, 168, 0.4);
-    color: var(--acc-mint-deeper);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px var(--shadow-soft);
-
-    .chip-icon {
-      color: var(--acc-mint-deeper);
-    }
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-}
-
-.nav-empty {
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-
-/* ---- OPERATOR ---- */
-.operator {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 14px;
-}
-
-.avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: var(--r-sm);
-  object-fit: cover;
-  flex-shrink: 0;
-  box-shadow: 0 0 0 1px var(--glass-border), 0 4px 12px var(--shadow-soft);
-}
-
-.avatar-fallback {
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
-  color: #fff;
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 16px;
-}
-
-.operator-meta {
-  min-width: 0;
-}
-
-.operator-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--ink);
-}
-
-.operator-sub {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--ink-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.operator-rows {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(30, 90, 90, 0.12);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.op-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-
-  dt {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    color: var(--ink-2);
-    flex-shrink: 0;
-  }
-
-  dd {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: right;
-  }
-
-  .op-mono {
-    font-family: var(--mono);
-    font-size: 11.5px;
-  }
-}
-
-.profile-link {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: 12px;
-  color: var(--acc-mint-deep);
-  text-decoration: none;
-
-  &:hover {
-    color: var(--acc-mint-deeper);
-    text-decoration: underline;
-  }
-}
-
-/* ---- RECENT ---- */
-.recent-list {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.recent-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  margin: 0 -10px;
-  border-radius: var(--r-sm);
-  color: var(--ink-2);
-  font-size: 13px;
-  text-decoration: none;
-  transition: all 0.15s ease;
-
-  .recent-icon {
-    font-size: 14px;
-    color: var(--ink-3);
-    flex-shrink: 0;
-  }
-
-  &:hover {
-    background: var(--menu-active-tint-soft);
-    color: var(--acc-mint-deeper);
-
-    .recent-icon {
-      color: var(--acc-mint-deep);
-    }
-  }
-}
-
-/* ---- 响应式 ---- */
-@media (max-width: 960px) {
-  .grid {
-    grid-template-columns: 1fr;
+  .workspace-grid,
+  .insight-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 640px) {
-  .search-pill kbd {
-    display: none;
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
-  .status-cell {
-    padding: 0 12px;
+  .overview-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 }
 </style>

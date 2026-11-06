@@ -69,7 +69,7 @@ httpSrv.Use(mwauth.JWT(
 
 ## 9.5 默认策略:fail-closed
 
-未收录路由(目录里没有 `data` 匹配行)→ **默认拒绝**,不进入角色授权判断。自助路由(profile / menu / password / avatar)由 `defaultCheckerAllowlist` 放行;admin 的 CRUD 与业务 RPC 由 `derive.go` 写入 catalog,再由 `Seed` 授给超管、由运维按角色授权。
+未收录路由(目录里没有 `data` 匹配行)→ **默认拒绝**,不进入角色授权判断。自助路由(profile / menu / password / avatar / dashboard overview)由 `defaultCheckerAllowlist` 放行;admin 的 CRUD 与业务 RPC 由 `derive.go` 写入 catalog,再由 `Seed` 授给超管、由运维按角色授权。
 
 拒绝路径覆盖**目录未收录**和**目录已收录但当前角色无授权**两种情况(业务码 `4003`)。`WithCheckerAllowlist` 是显式 bypass,不是更严格的开关;`WithCheckerFailOpen(true)` 仅用于迁移期恢复历史行为。
 
@@ -98,7 +98,7 @@ admin.NewPermissionChecker(db,
 )
 ```
 
-自助路由（`/user/profile`、`/user/menus`、`/menu/tree` 等）已内置在公开清单，不需要在这里重复登记。
+自助路由（`/user/profile`、`/user/menus`、`/menu/tree`、`/dashboard/overview` 等）已内置在公开清单，不需要在这里重复登记。
 
 条目语法:`"<METHOD> <pattern>"`(中间一个空格)。
 

@@ -6,8 +6,11 @@ import NotFoundView from '../views/public/NotFoundView.vue'
 import { useAuthStore } from '../stores/auth'
 import { useMenuStore } from '../stores/menu'
 import { useTabsStore, notifyRoutesChanged } from '../stores/tabs'
+import { useWorkspaceStore } from '../stores/workspace'
 import type { MenuNode } from '../types'
 import { normalizeGlobPath, deriveComponentName } from './viewPath'
+import { menuIconName } from '../utils/icons'
+import { brand } from '../config/brand'
 
 export const LOGIN_PATH = '/login'
 /** 工作台(dashboard)路由:登录后的默认落地页,固定写在前端,
@@ -209,8 +212,8 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const title = to.meta?.title as string | undefined
-  // 浏览器标签页标题不能永远是 "aeus";登录/404 也回到应用名。
-  document.title = title ? `${title} · aeus` : 'aeus'
+  // 浏览器标签页标题跟随运行时品牌配置;登录/404 也回到应用名。
+  document.title = title ? `${title} · ${brand.name}` : brand.name
   if (!title) return
   const menu = useMenuStore()
   const tabs = useTabsStore()
@@ -228,15 +231,33 @@ router.afterEach((to) => {
       break
     }
   }
+  const icon = menuIconName(
+    idx.iconsByUri.get(patternUri),
+    idx.componentsByUri.get(patternUri),
+  )
   tabs.addTab({
     path: to.path,
     // to.name 是 RouteRecordName(string | symbol | null | undefined);
     // tab 持久化需要 string key。symbol 路由名(目前没有)走 path 兜底。
     name: typeof to.name === 'string' ? to.name : to.path,
     title,
-    icon: idx.iconsByUri.get(patternUri),
+    icon,
     // 工作台是常驻落地页,不可关闭;其余 tab 均可关闭。
     closable: to.path !== DASHBOARD_PATH,
     query: to.query as Record<string, string>,
   })
+
+  // 工作台“继续工作”读的是真实访问历史,不是标签页顺序。
+  // 登录页/工作台自身不算“继续工作”,不写入历史。
+  if (to.path !== DASHBOARD_PATH) {
+    useWorkspaceStore().recordVisit({
+      path: to.path,
+      title,
+      icon,
+      section: menu.groupTitlesByUri.get(patternUri) ?? '',
+      ...(Object.keys(to.query).length > 0
+        ? { query: to.query as Record<string, string> }
+        : {}),
+    })
+  }
 })

@@ -1,16 +1,24 @@
+import { resolve } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
-// REST_UI_LOCAL=1 时,@sjlit/rest-ui 走本地源码 (/mobe/js/rest-ui/src),
-// 改源码即时 HMR;不设置则走 node_modules 里的发布版本。
+// REST_UI_LOCAL=1 时,@sjlit/rest-ui 走本地源码,改源码即时 HMR;
+// 不设置则走 node_modules 里的发布版本。
 const restUiLocal = !!process.env.REST_UI_LOCAL
-// REST_UI_ROOT lets each developer point at their own checkout of the
-// rest-ui source tree; the previous hard-coded /mobe path only worked on
-// one machine.
-const restUiRoot = process.env.REST_UI_ROOT || '/mobe/js/rest-ui'
+// REST_UI_ROOT 指向自己的 rest-ui 源码 checkout。这里刻意不设默认路径:
+// 任何硬编码路径都只在一台机器上成立,缺失时直接报错比静默解析到错误目录更安全。
+const restUiRootEnv = (process.env.REST_UI_ROOT || '').trim()
+const restUiRoot = restUiRootEnv ? resolve(restUiRootEnv) : ''
+if (restUiLocal && !restUiRoot) {
+  throw new Error(
+    'REST_UI_LOCAL is set but REST_UI_ROOT is empty. ' +
+    'Set REST_UI_ROOT to the @sjlit/rest-ui checkout path, e.g. ' +
+    'REST_UI_ROOT=/path/to/rest-ui npm run dev',
+  )
+}
 
 export default defineConfig({
   plugins: [
@@ -52,8 +60,8 @@ export default defineConfig({
       },
     ],
     // 本地源码调试时,rest-ui 源码里的 `import 'vue' / 'element-plus'` 按
-    // Node 解析会命中 /mobe/js/rest-ui/node_modules 下的另一份拷贝(版本还
-    // 不一致),导致 provide/inject 的 Symbol key 对不上 —— App 里的
+    // Node 解析会命中本地 rest-ui checkout 下的另一份 node_modules 拷贝
+    // (版本还可能不一致),导致 provide/inject 的 Symbol key 对不上 —— App 里的
     // ElConfigProvider locale 传不进 rest-ui 组件(表现为分页等仍是英文)。
     // dedupe 强制统一解析到本项目的拷贝。
     dedupe: restUiLocal

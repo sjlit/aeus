@@ -316,7 +316,7 @@ async function onDelete(row: MenuRow) {
 }
 
 .menu-row-icon__name {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--el-text-color-secondary);
 }
 </style>

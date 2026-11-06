@@ -323,14 +323,14 @@ const activeTab = ref('profile')
 .avatar-fallback {
     color: white;
     font-weight: 700;
-    font-size: 32px;
+    font-size: var(--fs-2xl);
     letter-spacing: 0.02em;
     font-family: var(--display);
 }
 
 .summary-name {
     font-family: var(--display);
-    font-size: 18px;
+    font-size: var(--fs-lg);
     font-weight: 600;
     color: var(--ink);
     line-height: 1.2;
@@ -338,7 +338,7 @@ const activeTab = ref('profile')
 
 .summary-role {
     margin-top: 4px;
-    font-size: 12px;
+    font-size: var(--fs-xs);
     color: var(--ink-2);
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -366,7 +366,7 @@ const activeTab = ref('profile')
     grid-template-columns: 56px 1fr;
     gap: 10px;
     align-items: baseline;
-    font-size: 13px;
+    font-size: var(--fs-sm);
 }
 
 .summary-list .row.description {
@@ -376,7 +376,7 @@ const activeTab = ref('profile')
 
 .summary-list dt {
     color: var(--ink-2);
-    font-size: 12px;
+    font-size: var(--fs-xs);
 }
 
 .summary-list dd {
@@ -386,7 +386,7 @@ const activeTab = ref('profile')
 
 .summary-list dd.mono {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: var(--fs-xs);
 }
 
 /* ── Tabs 卡(右) ── */
@@ -403,7 +403,7 @@ const activeTab = ref('profile')
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: var(--fs-sm);
 }
 
 .profile-form {

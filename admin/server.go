@@ -513,6 +513,12 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	if _, err = RegisterModelTiersEndpoint(s); err != nil {
 		return fmt.Errorf("register model-tiers endpoint: %w", err)
 	}
+	// Mount the signed-in operator's dashboard overview. The route is in
+	// the permission checker's self-service allowlist; the handler decides
+	// internally whether the caller may see global counts.
+	if _, err = RegisterDashboardEndpoint(s.opts); err != nil {
+		return fmt.Errorf("register dashboard endpoint: %w", err)
+	}
 	// Catalog the metadata endpoints so the PermissionChecker enforces
 	// RBAC on them (they are not tied to any registered model, so the
 	// ensurePermissionRows loop above cannot see them).  Seed's

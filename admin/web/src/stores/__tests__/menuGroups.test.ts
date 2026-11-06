@@ -3,6 +3,7 @@ import {
   buildTree,
   flattenMenu,
   groupBySection,
+  groupTitlesByUri,
   isSectionContainer,
   shouldRenderAsSubMenu,
 } from '../menuGroups'
@@ -263,6 +264,39 @@ describe('groupBySection', () => {
     const secs = groupBySection(mixed, custom)
     expect(secs.map((s) => s.name)).toEqual(['审计'])
     expect(secs[0].items.map((n) => n.component)).toEqual(['SystemLogs'])
+  })
+})
+
+describe('groupTitlesByUri', () => {
+  it('取最近一级容器标题而不是顶层分区', () => {
+    const groups = groupTitlesByUri(tree)
+    expect(groups.get('/system/sys-users')).toBe('用户中心')
+    expect(groups.get('/system/sys-roles')).toBe('用户中心')
+    expect(groups.get('/system/sys-audits')).toBe('日志记录')
+    expect(groups.get('/system/sys-login-logs')).toBe('日志记录')
+    expect(groups.get('/system/sys-menus')).toBe('系统设置')
+  })
+
+  it('有 uri 的分组节点:自身归上级容器,children 归它自己的标题', () => {
+    const nested = buildTree([
+      ...flat,
+      node({
+        name: '角色授权',
+        component: 'SystemSysRolePermissions',
+        parent: 'SystemSysRoles',
+        uri: '/system/sys-role-permissions',
+      }),
+    ])
+    const groups = groupTitlesByUri(nested)
+    expect(groups.get('/system/sys-roles')).toBe('用户中心')
+    expect(groups.get('/system/sys-role-permissions')).toBe('角色管理')
+  })
+
+  it('没有容器归属的顶层叶子回退为空串(调用方再回退到 section)', () => {
+    const orphan = buildTree([
+      node({ name: '概览', component: 'Overview', uri: '/workspace/overview' }),
+    ])
+    expect(groupTitlesByUri(orphan).get('/workspace/overview')).toBe('')
   })
 })
 

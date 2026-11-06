@@ -28,14 +28,14 @@ const pageTitle = usePageTitle()
 
 .notfound h1 {
   font-family: var(--display);
-  font-size: 64px;
+  font-size: var(--fs-hero);
   font-weight: 600;
   letter-spacing: -0.03em;
   margin-bottom: 12px;
 }
 
 .notfound p {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--ink-2);
   margin-bottom: 20px;
 }

@@ -306,6 +306,23 @@
   background: transparent !important;
   color: var(--ink-2) !important;
   font-family: var(--body) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* rest-ui 的 .schema-page-grid td 默认 .82rem(13.12px),脱离应用字号尺度;
+   统一到 13px 的紧凑档,表头保持 14px/600 的层级。 */
+.schema-page-grid td.el-table__cell {
+  font-size: var(--fs-sm);
+}
+
+/* rest-ui 内部还有 .8rem(12.8px)的零散字号,统一到 12px 档。 */
+.schema-form .el-upload-dragger,
+.mobile-preview-row {
+  font-size: var(--fs-xs);
+}
+
+.el-pagination {
+  font-variant-numeric: tabular-nums;
 }
 
 .el-table::before,
@@ -693,7 +710,7 @@
   --su-text-color-primary: var(--ink);
   --su-text-color-muted: var(--ink-2);
   --su-placeholder-text-color: var(--el-text-color-placeholder);
-  --su-placeholder-text-size: 0.75rem;
+  --su-placeholder-text-size: var(--fs-xs);
   --su-form-control-border-color: var(--el-border-color);
   --su-text-color-available: var(--acc-mint-deep);
   --su-text-color-link: var(--acc-mint-deep);

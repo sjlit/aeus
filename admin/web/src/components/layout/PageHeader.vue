@@ -43,7 +43,7 @@ withDefaults(defineProps<{
 .page-header__title {
   margin: 0;
   font-family: var(--display);
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.01em;
@@ -52,7 +52,7 @@ withDefaults(defineProps<{
 
 .page-header__desc {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
   color: var(--ink-2);
 }

@@ -294,7 +294,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 <style scoped>
 .role-key {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--glass-soft);
@@ -313,7 +313,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 .tab-label {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .menu-tree {
@@ -326,7 +326,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   padding: 8px 0;
   max-height: 60vh;
   overflow: auto;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .tab-actions {

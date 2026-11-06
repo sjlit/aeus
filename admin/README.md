@@ -259,6 +259,7 @@ admin/
 ├── schema_endpoint.go        # RegisterSchemaEndpoint（GET /schema/:module/:table）
 ├── modeltypes_endpoint.go    # RegisterModelTypesEndpoint（GET /rest/model-types/:module/:table）
 ├── modeltiers_endpoint.go    # RegisterModelTiersEndpoint（GET /rest/model-tiers/:module/:table）
+├── dashboard_endpoint.go     # RegisterDashboardEndpoint（GET /dashboard/overview）
 ├── options.go         # Functional options
 ├── responder.go       # 默认 envelope（{code,message,data}）
 ├── seed.go            # admin.Seed 收敛引导 + EnsureSectionMenus 分区容器
@@ -290,6 +291,7 @@ go test ./...
 - `tenant_scope_test.go` — GORM 租户回调（Query/Update/Delete/Create/强制租户）
 - `permission_test.go` — `NewPermissionChecker`：已授权放行 / 未授权 4003 / 未收录路由默认**拒绝**（fail-closed）/ 自助路由放行 / 基础设施路由放行 / 显式 allowlist bypass / `WithCheckerFailOpen(true)` 兼容 / allowlist 通配段边界 / 非 http 跳过 / 跨租户不串权 / claims 类型不符 4005 / 缓存命中
 - `schema_endpoint_test.go` — `RegisterSchemaEndpoint`：路径解析、pre-condition 失败、HTTP 端到端、未知 module/table、Seed 后字段不重复、租户过滤
+- `dashboard_endpoint_test.go` — 工作台概览：super 角色系统计数/登录趋势/最近操作、租户隔离、非 super 仅返回 personal、未登录 4001、权限目录收录
 - `modeloptions_endpoint_test.go` — `RegisterModelTypesEndpoint` + `RegisterModelTiersEndpoint`：路径解析、pre-condition 失败、HTTP 端到端（成功/缺失必填 query/未知 valueType/未知 module/table/路由注册）、`queryModelTypes` / `queryModelTiers` 分派器单元测试
 - `register_model_options_test.go` — `RegisterModel` per-call 选项（`WithRegisterMenuSpec` / `WithRegisterScenarios` / `WithRegisterVueOutputDir`）的覆盖语义、显式空 spec / 空 scenarios 的边界
 - `vue_gen_test.go` — `buildVueContent` / `vuePathForModel` / `generateVueFile` / `generateVueForResource`：模板占位符替换、路径遍历保护、已存在文件跳过、失败 warn 不中断

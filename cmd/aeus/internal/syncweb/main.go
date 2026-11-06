@@ -159,9 +159,17 @@ func transform(rel string, body []byte) []byte {
 		// same-origin. admin/web uses /api for its separate dev setup.
 		return []byte("VITE_API_BASE=\n")
 	case "index.html":
-		return bytes.ReplaceAll(body,
-			[]byte("<title>aeus</title>"),
+		body = bytes.ReplaceAll(body,
+			[]byte("<title>Board</title>"),
 			[]byte("<title>__AEUS_NAME__</title>"))
+		return bytes.ReplaceAll(body,
+			[]byte(`<div class="boot">Board</div>`),
+			[]byte(`<div class="boot">__AEUS_NAME__</div>`))
+	case "public/app-config.js":
+		// admin/web keeps its own default brand; generated projects start
+		// with the project name. appMark is omitted so brand.ts derives it
+		// from the first character of appName.
+		return []byte("window.__AEUS_CONFIG__ = {\n  appName: '__AEUS_NAME__',\n}\n")
 	case "package.json", "package-lock.json":
 		return bytes.ReplaceAll(body,
 			[]byte(`"name": "aeus"`),

@@ -269,6 +269,10 @@ var defaultCheckerAllowlist = []string{
 	"GET /user/permissions",
 	"GET /menu/tree",
 	"GET /menu/breadcrumb",
+	// Dashboard is the landing page for every signed-in role. The handler
+	// returns only personal data unless the caller's role is super, so it
+	// can bypass the catalog grant check safely.
+	"GET /dashboard/overview",
 }
 
 // WithCheckerFailOpen restores the historical fail-open behavior for

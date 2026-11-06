@@ -19,13 +19,21 @@ npm run dev
 
 打开 http://localhost:5173 ，用 `admin / Admin123` 登录。
 
+如果要在本项目里直接调试 `@sjlit/rest-ui` 源码，设置两个环境变量：
+
+```bash
+REST_UI_LOCAL=1 REST_UI_ROOT=/path/to/rest-ui npm run dev
+```
+
+`REST_UI_ROOT` 指向 rest-ui checkout 根目录（支持绝对路径或相对当前目录的路径）。只设 `REST_UI_LOCAL` 不设 `REST_UI_ROOT` 会直接报错，避免落到机器相关的默认路径上。
+
 ## 命令
 
 | 命令 | 作用 |
 |------|------|
 | `npm run dev` | 开发服务器(:5173) |
 | `npm run typecheck` | vue-tsc 类型检查 |
-| `npm test` | vitest 单测(信封/菜单分组纯函数、view_path 规范化、auth store) |
+| `npm test` | vitest 单测(信封/菜单分组/品牌解析/view_path 规范化/auth store) |
 | `npm run build` | 类型检查 + 构建到 dist/ |
 
 ## 约定
@@ -36,6 +44,41 @@ npm run dev
 - 路由:Hash 模式;业务路由从 MenuTree 动态注册,uri 即路径,view_path 决定视图文件。
 - 视觉:`src/styles/style.scss` 提供共享 token + 玻璃拟态工具类;
   `src/styles/app.scss` 桥接 Element Plus 主题并承载管理台布局。`app.scss` 顶部用 `@use './style'` 引入共享样式。
+
+## 排版
+
+字号统一走 `src/styles/style.scss` 的 `--fs-*` token:
+
+| token | 值 | 用途 |
+|-------|----|------|
+| `--fs-2xs` | 11px | 仅 Latin/mono 辅助信息、kbd、图表刻度 |
+| `--fs-xs` | 12px | 辅助文字 |
+| `--fs-sm` | 13px | 紧凑正文、表格 |
+| `--fs-base` | 14px | 正文、表单控件 |
+| `--fs-md` | 16px | 卡片标题 |
+| `--fs-lg` | 20px | 页面标题、个人资料名 |
+| `--fs-xl` | 22px | 品牌名 |
+| `--fs-2xl` | 32px | KPI 数字、登录页主标题 |
+| `--fs-display` | 36px | 展示型大标题 |
+| `--fs-hero` | 64px | 404 等超大标题 |
+
+新增样式不要再写裸 `px` 字号；中文正文最小 12px。小图标沿用最近的字号档位，15/18/21/22 等装饰性大图标保留视觉尺寸。中文标题负字距不超过 `-0.01em`，品牌名可配置为中文，不使用负字距。中文字重由系统字体提供，不同系统未必有 600 档，不要只靠字重区分层级。
+
+## 品牌配置
+
+侧栏、登录页和浏览器标题共用运行时品牌配置 `public/app-config.js`：
+
+```js
+window.__AEUS_CONFIG__ = {
+  appName: 'Board',
+  appMark: 'D',
+}
+```
+
+- `appName`：产品名，显示在侧栏、登录页和浏览器标题。
+- `appMark`：品牌方块里的字符；留空时取 `appName` 首字符。
+- Vite 会把 `public/` 原样复制到 `dist/`；部署后直接修改 `dist/app-config.js` 并刷新即可，不必重新构建。
+- 生产环境建议给该文件设置 `Cache-Control: no-cache`，否则改完可能被浏览器缓存。
 
 ## 关键端点速查
 

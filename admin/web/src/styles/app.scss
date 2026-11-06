@@ -68,9 +68,10 @@ body {
 
   .brand {
     font-family: var(--display);
-    font-size: 22px;
+    font-size: var(--fs-xl);
     font-weight: 600;
-    letter-spacing: -0.02em;
+    // 品牌名可由 app-config 配成中文,不使用负字距。
+    letter-spacing: 0;
     padding: 0 8px 18px;
     display: flex;
     align-items: center;
@@ -78,9 +79,10 @@ body {
     flex-shrink: 0;
 
     &::before {
-      // 系统标:暖色渐变方块 + 小写 italic 'a'(倾斜 -6°)。
+      // 系统标:暖色渐变方块 + 运行时品牌字符(倾斜 -6°)。
+      // 字符来自 public/app-config.js 的 appMark,由 SidebarContent 写到 data-mark;
       // 与绿色菜单行形成冷暖对位,是侧栏唯一带暖色的元素 → 强品牌点。
-      content: 'a';
+      content: attr(data-mark);
       width: 24px;
       height: 24px;
       background: var(--grad-warm);
@@ -91,7 +93,7 @@ body {
       font-family: var(--display);
       font-style: italic;
       font-weight: 700;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       line-height: 1;
       letter-spacing: 0;
       transform: rotate(-6deg);
@@ -114,7 +116,7 @@ body {
     .nav-section-title {
       // 分组名是中文:不能用 mono(mono 无 CJK 字形会回落系统字体),
       // 10px + uppercase 也是纯拉丁写法;改为 12px 正文家族 + 弱字距
-      font-size: 12px;
+      font-size: var(--fs-xs);
       letter-spacing: 0.05em;
       color: var(--ink-3);
       padding: 0 8px;
@@ -124,7 +126,7 @@ body {
 
     .nav-group-label {
       padding: 8px 10px;
-      font-size: 12px;
+      font-size: var(--fs-xs);
       font-weight: 600;
       color: var(--ink-2);
       opacity: 0.6;
@@ -146,7 +148,7 @@ body {
       margin: 2px 0;
       height: 40px;
       line-height: 40px;
-      font-size: 14px;
+      font-size: var(--fs-base);
       color: var(--sidebar-ink);
       font-weight: 500;
       transition: background-color 0.16s, color 0.16s, transform 0.16s, box-shadow 0.16s;
@@ -191,7 +193,7 @@ body {
 
     // 文件夹右侧的小箭头:小一号 + 弱化
     .el-sub-menu__icon-arrow {
-      font-size: 11px;
+      font-size: var(--fs-2xs);
       color: var(--ink-3);
     }
 
@@ -201,7 +203,7 @@ body {
       padding: 2px 0;
 
       .el-menu-item {
-        font-size: 13.5px;
+        font-size: var(--fs-sm);
         height: 36px;
         line-height: 36px;
         padding-left: 38px !important;
@@ -342,7 +344,7 @@ body {
 .hero {
   h1 {
     font-family: var(--display);
-    font-size: 36px;
+    font-size: var(--fs-display);
     line-height: 1.1;
     font-weight: 600;
     letter-spacing: -0.03em;
@@ -373,7 +375,7 @@ body {
   font-family: var(--display);
   font-style: italic;
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1;
   letter-spacing: 0;
   transform: rotate(-6deg);
@@ -409,10 +411,34 @@ body {
 
   h2 {
     font-family: var(--display);
-    font-size: 20px;
+    font-size: var(--fs-lg);
     font-weight: 600;
     letter-spacing: -0.01em;
   }
+}
+
+// ---- dashboard 面板头 ----
+// 4 个卡片组件共用,避免各写一份 scoped 副本。
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.panel-sub {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--ink-3);
 }
 
 // ---- el-sub-menu 浮层(teleport 到 body,scoped 够不着,放全局) ----
@@ -435,7 +461,7 @@ body {
   margin: 2px 0 !important;
   height: 40px !important;
   line-height: 40px !important;
-  font-size: 14px !important;
+  font-size: var(--fs-base) !important;
   color: var(--sidebar-ink) !important;
   transition: all 0.16s;
 }

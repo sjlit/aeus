@@ -6,6 +6,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sjlit/aeus/admin"
 	adminAuth "github.com/sjlit/aeus/admin/auth"
+	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/admin/pb"
 	"github.com/sjlit/aeus/admin/service"
 	memcache "github.com/sjlit/aeus/infra/cache/memory"
@@ -41,15 +42,32 @@ func (s *ServiceLoader) Init(ctx context.Context) (err error) {
 		return
 	}
 
+	db := s.scope.DB()
 	// AuthService is registered manually (admin no longer auto-wires
 	// it from a secret option); same router as the REST resources so
 	// the JWT allowlist can reference /auth/login uniformly.
+	//
+	// The mock records successful logins so the dashboard's "今日登录"
+	// card and 7-day trend show real data in local demos. Production
+	// applications can wire the same LoginLog model from their own
+	// LoginLogger implementation.
 	pb.RegisterAuthServiceRouter(http, service.NewAuthService(
-		service.WithAuthServiceDB(s.scope.DB()),
+		service.WithAuthServiceDB(db),
 		service.WithAuthSecret(JWTSecret()),
+		service.WithLoginLogger(func(ctx context.Context, info service.LoginLogInfo) {
+			if !info.Success {
+				return
+			}
+			_ = db.WithContext(admin.WithoutTenant(ctx)).Create(&models.LoginLog{
+				TenantModel: models.TenantModel{TenantID: info.TenantID},
+				UID:         info.UID,
+				IP:          info.IP,
+				UserAgent:   info.UserAgent,
+				AccessToken: info.AccessToken,
+			}).Error
+		}),
 	))
 
-	db := s.scope.DB()
 	// sharedCache backs every read-through Cacher the admin services
 	// build (permission catalog + role grants via NewPermissionChecker,
 	// menus / visible menus / permission codes / role options via the

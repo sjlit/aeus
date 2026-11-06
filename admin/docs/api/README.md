@@ -31,6 +31,7 @@
 | `MenuService` | `pb.RegisterMenuServiceRouter(router, service.NewMenuService(...))` | `pb/menu.proto`、`service/menu.go` |
 | `TenantService` | `pb.RegisterTenantServiceRouter(router, service.NewTenantService(...))` | `pb/tenant.proto`、`service/tenant.go` |
 | Schema 元数据 | `admin.New(...).Setup(ctx)` 自动挂 `/schema/:module/:table` | `schema_endpoint.go` |
+| 工作台概览 | `admin.New(...).Setup(ctx)` 自动挂 `/dashboard/overview` | `dashboard_endpoint.go` |
 | 权限执行 | `mwauth.WithPermissionChecker(admin.NewPermissionChecker(db))` | `permission.go` |
 
 > `AuthService` 故意不挂在 `Setup` 里——这是设计约定,见 [overview.md §AuthService 注册路径](./overview.md#authservice-注册路径)。
@@ -46,6 +47,7 @@
 /tenant/*       TenantService   租户管理读端点
 /system/*       rest/v3 自动资源  CRUD + schema 元数据
 /schema/*       admin           schema 元数据
+/dashboard/*    admin           工作台概览(自助路由,按角色裁剪)
 ```
 
 ## 配套文档

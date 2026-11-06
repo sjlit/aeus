@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>aeus</title>
+  <title>Board</title>
   <style>
     /* Vue 挂载前占位:bootstrap 期间的 loading。
        #app 有内容后会被覆盖,这里无需清理。 */
@@ -34,9 +34,11 @@
       50%      { opacity: 1;   transform: scale(1.1); }
     }
   </style>
+  <!-- 运行时品牌配置：构建后可直接修改 dist/app-config.js，无需重新构建。 -->
+  <script src="/app-config.js"></script>
 </head>
 <body>
-  <div id="app"><div class="boot">aeus</div></div>
+  <div id="app"><div class="boot">Board</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
