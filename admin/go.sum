@@ -100,12 +100,10 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
-github.com/sjlit/aeus v1.3.0 h1:l60ASR+qfn+SoPQzGqMxk7eVVW4lFgfe7loeYley6Lc=
-github.com/sjlit/aeus v1.3.0/go.mod h1:ebmdc4ZMNqNBmpfnSwSf65MK1oQFpiozZbfPIBzdlYc=
+github.com/sjlit/aeus v1.4.0 h1:K/H61AlIdil8XA1pqRaGfSU6hawMOEv/FOQVrER+334=
+github.com/sjlit/aeus v1.4.0/go.mod h1:ebmdc4ZMNqNBmpfnSwSf65MK1oQFpiozZbfPIBzdlYc=
 github.com/sjlit/aeus/transport/http v1.1.1 h1:je3YJ+PlO65tKyu99wTJbgQ9VYaYc8TJwCex80zj/bg=
 github.com/sjlit/aeus/transport/http v1.1.1/go.mod h1:jxHAduisduLR3DZCq1Zp3c5tCRZR4KDnLi5ZONdtY4Y=
-github.com/sjlit/rest/v3 v3.1.0 h1:4tE62MZ7YUOV3tVPMQny1YyTGccYbEZ7dp2/IHCbhiA=
-github.com/sjlit/rest/v3 v3.1.0/go.mod h1:S+6pR92dmzSasTf3euAQYV7JnmwX6mcRHc0jlI6mxes=
 github.com/sjlit/rest/v3 v3.1.1 h1:cXqtWyntiN4rRyzJi1ykHCDg5h/2yuxiI+irZJgIWHE=
 github.com/sjlit/rest/v3 v3.1.1/go.mod h1:S+6pR92dmzSasTf3euAQYV7JnmwX6mcRHc0jlI6mxes=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
