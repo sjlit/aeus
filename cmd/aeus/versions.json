@@ -1,5 +1,5 @@
 {
-  "root": "v1.3.0",
+  "root": "v1.4.0",
   "transport/http": "v1.1.1",
-  "admin": "v1.2.1"
+  "admin": "v1.3.0"
 }
