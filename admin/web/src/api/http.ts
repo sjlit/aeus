@@ -98,6 +98,14 @@ async function refreshAndRetry(
 
 http.interceptors.response.use(
   (response) => {
+    // 文件下载（CSV/Blob）不是 JSON 信封，直接返回 AxiosResponse，
+    // 交给 rest-ui 的 CRUD.__downloadFile 处理 headers/文件名。
+    if (
+      response.config?.responseType === 'blob' ||
+      response.config?.responseType === 'arraybuffer'
+    ) {
+      return response as unknown as AxiosResponse
+    }
     const body = response.data
     const code = envelopeCode(body)
     if (code === 0) {
