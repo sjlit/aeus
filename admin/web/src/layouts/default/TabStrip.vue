@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight, Back, CircleClose, Close, FolderRemove, Refresh, Right } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Back, CircleClose, Close, Refresh, Right } from '@element-plus/icons-vue'
 import { useTabsStore, type Tab } from '@/stores/tabs'
 import { useMediaQuery } from '@/composables/useMediaQuery'
 import { resolveIcon } from '@/utils/icons'
@@ -19,7 +19,9 @@ const showRightArrow = ref(false)
 // 右键菜单
 const contextMenuVisible = ref(false)
 const contextMenuTab = ref<Tab | null>(null)
+const contextMenuRef = ref<HTMLElement | null>(null)
 const contextMenuPosition = ref({ x: 0, y: 0 })
+let closeContextMenuOnOutsideClick: (() => void) | null = null
 
 // 拖拽状态
 const dragTab = ref<Tab | null>(null)
@@ -54,6 +56,15 @@ function onTabsListKeydown(e: KeyboardEvent) {
             e.preventDefault()
             if (list[currentIdx]) switchTab(list[currentIdx]!)
             return
+        case 'Delete':
+        case 'Backspace': {
+            e.preventDefault()
+            const current = list[currentIdx]
+            if (!current?.closable) return
+            closeTab(current)
+            nextTick(() => focusActiveTab())
+            return
+        }
         default:
             return
     }
@@ -87,17 +98,60 @@ function closeTab(tab: Tab) {
     }
 }
 
+function tabNodeAt(index: number): HTMLElement | undefined {
+    return tabsContainer.value?.querySelectorAll<HTMLElement>('.tab')[index]
+}
+
+function focusActiveTab() {
+    const idx = tabsStore.tabs.findIndex(t => t.path === tabsStore.activeTab)
+    if (idx >= 0) tabNodeAt(idx)?.focus()
+}
+
+/** 菜单 / 命令面板跳转后,让激活标签回到标签栏可视区。 */
+function scrollActiveIntoView() {
+    const idx = tabsStore.tabs.findIndex(t => t.path === tabsStore.activeTab)
+    if (idx < 0) return
+    const node = tabNodeAt(idx)
+    const container = tabsContainer.value
+    if (!node || !container) return
+    // offsetLeft 的参考系可能是 topbar(定位祖先),用 rect 转成容器内坐标。
+    const nodeRect = node.getBoundingClientRect()
+    const containerRect = container.getBoundingClientRect()
+    const left = nodeRect.left - containerRect.left + container.scrollLeft
+    const right = left + nodeRect.width
+    if (left < container.scrollLeft) {
+        container.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' })
+    } else if (right > container.scrollLeft + container.clientWidth) {
+        container.scrollTo({ left: right - container.clientWidth + 8, behavior: 'smooth' })
+    }
+    nextTick(checkScroll)
+}
+
+function closeContextMenu() {
+    contextMenuVisible.value = false
+    contextMenuTab.value = null
+    if (closeContextMenuOnOutsideClick) {
+        document.removeEventListener('click', closeContextMenuOnOutsideClick)
+        closeContextMenuOnOutsideClick = null
+    }
+}
+
 function openContextMenu(e: MouseEvent, tab: Tab) {
     e.preventDefault()
     contextMenuTab.value = tab
-    contextMenuPosition.value = { x: e.clientX, y: e.clientY }
-    contextMenuVisible.value = true
-    const closeMenu = () => {
-        contextMenuVisible.value = false
-        document.removeEventListener('click', closeMenu)
+    // 估算菜单尺寸,靠近视口右下角时向内收,避免右键菜单被裁掉。
+    const menuWidth = 184
+    const menuHeight = 260
+    contextMenuPosition.value = {
+        x: Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8)),
+        y: Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8)),
     }
+    contextMenuVisible.value = true
     nextTick(() => {
-        document.addEventListener('click', closeMenu)
+        // 键盘用户从第一个菜单项开始;Esc 可关闭。
+        contextMenuRef.value?.querySelector<HTMLElement>('.menu-item')?.focus()
+        closeContextMenuOnOutsideClick = closeContextMenu
+        document.addEventListener('click', closeContextMenuOnOutsideClick)
     })
 }
 
@@ -131,7 +185,7 @@ function onContextMenuAction(action: string) {
             }
             break
     }
-    contextMenuVisible.value = false
+    closeContextMenu()
 }
 
 function onDragStart(e: DragEvent, tab: Tab) {
@@ -169,12 +223,23 @@ function scrollRight() { tabsContainer.value?.scrollBy({ left: 200, behavior: 's
 
 onMounted(() => {
     checkScroll()
+    nextTick(scrollActiveIntoView)
     window.addEventListener('resize', checkScroll)
 })
 onBeforeUnmount(() => {
     window.removeEventListener('resize', checkScroll)
+    if (closeContextMenuOnOutsideClick) {
+        document.removeEventListener('click', closeContextMenuOnOutsideClick)
+        closeContextMenuOnOutsideClick = null
+    }
 })
-watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
+watch(
+    () => [tabsStore.tabs.length, tabsStore.activeTab],
+    () => nextTick(() => {
+        checkScroll()
+        scrollActiveIntoView()
+    }),
+)
 </script>
 
 <template>
@@ -230,10 +295,10 @@ watch(() => tabsStore.tabs.length, () => nextTick(checkScroll))
             </el-icon>
         </button>
         <teleport to="body">
-            <div v-if="contextMenuVisible" class="context-menu" role="menu" :style="{
+            <div v-if="contextMenuVisible" ref="contextMenuRef" class="context-menu" role="menu" :style="{
                 left: contextMenuPosition.x + 'px',
                 top: contextMenuPosition.y + 'px',
-            }">
+            }" @keydown.esc.stop.prevent="closeContextMenu">
                 <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('refresh')">
                     <el-icon>
                         <Refresh />

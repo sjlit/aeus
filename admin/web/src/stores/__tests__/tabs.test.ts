@@ -129,6 +129,18 @@ describe('tabs store', () => {
     expect(store.tabs).toEqual([])
   })
 
+  it('clearTabs 清空标签、激活态与持久化缓存', async () => {
+    const store = useTabsStore()
+    store.addTab(tab({ path: '/home', closable: false }))
+    store.addTab(tab({ path: '/b', title: 'B' }))
+    await nextTick()
+    store.clearTabs()
+    expect(store.tabs).toEqual([])
+    expect(store.activeTab).toBe('')
+    expect(localStorage.getItem('aeus.app.tabs')).toBeNull()
+    expect(localStorage.getItem('aeus.app.activeTab')).toBeNull()
+  })
+
   it('cachedViews 从路由表推导:keepAlive 缺省缓存,取 componentName', () => {
     const store = useTabsStore()
     setTabsRouter({

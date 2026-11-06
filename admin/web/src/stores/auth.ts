@@ -6,6 +6,7 @@ import {
 } from '../api/user'
 import { safeGetString, safeRemove, safeSetString } from '../utils/storage'
 import { useMenuStore } from './menu'
+import { useTabsStore } from './tabs'
 import type { LoginResponse, UserProfile } from '../types'
 
 const LS_ACCESS = 'aeus.access'
@@ -47,6 +48,8 @@ export const useAuthStore = defineStore('auth', {
       safeSetString(LS_REFRESH, resp.refresh_token)
       // 换用户后菜单可能不同:清空菜单缓存,路由守卫会在首次导航时重新拉取
       useMenuStore().$reset()
+      // 旧账号的多标签不能带到新会话里。
+      useTabsStore().clearTabs()
     },
     // 只更新 token —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile。
     // refresh_token 是轮换语义:旧值已被服务端吊销,必须持久化新值。
@@ -91,6 +94,7 @@ export const useAuthStore = defineStore('auth', {
       this.userProfile = null
       safeRemove(LS_ACCESS)
       safeRemove(LS_REFRESH)
+      useTabsStore().clearTabs()
       try {
         if (accessToken || refreshToken)
           await apiLogout(accessToken ?? undefined, refreshToken ?? undefined)

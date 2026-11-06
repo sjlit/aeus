@@ -10,10 +10,16 @@
   --bg-3: #fde9e0;
   --bg-base: #f9fcfb;
   --ink: #1e3a3a;
-  --ink-2: #5b7a78;
-  --ink-3: #3a5a58;
-  /* 侧栏菜单文字:比 --ink-2 再实一档,浅玻璃底上不发灰 */
+  /* 语义顺序:ink > ink-2 > ink-3。旧值 ink-3 比 ink-2 更深,层级是反的。 */
+  --ink-2: #3a5a58;
+  --ink-3: #5a7673;
+  /* 侧栏菜单文字:比 --ink-3 再实一档,浅玻璃底上不发灰 */
   --sidebar-ink: #3f625f;
+  /* 内容面 / 分隔线:玻璃只留给 chrome,数据内容用近实色纸面。 */
+  --surface: #ffffff;
+  --surface-soft: #f4faf7;
+  --line: rgba(30, 90, 90, 0.12);
+  --line-soft: rgba(30, 90, 90, 0.07);
   --glass: rgba(255, 255, 255, 0.72);
   --glass-strong: rgba(255, 255, 255, 0.85);
   --glass-soft: rgba(255, 255, 255, 0.5);

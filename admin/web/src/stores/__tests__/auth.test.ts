@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAuthStore } from '../auth'
+import { useTabsStore } from '../tabs'
 import * as authApi from '../../api/auth'
 import * as userApi from '../../api/user'
 
@@ -97,10 +98,17 @@ describe('auth store', () => {
     expect(await s.refresh()).toBe(false)
   })
 
-  it('logout 调用接口并清空状态与 localStorage', async () => {
+  it('logout 调用接口并清空状态、localStorage 与旧标签', async () => {
     vi.mocked(authApi.login).mockResolvedValue(loginResp)
     const s = useAuthStore()
     await s.login({ username: 'admin', password: 'Admin123' })
+    const tabs = useTabsStore()
+    tabs.addTab({
+      path: '/system/sys-users',
+      name: 'menu:/system/sys-users',
+      title: '用户管理',
+      closable: true,
+    })
     vi.mocked(userApi.fetchProfile).mockResolvedValue(profileResp)
     await s.fetchProfile()
     vi.mocked(authApi.logout).mockResolvedValue(undefined)
@@ -112,6 +120,8 @@ describe('auth store', () => {
     expect(s.userProfile).toBeNull()
     expect(localStorage.getItem('aeus.access')).toBeNull()
     expect(localStorage.getItem('aeus.refresh')).toBeNull()
+    expect(tabs.tabs).toEqual([])
+    expect(localStorage.getItem('aeus.app.tabs')).toBeNull()
   })
 
   it('fetchProfile 拉取并存入 userProfile', async () => {

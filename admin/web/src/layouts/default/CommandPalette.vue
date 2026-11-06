@@ -29,6 +29,8 @@ const query = ref('')
 const activeIdx = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
+/** 打开前的焦点,关闭后还回去;命令面板是模态层,不能把焦点丢在 body。 */
+let lastFocused: HTMLElement | null = null
 
 /** 全部可路由节点的扁平视图,从 menu 的预计算索引直接读,不重复 DFS。 */
 const items = computed<PaletteItem[]>(() => {
@@ -74,12 +76,26 @@ watch(results, () => {
 watch(
     () => ui.paletteOpen,
     (open) => {
-        if (!open) return
+        if (!open) {
+            document.body.style.overflow = ''
+            nextTick(() => lastFocused?.focus())
+            return
+        }
+        lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
         query.value = ''
         activeIdx.value = 0
+        document.body.style.overflow = 'hidden'
         nextTick(() => inputRef.value?.focus())
     },
 )
+
+/** 模态层内只有输入框可聚焦;Tab 不把焦点送到遮罩后的页面。 */
+function onOverlayKeydown(e: KeyboardEvent) {
+    if (e.key === 'Tab') {
+        e.preventDefault()
+        inputRef.value?.focus()
+    }
+}
 
 function select(item: PaletteItem) {
     ui.closePalette()
@@ -127,13 +143,16 @@ function onGlobalKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onGlobalKeydown)
+    document.body.style.overflow = ''
+})
 </script>
 
 <template>
     <teleport to="body">
         <div v-if="ui.paletteOpen" class="palette-overlay" role="dialog" aria-modal="true" aria-label="搜索菜单"
-            @click.self="ui.closePalette()">
+            @click.self="ui.closePalette()" @keydown="onOverlayKeydown">
             <div class="palette">
                 <div class="palette-head">
                     <el-icon class="p-icon">

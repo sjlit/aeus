@@ -391,6 +391,16 @@ body {
   min-height: 100%;
 }
 
+// ---- 内容面:数据/表单页使用近实色纸面 ----
+// 玻璃质感保留给侧栏、顶栏、登录页、命令面板和浮层;表格/表单放在
+// 会随背景变化而降低可读性的玻璃上,长时间使用容易疲劳,也增加重绘成本。
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 30px var(--shadow-soft);
+}
+
 .page-head {
   display: flex;
   align-items: center;

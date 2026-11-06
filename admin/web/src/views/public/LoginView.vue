@@ -63,10 +63,12 @@ async function submit() {
       <!-- 提交只走 form submit:输入框回车与按钮点击都由原生 submit 触发 -->
       <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="submit">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" autofocus size="large" />
+          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" autofocus size="large"
+            autocomplete="username" />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="密码" :prefix-icon="Lock" size="large" />
+          <el-input v-model="form.password" type="password" show-password placeholder="密码" :prefix-icon="Lock" size="large"
+            autocomplete="current-password" />
         </el-form-item>
 
         <el-button type="primary" size="large" native-type="submit" :loading="loading">

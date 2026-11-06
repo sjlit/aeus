@@ -209,6 +209,8 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const title = to.meta?.title as string | undefined
+  // 浏览器标签页标题不能永远是 "aeus";登录/404 也回到应用名。
+  document.title = title ? `${title} · aeus` : 'aeus'
   if (!title) return
   const menu = useMenuStore()
   const tabs = useTabsStore()

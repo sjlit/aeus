@@ -79,6 +79,12 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
         </button>
 
         <div class="cluster right">
+            <button v-if="isMobile" class="icon-btn search-mobile" type="button" aria-label="搜索菜单"
+                title="搜索菜单" @click="ui.openPalette()">
+                <el-icon>
+                    <Search />
+                </el-icon>
+            </button>
             <UserMenu />
         </div>
     </div>
