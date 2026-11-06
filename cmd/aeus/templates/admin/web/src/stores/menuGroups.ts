@@ -132,6 +132,26 @@ export interface MenuFlat {
   componentsByUri: Map<string, string>
 }
 
+/** 产出 uri → 最近一级容器标题的映射。
+ *
+ *  sectionize 给出的是顶层分区(如“基础能力”),但工作台需要更具体的归属:
+ *  用户管理 → 用户中心、操作日志 → 日志记录、菜单管理 → 系统设置。
+ *  容器节点没有 uri、有 children,沿树向下继承最近的容器名;没有容器归属的
+ *  孤儿节点由调用方回退到 sectionize 的顶层分区名。 */
+export function groupTitlesByUri(nodes: MenuNode[]): Map<string, string> {
+  const out = new Map<string, string>()
+  const walk = (list: MenuNode[], inherited: string): void => {
+    for (const node of list) {
+      // 节点自身归属上一级容器;它有 children 时,children 归属它自己的标题。
+      if (node.uri && !out.has(node.uri)) out.set(node.uri, inherited)
+      const childGroup = node.children?.length ? node.name : inherited
+      if (node.children?.length) walk(node.children, childGroup)
+    }
+  }
+  walk(nodes, '')
+  return out
+}
+
 /** 把 groupBySection 的输出扫一遍,产出 uri → section 的映射。
  *  用于 CommandPalette 这类"按节分组平铺"的视图共享一次遍历,
  *  避免各自再写一份 walk + seen 去重。 */

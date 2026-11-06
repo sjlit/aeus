@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // 与 router/index.ts 里菜单路由 meta.componentName (= deriveComponentName('@/views/system/sys_menu/Index.vue')) 对齐。
 // 给 <keep-alive :include> 一个稳定可匹配的组件名,防止异步组件包装层丢失 name 导致视图不缓存。
-defineOptions({ name: 'SystemSysMenuses' })
+defineOptions({ name: 'SystemSysMenus' })
 
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import IconPicker from '@/components/widgets/IconPicker.vue'
+import PageHeader from '@/components/layout/PageHeader.vue'
+import PageShell from '@/components/layout/PageShell.vue'
 import { resolveIcon } from '../../../utils/icons'
 import { buildTree } from '../../../stores/menuGroups'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import { usePageTitle } from '@/composables/usePageTitle'
 import {
   createMenu,
@@ -22,6 +25,10 @@ import {
 // 页面标题跟随菜单(route.meta.title 由路由注册时从菜单写入),
 // 避免 el-table 页面没有 schema 兜底。
 const title = usePageTitle('sys_menus')
+
+// 宽屏才展示 view_path / 备注这类技术列;1440 下保持核心列可读,
+// 固定操作列不会盖住后面的数据。
+const wide = useMediaQuery('(min-width: 1800px)')
 
 // ----- 状态 ------------------------------------------------------------
 
@@ -181,58 +188,59 @@ async function onDelete(row: MenuRow) {
 </script>
 
 <template>
-  <div class="menu-page">
-    <header class="menu-page__header">
-      <h2>{{ title }}</h2>
-      <div class="menu-page__actions">
+  <PageShell>
+    <PageHeader :title="title" subtitle="维护系统菜单、路由与可见性">
+      <template #actions>
         <el-button :loading="loading" @click="load">刷新</el-button>
         <el-button type="primary" @click="openCreate()">新增菜单</el-button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
-    <el-table v-loading="loading" :data="tree" row-key="id"
-      :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }" :default-expand-all="true"
-      class="menu-table">
-      <el-table-column prop="name" label="菜单标题" min-width="180" />
-      <el-table-column prop="component" label="组件" min-width="180" />
-      <el-table-column prop="uri" label="路由" min-width="160" />
-      <el-table-column prop="view_path" label="视图路径" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="icon" label="图标" min-width="120">
-        <template #default="{ row }">
-          <span v-if="resolveIcon(row.icon)" class="menu-row-icon">
-            <el-icon>
-              <component :is="resolveIcon(row.icon)" />
-            </el-icon>
-            <span class="menu-row-icon__name">{{ row.icon }}</span>
-          </span>
-          <span v-else class="dim">{{ row.icon || '—' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="sort" label="排序" width="80" align="center" />
-      <el-table-column label="公开" width="80" align="center">
-        <template #default="{ row }">
-          <el-tag v-if="row.public" type="success" size="small">是</el-tag>
-          <span v-else class="dim">—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="隐藏" width="80" align="center">
-        <template #default="{ row }">
-          <el-tag v-if="row.hidden" type="info" size="small">是</el-tag>
-          <span v-else class="dim">—</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="备注" min-width="160" show-overflow-tooltip />
-      <el-table-column label="操作" width="220" fixed="right" align="center">
-        <template #default="{ row }">
-          <!-- el-table slot 的 row 推为 DefaultRow(=Record<string, any>);
-               实际数据是 MenuRow[](:data="tree"),这里 inline 收敛到 MenuRow,
-               避免把函数签名放宽到 Record<string, any>。 -->
-          <el-button size="small" type="primary" link @click="openCreate(row as MenuRow)">新增子菜单</el-button>
-          <el-button size="small" type="primary" link @click="openEdit(row as MenuRow)">编辑</el-button>
-          <el-button size="small" type="danger" link @click="onDelete(row as MenuRow)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <section class="surface-card menu-card">
+      <el-table v-loading="loading" :data="tree" row-key="id"
+        :tree-props="{ children: 'children', hasChildren: 'children.length > 0' }" :default-expand-all="true"
+        class="menu-table">
+        <el-table-column prop="name" label="菜单标题" min-width="180" />
+        <el-table-column prop="component" label="组件" min-width="180" />
+        <el-table-column prop="uri" label="路由" min-width="160" />
+        <el-table-column v-if="wide" prop="view_path" label="视图路径" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="icon" label="图标" min-width="90">
+          <template #default="{ row }">
+            <span v-if="resolveIcon(row.icon)" class="menu-row-icon">
+              <el-icon>
+                <component :is="resolveIcon(row.icon)" />
+              </el-icon>
+              <span class="menu-row-icon__name">{{ row.icon }}</span>
+            </span>
+            <span v-else class="dim">{{ row.icon || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="sort" label="排序" width="80" align="center" />
+        <el-table-column label="公开" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.public" type="success" size="small">是</el-tag>
+            <span v-else class="dim">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="隐藏" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.hidden" type="info" size="small">是</el-tag>
+            <span v-else class="dim">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="wide" prop="description" label="备注" min-width="160" show-overflow-tooltip />
+        <el-table-column label="操作" width="200" fixed="right" align="center">
+          <template #default="{ row }">
+            <!-- el-table slot 的 row 推为 DefaultRow(=Record<string, any>);
+                 实际数据是 MenuRow[](:data="tree"),这里 inline 收敛到 MenuRow,
+                 避免把函数签名放宽到 Record<string, any>。 -->
+            <el-button size="small" type="primary" link @click="openCreate(row as MenuRow)">新增子菜单</el-button>
+            <el-button size="small" type="primary" link @click="openEdit(row as MenuRow)">编辑</el-button>
+            <el-button size="small" type="danger" link @click="onDelete(row as MenuRow)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
 
     <el-dialog v-model="dialogVisible" draggable :title="dialogMode === 'create' ? '新增菜单' : '编辑菜单'"
       width="min(640px, 92vw)"
@@ -281,30 +289,12 @@ async function onDelete(row: MenuRow) {
         </el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageShell>
 </template>
 
 <style scoped>
-.menu-page {
-  padding: 16px;
-}
-
-.menu-page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.menu-page__header h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.menu-page__actions {
-  display: flex;
-  gap: 8px;
+.menu-card {
+  overflow: hidden;
 }
 
 .menu-table {
@@ -326,7 +316,7 @@ async function onDelete(row: MenuRow) {
 }
 
 .menu-row-icon__name {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--el-text-color-secondary);
 }
 </style>

@@ -16,27 +16,30 @@
   --el-fill-color-lighter: rgba(255, 255, 255, 0.32);
   --el-fill-color-extra-light: rgba(255, 255, 255, 0.18);
 
-  --el-border-color: rgba(30, 90, 90, 0.12);
-  --el-border-color-light: rgba(30, 90, 90, 0.08);
-  --el-border-color-lighter: rgba(30, 90, 90, 0.05);
+  --el-border-color: rgba(30, 90, 90, 0.14);
+  --el-border-color-light: rgba(30, 90, 90, 0.1);
+  --el-border-color-lighter: rgba(30, 90, 90, 0.06);
 
   --el-text-color-primary: #1e3a3a;
-  --el-text-color-regular: #284542;
-  --el-text-color-secondary: #3a5a58;
+  --el-text-color-regular: #3a5a58;
+  --el-text-color-secondary: #5a7673;
   --el-text-color-placeholder: #6b8a88;
 
-  /* B2 主色 = 薄荷 */
-  --el-color-primary: #6cc5a8;
-  --el-color-primary-light-3: #8fd3bd;
-  --el-color-primary-light-5: #b3e1d0;
-  --el-color-primary-light-7: #d2ede1;
-  --el-color-primary-light-9: #ecf7f2;
-  --el-color-primary-dark-2: #4f9a82;
+  /* 主色 = 深薄荷。浅薄荷 #6cc5a8 在白底只有约 2:1 对比度,
+     继续作为文字/标签色会不可读;浅色只保留给装饰和淡染底色。 */
+  --el-color-primary: #2f7d63;
+  --el-color-primary-light-3: #6aa791;
+  --el-color-primary-light-5: #97c4b4;
+  --el-color-primary-light-7: #c3dfd6;
+  --el-color-primary-light-8: #d9ebe5;
+  --el-color-primary-light-9: #eef7f3;
+  --el-color-primary-dark-2: #245f4c;
 
-  --el-color-success: #6cc5a8;
-  --el-color-warning: #b8791f;
+  /* 状态色与主色分开,避免“成功”和“主操作”看起来是同一件事。 */
+  --el-color-success: #2e7d32;
+  --el-color-warning: #9a6516;
   --el-color-danger: #c0392b;
-  --el-color-info: #9b85c4;
+  --el-color-info: #4f6f8f;
 
   --el-box-shadow: 0 8px 32px rgba(30, 90, 90, 0.12);
   --el-box-shadow-light: 0 2px 12px rgba(30, 90, 90, 0.08);
@@ -78,9 +81,9 @@
    (数量多,逐个模糊成本远超收益;视觉上与卡片玻璃底几乎无差) */
 .el-input__wrapper,
 .el-select__wrapper {
-  background: var(--glass) !important;
-  border: 1px solid var(--glass-border) !important;
-  box-shadow: 0 4px 16px var(--shadow-soft) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 1px 2px var(--line-soft) !important;
 }
 
 .el-button,
@@ -185,6 +188,43 @@
   color: var(--ink-2) !important;
 }
 
+/* —— Tag:浅底深字,避免“浅薄荷字 + 白底”看不清 —— */
+.el-tag {
+  color: var(--ink-2) !important;
+  background: var(--surface-soft) !important;
+  border-color: var(--line) !important;
+}
+
+.el-tag--primary {
+  color: var(--acc-mint-deeper) !important;
+  background: var(--menu-active-tint) !important;
+  border-color: rgba(47, 125, 99, 0.24) !important;
+}
+
+.el-tag--success {
+  color: #1f6b45 !important;
+  background: rgba(46, 125, 50, 0.1) !important;
+  border-color: rgba(46, 125, 50, 0.22) !important;
+}
+
+.el-tag--warning {
+  color: #7a4d0f !important;
+  background: rgba(154, 101, 22, 0.1) !important;
+  border-color: rgba(154, 101, 22, 0.22) !important;
+}
+
+.el-tag--danger {
+  color: #9e2f24 !important;
+  background: rgba(192, 57, 43, 0.09) !important;
+  border-color: rgba(192, 57, 43, 0.2) !important;
+}
+
+.el-tag--info {
+  color: #3f5f7f !important;
+  background: rgba(79, 111, 143, 0.1) !important;
+  border-color: rgba(79, 111, 143, 0.22) !important;
+}
+
 /* —— 弹窗 / 抽屉(overlay 浮层,teleport 到 body,需全局覆盖) ————————— */
 .el-overlay {
   background: rgba(30, 60, 60, 0.28) !important;
@@ -266,6 +306,23 @@
   background: transparent !important;
   color: var(--ink-2) !important;
   font-family: var(--body) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* rest-ui 的 .schema-page-grid td 默认 .82rem(13.12px),脱离应用字号尺度;
+   统一到 13px 的紧凑档,表头保持 14px/600 的层级。 */
+.schema-page-grid td.el-table__cell {
+  font-size: var(--fs-sm);
+}
+
+/* rest-ui 内部还有 .8rem(12.8px)的零散字号,统一到 12px 档。 */
+.schema-form .el-upload-dragger,
+.mobile-preview-row {
+  font-size: var(--fs-xs);
+}
+
+.el-pagination {
+  font-variant-numeric: tabular-nums;
 }
 
 .el-table::before,
@@ -274,19 +331,34 @@
 }
 
 .el-table__header-wrapper th.el-table__cell {
-  background: var(--glass-soft) !important;
+  background: var(--surface-soft) !important;
   color: var(--ink) !important;
   font-weight: 600 !important;
-  border-bottom: 1px solid var(--glass-border) !important;
+  border-bottom: 1px solid var(--line) !important;
 }
 
 .el-table__row td.el-table__cell {
   background: transparent;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .el-table__row:hover>td.el-table__cell {
-  background: var(--glass-soft) !important;
+  background: var(--surface-soft) !important;
+}
+
+/* 固定列必须不透明:半透明表头会让下层滚动列的文字透出来,
+   视觉上像两列文字叠在一起。 */
+.el-table .el-table-fixed-column--right {
+  background: var(--surface) !important;
+  box-shadow: inset 1px 0 0 var(--line-soft) !important;
+}
+
+.el-table__header-wrapper th.el-table-fixed-column--right {
+  background: var(--surface-soft) !important;
+}
+
+.el-table__row:hover>td.el-table-fixed-column--right {
+  background: var(--surface-soft) !important;
 }
 
 .el-table--border .el-table__cell,
@@ -317,7 +389,7 @@
 }
 
 .el-tabs__item.is-active {
-  color: var(--acc-mint) !important;
+  color: var(--acc-mint-deep) !important;
   font-weight: 600 !important;
 }
 
@@ -436,7 +508,7 @@
 }
 
 .el-loading-spinner .path {
-  stroke: var(--acc-mint) !important;
+  stroke: var(--acc-mint-deep) !important;
 }
 
 .el-loading-spinner .el-loading-text {
@@ -457,7 +529,7 @@
 
 .el-date-table td.available:hover,
 .el-date-table td.today span {
-  color: var(--acc-mint) !important;
+  color: var(--acc-mint-deep) !important;
 }
 
 .el-date-table td.current:not(.disabled) span {
@@ -505,7 +577,7 @@
 }
 
 .el-progress-bar__inner {
-  background: var(--acc-mint) !important;
+  background: var(--acc-mint-deep) !important;
 }
 
 /* —— Alert ————————— */
@@ -605,7 +677,7 @@
 
 .el-step__title.is-process,
 .el-step__title.is-finish {
-  color: var(--acc-mint) !important;
+  color: var(--acc-mint-deep) !important;
 }
 
 .el-step__description {
@@ -638,7 +710,7 @@
   --su-text-color-primary: var(--ink);
   --su-text-color-muted: var(--ink-2);
   --su-placeholder-text-color: var(--el-text-color-placeholder);
-  --su-placeholder-text-size: 0.75rem;
+  --su-placeholder-text-size: var(--fs-xs);
   --su-form-control-border-color: var(--el-border-color);
   --su-text-color-available: var(--acc-mint-deep);
   --su-text-color-link: var(--acc-mint-deep);
@@ -660,15 +732,13 @@
   letter-spacing: -0.01em;
 }
 
-/* 主体卡片玻璃化:rest-ui 只给了 background-color(--su-bg 在本主题
-   下是透明的),这里补齐毛玻璃/边框/圆角/阴影,与 chrome 的玻璃卡同质 */
+/* 主体卡片用近实色纸面:玻璃只做 chrome,数据表/表单不再压在大面积
+   backdrop-filter 上——可读性、滚动性能都更稳。 */
 .schema-page-body {
-  background: var(--glass);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-lg);
-  box-shadow: 0 4px 16px var(--shadow-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 30px var(--shadow-soft);
 }
 
 /* 搜索表单的 textarea 硬编码 #f2f3f5 灰底 + 0.8s 慢过渡,改玻璃 + 常规速度 */

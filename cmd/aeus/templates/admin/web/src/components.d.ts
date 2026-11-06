@@ -44,6 +44,8 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTree: typeof import('element-plus/es')['ElTree']
     IconPicker: typeof import('./components/widgets/IconPicker.vue')['default']
+    PageHeader: typeof import('./components/layout/PageHeader.vue')['default']
+    PageShell: typeof import('./components/layout/PageShell.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

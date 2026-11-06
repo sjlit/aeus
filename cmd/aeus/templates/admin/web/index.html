@@ -34,9 +34,11 @@
       50%      { opacity: 1;   transform: scale(1.1); }
     }
   </style>
+  <!-- 运行时品牌配置：构建后可直接修改 dist/app-config.js，无需重新构建。 -->
+  <script src="/app-config.js"></script>
 </head>
 <body>
-  <div id="app"><div class="boot">aeus</div></div>
+  <div id="app"><div class="boot">__AEUS_NAME__</div></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

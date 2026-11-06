@@ -83,17 +83,17 @@ function onCommand(cmd: string) {
     place-items: center;
     color: white;
     font-weight: 600;
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     flex-shrink: 0;
 }
 
 .um-name {
-    font-size: 13px;
+    font-size: var(--fs-sm);
     font-weight: 600;
 }
 
 .um-arrow {
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
 }
 </style>

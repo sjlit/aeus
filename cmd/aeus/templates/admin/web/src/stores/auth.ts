@@ -6,6 +6,8 @@ import {
 } from '../api/user'
 import { safeGetString, safeRemove, safeSetString } from '../utils/storage'
 import { useMenuStore } from './menu'
+import { useTabsStore } from './tabs'
+import { useWorkspaceStore } from './workspace'
 import type { LoginResponse, UserProfile } from '../types'
 
 const LS_ACCESS = 'aeus.access'
@@ -43,10 +45,23 @@ export const useAuthStore = defineStore('auth', {
       this.accessToken = resp.access_token
       this.refreshToken = resp.refresh_token
       this.profile = resp
+      // 换用户时先丢掉上一位用户的资料;profile(LoginResponse)没有 role/email 等字段,
+      // 工作台/Topbar 需要 userProfile 才能显示完整信息。
+      this.userProfile = null
       safeSetString(LS_ACCESS, resp.access_token)
       safeSetString(LS_REFRESH, resp.refresh_token)
       // 换用户后菜单可能不同:清空菜单缓存,路由守卫会在首次导航时重新拉取
       useMenuStore().$reset()
+      // 旧账号的多标签与访问历史不能带到新会话里。
+      useTabsStore().clearTabs()
+      useWorkspaceStore().clear()
+      // 登录响应只带 uid/username/tenant,role/email/avatar 要等 profile。
+      // 失败不阻断登录(http 拦截器已 toast),页面仍可用 LoginResponse 的字段。
+      try {
+        await this.fetchProfile()
+      } catch {
+        // 保持 userProfile=null,由后续页面按需重试。
+      }
     },
     // 只更新 token —— RefreshTokenResponse 不含 username/tenant,绝不能覆盖 profile。
     // refresh_token 是轮换语义:旧值已被服务端吊销,必须持久化新值。
@@ -91,6 +106,8 @@ export const useAuthStore = defineStore('auth', {
       this.userProfile = null
       safeRemove(LS_ACCESS)
       safeRemove(LS_REFRESH)
+      useTabsStore().clearTabs()
+      useWorkspaceStore().clear()
       try {
         if (accessToken || refreshToken)
           await apiLogout(accessToken ?? undefined, refreshToken ?? undefined)

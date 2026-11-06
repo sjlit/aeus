@@ -4,6 +4,7 @@ import {
   buildTree,
   flattenMenu,
   groupBySection,
+  groupTitlesByUri,
   sectionize,
   type MenuFlat,
   type Section,
@@ -37,6 +38,17 @@ export const useMenuStore = defineStore('menu', {
      *  索引共享"seen / 出现顺序"的语义。 */
     sectionsByUri(): Map<string, string> {
       return sectionize(this.sections)
+    },
+    /** uri → 最近一级容器标题(用户中心/日志记录/系统设置…)。
+     *  工作台的“继续工作/常用入口”用它显示更具体的归属;
+     *  没有容器归属的孤儿节点回退到顶层节名。 */
+    groupTitlesByUri(state): Map<string, string> {
+      const out = groupTitlesByUri(state.tree)
+      const sections = sectionize(groupBySection(state.tree))
+      for (const uri of flattenMenu(state.tree).uris) {
+        if (!out.has(uri)) out.set(uri, sections.get(uri) ?? '')
+      }
+      return out
     },
   },
   actions: {

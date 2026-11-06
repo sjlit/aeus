@@ -19,6 +19,13 @@ import '@sjlit/rest-ui/dist/style.css'
 // +32 KB raw / +32 KB gzip),换来所有弹层/动画/toast/loading 不再缺样式。
 import 'element-plus/dist/index.css'
 import './styles/app.scss'
+import { brand } from './config/brand'
+
+// 品牌名来自 public/app-config.js；模块脚本在 HTML 解析后执行，
+// 此时配置已加载、.boot 占位也已在 DOM 中。
+document.title = brand.name
+const boot = document.querySelector<HTMLElement>('.boot')
+if (boot) boot.textContent = brand.name
 
 const app = createApp(App)
 const pinia = createPinia()

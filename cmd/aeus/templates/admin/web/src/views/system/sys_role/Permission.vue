@@ -7,6 +7,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import type { ElTree } from 'element-plus'
+import PageHeader from '@/components/layout/PageHeader.vue'
+import PageShell from '@/components/layout/PageShell.vue'
 import {
   fetchRolePermissions,
   replaceRolePermissions,
@@ -226,18 +228,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 </script>
 
 <template>
-  <div class="page role-perm-page" v-loading="loading">
-    <header class="page-head glass">
-      <div class="head-meta">
-        <h2 class="head-title">角色权限配置</h2>
-        <p class="head-sub">
-          当前角色:
-          <code class="role-key">{{ roleKey || '—' }}</code>
-        </p>
-      </div>
-    </header>
+  <PageShell narrow v-loading="loading">
+    <PageHeader title="角色权限配置">
+      <template #description>
+        当前角色:
+        <code class="role-key">{{ roleKey || '—' }}</code>
+      </template>
+    </PageHeader>
 
-    <section class="glass tabs-card">
+    <section class="surface-card tabs-card">
       <el-tabs v-model="activeTab" class="role-perm-tabs">
         <!-- ── Tab 1:菜单配置 ─────────────────────────── -->
         <el-tab-pane name="menus">
@@ -289,42 +288,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         </el-tab-pane>
       </el-tabs>
     </section>
-  </div>
+  </PageShell>
 </template>
 
 <style scoped>
-.role-perm-page {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 8px 4px 24px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.page-head {
-  padding: 18px 22px;
-  border-radius: var(--r-md);
-}
-
-.head-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  font-family: var(--display);
-  color: var(--ink);
-}
-
-.head-sub {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
 .role-key {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--glass-soft);
@@ -343,7 +313,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 .tab-label {
   display: inline-flex;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .menu-tree {
@@ -356,7 +326,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   padding: 8px 0;
   max-height: 60vh;
   overflow: auto;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .tab-actions {

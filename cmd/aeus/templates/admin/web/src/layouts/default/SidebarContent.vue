@@ -21,6 +21,7 @@ import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
 import { isSectionContainer, shouldRenderAsSubMenu } from '@/stores/menuGroups'
+import { brand } from '@/config/brand'
 import type { MenuNode } from '@/types'
 import { resolveIcon } from '@/utils/icons'
 
@@ -57,7 +58,7 @@ watch(defaultOpeneds, async (openeds) => {
 </script>
 
 <template>
-    <div class="brand text-gradient"><span class="brand-name">aeus</span></div>
+    <div class="brand text-gradient" :data-mark="brand.mark"><span class="brand-name">{{ brand.name }}</span></div>
     <div class="nav-scroll">
         <div v-for="section in menu.sections" :key="section.name" class="nav-section">
             <div class="nav-section-title">{{ section.name }}</div>
@@ -65,9 +66,9 @@ watch(defaultOpeneds, async (openeds) => {
                 class="nav-group-label">
                 {{ node.name }}
             </div>
-            <el-menu ref="menuRef" class="nav-menu" :default-active="route.path"
-                :default-openeds="defaultOpeneds" :router="true" :collapse="ui.sidebarCollapsed"
-                background-color="transparent" text-color="var(--sidebar-ink)" active-text-color="var(--ink)">
+            <el-menu ref="menuRef" class="nav-menu" :default-active="route.path" :default-openeds="defaultOpeneds"
+                :router="true" :collapse="ui.sidebarCollapsed" background-color="transparent"
+                text-color="var(--sidebar-ink)" active-text-color="var(--ink)">
                 <template v-for="node in section.items" :key="node.uri || node.view_path || node.name">
                     <!-- Section container:
                          - 容器名 ≠ 节名 → 渲染为 el-sub-menu(显示容器自身标题,呈现层级);

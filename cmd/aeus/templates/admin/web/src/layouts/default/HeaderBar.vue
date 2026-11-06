@@ -79,6 +79,12 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
         </button>
 
         <div class="cluster right">
+            <button v-if="isMobile" class="icon-btn search-mobile" type="button" aria-label="搜索菜单"
+                title="搜索菜单" @click="ui.openPalette()">
+                <el-icon>
+                    <Search />
+                </el-icon>
+            </button>
             <UserMenu />
         </div>
     </div>
@@ -121,7 +127,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     place-items: center;
     cursor: pointer;
     color: var(--ink-2);
-    font-size: 16px;
+    font-size: var(--fs-md);
     padding: 0;
     font-family: inherit;
     transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -147,7 +153,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     overflow: hidden;
     white-space: nowrap;
     /* 面包屑是中文标题,mono 无 CJK 字形会回落系统字体,统一走正文家族 */
-    font-size: 13px;
+    font-size: var(--fs-sm);
     letter-spacing: 0.02em;
 }
 
@@ -190,7 +196,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
     justify-self: center;
     color: var(--ink-2);
     font-family: inherit;
-    font-size: 13.5px;
+    font-size: var(--fs-base);
     letter-spacing: 0.02em;
     text-align: left;
     cursor: pointer;
@@ -233,7 +239,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 
 .s-kbd {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
     background: var(--glass);
     border: 1px solid var(--glass-border);

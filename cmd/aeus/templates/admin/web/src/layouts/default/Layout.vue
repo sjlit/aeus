@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
@@ -15,6 +15,23 @@ const ui = useUiStore()
 const route = useRoute()
 const tabs = useTabsStore()
 const isMobile = useMediaQuery('(max-width: 768px)')
+
+// el-main 是唯一的滚动容器:按 tab path 记忆位置,切回来时恢复,
+// 新页面则从顶部开始,避免继承上一个页面的滚动深度。
+const mainRef = ref<{ $el?: HTMLElement } | null>(null)
+const scrollByPath = new Map<string, number>()
+
+watch(
+  () => route.path,
+  (to, from) => {
+    const el = mainRef.value?.$el
+    if (!el) return
+    if (from) scrollByPath.set(from, el.scrollTop)
+    nextTick(() => {
+      el.scrollTop = scrollByPath.get(to) ?? 0
+    })
+  },
+)
 
 // 路由切换时关掉抽屉,避免"点了菜单但抽屉还盖在内容上"
 watch(
@@ -55,7 +72,7 @@ watch(isMobile, (now) => {
                 <TabStrip />
             </el-header>
 
-            <el-main>
+            <el-main ref="mainRef">
                 <router-view v-slot="{ Component, route: r }">
                     <!-- Transition 包 keep-alive,模式 out-in 让离场先于入场;
                          page-* 过渡四件套在 motion.scss 定义 -->

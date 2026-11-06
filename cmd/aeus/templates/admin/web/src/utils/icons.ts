@@ -112,6 +112,31 @@ const ICONS: Record<string, Component> = {
   View, WarningFilled, WarnTriangleFilled, ZoomIn, ZoomOut,
 }
 
+/** 服务端菜单的叶子节点通常不单独配 icon(icon 只配在 section 容器上)。
+ *  工作台/标签页需要给每个叶子一个可识别的图标,这里按模型 component 兜底;
+ *  新增 built-in 模块时只改这一张表。 */
+const COMPONENT_ICON_FALLBACK: Record<string, string> = {
+  SystemSysUsers: 'User',
+  SystemSysRoles: 'UserFilled',
+  SystemSysDepartments: 'OfficeBuilding',
+  SystemSysRolePermissions: 'Key',
+  SystemSysPermissions: 'Key',
+  SystemSysMenus: 'Menu',
+  SystemSysAudits: 'Tickets',
+  SystemSysLoginLogs: 'Tickets',
+  SystemSysTenants: 'OfficeBuilding',
+}
+
+/** 菜单图标名:优先用服务端配置,缺失时按 component 兜底。 */
+export function menuIconName(
+  icon: string | undefined,
+  component: string | undefined,
+): string {
+  if (icon) return icon
+  if (!component) return ''
+  return COMPONENT_ICON_FALLBACK[component] ?? ''
+}
+
 const iconCache = new Map<string, Component | null>()
 
 export function resolveIcon(name: string | undefined): Component | null {

@@ -392,7 +392,7 @@ function done(): void {
 }
 
 .ip-cell__label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -406,7 +406,7 @@ function done(): void {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--el-border-color-lighter);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--el-text-color-secondary);
 }
 

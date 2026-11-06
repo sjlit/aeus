@@ -7,6 +7,7 @@ import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
+import { brand } from '@/config/brand'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -54,8 +55,8 @@ async function submit() {
   <div class="login-screen">
     <div class="glass login-card">
       <div class="brand-row">
-        <div class="brand-mark">A</div>
-        <div class="brand-name text-gradient">aeus</div>
+        <div class="brand-mark">{{ brand.mark }}</div>
+        <div class="brand-name text-gradient">{{ brand.name }}</div>
       </div>
 
       <h1>欢迎回来</h1>
@@ -63,10 +64,12 @@ async function submit() {
       <!-- 提交只走 form submit:输入框回车与按钮点击都由原生 submit 触发 -->
       <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="submit">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" autofocus size="large" />
+          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" autofocus size="large"
+            autocomplete="username" />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" show-password placeholder="密码" :prefix-icon="Lock" size="large" />
+          <el-input v-model="form.password" type="password" show-password placeholder="密码" :prefix-icon="Lock" size="large"
+            autocomplete="current-password" />
         </el-form-item>
 
         <el-button type="primary" size="large" native-type="submit" :loading="loading">
@@ -141,22 +144,23 @@ async function submit() {
   place-items: center;
   color: white;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--fs-base);
   box-shadow: 0 4px 12px rgba(108, 197, 168, 0.4);
 }
 
 .brand-name {
   font-family: var(--display);
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  /* 品牌名可配置为中文,不使用负字距。 */
+  letter-spacing: 0;
 }
 
 h1 {
   font-family: var(--display);
-  font-size: 30px;
+  font-size: var(--fs-2xl);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   margin-bottom: 24px;
   position: relative;
 }
@@ -197,7 +201,7 @@ h1 {
   width: 100%;
   height: 48px;
   margin-top: 8px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   letter-spacing: 0.35em;
   text-indent: 0.35em;
   border-radius: var(--r-md);
@@ -207,7 +211,7 @@ h1 {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   letter-spacing: 0.04em;
   color: var(--ink-2);
   margin-top: 24px;

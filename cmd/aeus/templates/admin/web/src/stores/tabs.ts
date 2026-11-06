@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { Router } from 'vue-router'
-import { safeGet, safeSet } from '../utils/storage'
+import { safeGet, safeRemove, safeSet } from '../utils/storage'
 
 const TABS_KEY = 'aeus.app.tabs'
 const ACTIVE_TAB_KEY = 'aeus.app.activeTab'
@@ -53,9 +53,15 @@ export const useTabsStore = defineStore('tabs', () => {
       .filter((n): n is string => Boolean(n))
   })
 
-  // 持久化
-  watch(tabs, (v) => { safeSet(TABS_KEY, v) }, { deep: true })
-  watch(activeTab, (v) => { safeSet(ACTIVE_TAB_KEY, v) })
+  // 持久化:空态由 clearTabs 主动删 key,watcher 不再把 "[]" 写回去。
+  watch(tabs, (v) => {
+    if (v.length === 0) return
+    safeSet(TABS_KEY, v)
+  }, { deep: true })
+  watch(activeTab, (v) => {
+    if (!v) return
+    safeSet(ACTIVE_TAB_KEY, v)
+  })
 
   // Actions
   function addTab(tab: Tab) {
@@ -151,6 +157,16 @@ export const useTabsStore = defineStore('tabs', () => {
     }
   }
 
+  /** 登出/换用户时清空。tabs 是持久化的,不清会让下一个账号看到
+   *  上一个账号的页面标题,甚至点到已无权限的旧路由。 */
+  function clearTabs(): void {
+    tabs.value = []
+    activeTab.value = ''
+    refreshTokens.value = {}
+    safeRemove(TABS_KEY)
+    safeRemove(ACTIVE_TAB_KEY)
+  }
+
   /** 读取某个 path 的 refresh token,供 :key 计算使用。封装后不暴露内部 ref */
   function getRefreshToken(path: string): number {
     return refreshTokens.value[path] ?? 0
@@ -169,5 +185,6 @@ export const useTabsStore = defineStore('tabs', () => {
     removeAllTabs,
     setActiveTab,
     refreshTab,
+    clearTabs,
   }
 })

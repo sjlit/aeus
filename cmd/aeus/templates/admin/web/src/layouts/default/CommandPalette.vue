@@ -29,6 +29,8 @@ const query = ref('')
 const activeIdx = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
+/** 打开前的焦点,关闭后还回去;命令面板是模态层,不能把焦点丢在 body。 */
+let lastFocused: HTMLElement | null = null
 
 /** 全部可路由节点的扁平视图,从 menu 的预计算索引直接读,不重复 DFS。 */
 const items = computed<PaletteItem[]>(() => {
@@ -74,12 +76,26 @@ watch(results, () => {
 watch(
     () => ui.paletteOpen,
     (open) => {
-        if (!open) return
+        if (!open) {
+            document.body.style.overflow = ''
+            nextTick(() => lastFocused?.focus())
+            return
+        }
+        lastFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
         query.value = ''
         activeIdx.value = 0
+        document.body.style.overflow = 'hidden'
         nextTick(() => inputRef.value?.focus())
     },
 )
+
+/** 模态层内只有输入框可聚焦;Tab 不把焦点送到遮罩后的页面。 */
+function onOverlayKeydown(e: KeyboardEvent) {
+    if (e.key === 'Tab') {
+        e.preventDefault()
+        inputRef.value?.focus()
+    }
+}
 
 function select(item: PaletteItem) {
     ui.closePalette()
@@ -127,13 +143,16 @@ function onGlobalKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onGlobalKeydown)
+    document.body.style.overflow = ''
+})
 </script>
 
 <template>
     <teleport to="body">
         <div v-if="ui.paletteOpen" class="palette-overlay" role="dialog" aria-modal="true" aria-label="搜索菜单"
-            @click.self="ui.closePalette()">
+            @click.self="ui.closePalette()" @keydown="onOverlayKeydown">
             <div class="palette">
                 <div class="palette-head">
                     <el-icon class="p-icon">
@@ -208,7 +227,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 }
 
 .p-icon {
-    font-size: 16px;
+    font-size: var(--fs-md);
     color: var(--ink-3);
     flex-shrink: 0;
 }
@@ -220,7 +239,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
     outline: none;
     background: transparent;
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--fs-base);
     color: var(--ink);
 }
 
@@ -231,7 +250,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 .p-kbd,
 .palette-foot kbd {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
     background: var(--glass-soft);
     border: 1px solid var(--glass-border);
@@ -247,7 +266,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 }
 
 .palette-group {
-    font-size: 11px;
+    font-size: var(--fs-xs);
     font-weight: 600;
     letter-spacing: 0.05em;
     color: var(--ink-3);
@@ -261,7 +280,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
     padding: 9px 10px;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-2);
     transition: background 0.14s, color 0.14s;
 }
@@ -273,7 +292,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 }
 
 .p-item-icon {
-    font-size: 14px;
+    font-size: var(--fs-base);
     color: var(--ink-3);
     flex-shrink: 0;
 }
@@ -291,7 +310,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 .p-item-uri {
     margin-left: auto;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     color: var(--ink-3);
     opacity: 0.7;
     white-space: nowrap;
@@ -300,7 +319,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 .palette-empty {
     padding: 28px 16px;
     text-align: center;
-    font-size: 13px;
+    font-size: var(--fs-sm);
     color: var(--ink-3);
 }
 
@@ -309,7 +328,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
     gap: 16px;
     padding: 10px 16px;
     border-top: 1px dashed rgba(30, 90, 90, 0.15);
-    font-size: 11px;
+    font-size: var(--fs-xs);
     color: var(--ink-3);
 }
 
