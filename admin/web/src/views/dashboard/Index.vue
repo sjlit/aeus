@@ -124,13 +124,19 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
+// 问候语里的日期保留自然语言写法(带星期),和「更新于」这类时间戳
+// 语境区分开;日期与星期之间补一个空格,避免「11日星期三」挤在一起。
+// zh-CN 的 Intl 输出是「2026年11月11日星期三」(星期以「星期」开头),
+// 所以按「日 + 星期」这一段来切,而不是匹配「周」。
 const dateLine = computed(() =>
   new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     weekday: 'long',
-  }).format(now.value),
+  })
+    .format(now.value)
+    .replace(/日(?=星期)/, '日 '),
 )
 
 const displayName = computed(() =>
@@ -281,8 +287,10 @@ const kpis = computed<KpiCard[]>(() => {
       id: 'audits',
       label: '今日操作',
       value: auditsToday.value,
+      // formatRelativeTime 已经自带「3 分钟前」「昨天」这类后缀,
+      // 再加「最近」会拼出「最近 3 分钟前」这种重复读法。
       hint: latestAudit
-        ? `最近 ${formatRelativeTime(latestAudit.created_at * 1000, now.value.getTime())}`
+        ? formatRelativeTime(latestAudit.created_at * 1000, now.value.getTime())
         : '暂无操作',
       icon: Tickets,
       to: uriByComponent.value.get('SystemSysAudits') ?? '',
@@ -455,11 +463,16 @@ function viewAllAudits(): void {
 }
 
 .overview-meta {
+  /* 统计组的附属信息:贴在卡片网格下方,与网格左边缘对齐。
+     之前这行直接浮在页面背景上,读起来像一句孤立的说明文字,
+     不知道属于上面哪组数字 —— 现在用左竖线把它和 stat-grid 绑在一起。 */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 2px;
+  margin-top: -2px;
+  padding: 0 2px 0 12px;
+  border-left: 2px solid var(--line);
   font-size: var(--fs-xs);
   color: var(--ink-3);
 }

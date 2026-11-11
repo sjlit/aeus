@@ -223,7 +223,10 @@
 }
 
 // ---- 减少动效偏好 ----
-// 系统级 / 用户级 prefers-reduced-motion: reduce 时,关掉本页所有编排动画
+// 系统级 / 用户级 prefers-reduced-motion: reduce 时,关掉本页所有编排动画。
+// 命令面板的开合动画(overlay-in / palette-in)与登录页的状态呼吸灯
+// 也在此覆盖:它们是组件内的 scoped 动画,不会被下面的工具类规则命中。
+// 一律用 !important —— 组件 scoped 样式带属性选择器,优先级高于这里的类选择器。
 @media (prefers-reduced-motion: reduce) {
 
   .rise-in,
@@ -234,7 +237,20 @@
     animation: none !important;
     transition: none !important;
   }
-}// =========================================================
+
+  /* 命令面板:遮罩淡入与面板上浮 */
+  .palette-overlay,
+  .palette {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* 登录页状态指示灯的呼吸效果 */
+  .live {
+    animation: none !important;
+  }
+}
+// =========================================================
 // texture · 噪点 + 点阵纹理工具
 // 给玻璃面、卡片、空状态加一点"纸感/触感",避免大面积纯色塑料感;
 // ⚠️ 不要挂在 body 上(body::before 已被极光渐变占用),

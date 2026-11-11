@@ -201,8 +201,10 @@ onBeforeUnmount(() => {
     -webkit-backdrop-filter: blur(4px);
     display: grid;
     justify-items: center;
-    align-items: start;
-    padding: 14vh 16px 16px;
+    /* 面板垂直居中:之前用 align-items:start + 14vh 顶对齐,
+       结果项不多时面板悬在上方、下方空出一大片,视觉上失重。 */
+    align-items: center;
+    padding: 16px;
     animation: overlay-in 0.16s ease;
 }
 
@@ -274,10 +276,11 @@ onBeforeUnmount(() => {
 }
 
 .palette-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 10px;
+    padding: 9px 10px 9px 14px;
     border-radius: 10px;
     cursor: pointer;
     font-size: var(--fs-sm);
@@ -285,10 +288,25 @@ onBeforeUnmount(() => {
     transition: background 0.14s, color 0.14s;
 }
 
+/* 选中态:薄荷淡染底 + 左侧竖条,与侧栏的"静默高亮"同一套语言。
+   之前用 --glass-soft(半透明白)叠在同色面板上,合成后与未选中行
+   的像素差只有 1.07:1,肉眼几乎看不出当前选中的是哪一项。 */
 .palette-item.is-active {
-    background: var(--glass-soft);
+    background: var(--menu-active-tint);
     color: var(--ink);
     font-weight: 600;
+}
+
+.palette-item.is-active::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--acc-mint-deep);
 }
 
 .p-item-icon {
@@ -311,8 +329,10 @@ onBeforeUnmount(() => {
     margin-left: auto;
     font-family: var(--mono);
     font-size: var(--fs-2xs);
+    /* 用颜色而非 opacity 做视觉降级:opacity 会把对比度一起压下去
+       (ink-3 @0.7 叠在面板上只剩 2.68:1,低于 AA 的 4.5:1),
+       而这行路径是可读信息,不能看不清。 */
     color: var(--ink-3);
-    opacity: 0.7;
     white-space: nowrap;
 }
 

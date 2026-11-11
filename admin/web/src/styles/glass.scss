@@ -35,11 +35,51 @@
   --el-color-primary-light-9: #eef7f3;
   --el-color-primary-dark-2: #245f4c;
 
-  /* 状态色与主色分开,避免“成功”和“主操作”看起来是同一件事。 */
-  --el-color-success: #2e7d32;
+  /* 状态色与主色分开,避免“成功”和“主操作”看起来是同一件事。
+     success 从 EP 默认的 #2e7d32(纯正绿,hue 123)挪到暖橄榄绿 #48793c
+     (hue 108):落在 warning(36)与薄荷主色(160)之间的自然色阶上,
+     与薄荷仍明确可区分(不会被误读成主操作),但不再像另一套系统。
+     改后对白底 5.15:1,仍过 AA。
+
+     ↓ light-N / dark-2 / rgb 一并覆盖:EP 把这些派生值编译成了字面值
+     (light-N = 基色与白色按 N/10 混合),只改基色的话,EP 内部仍会
+     用旧的 EP 默认绿渲染 success 的浅底/禁用态,和新的基色对不上。
+     下面的值按同一条混合规则从本页基色重算。 */
+  --el-color-success: #48793c;
+  --el-color-success-light-3: #7fa176;
+  --el-color-success-light-5: #a4bc9e;
+  --el-color-success-light-7: #c8d7c4;
+  --el-color-success-light-8: #dae4d8;
+  --el-color-success-light-9: #edf2ec;
+  --el-color-success-dark-2: #3a6130;
+  --el-color-success-rgb: 72, 121, 60;
+
   --el-color-warning: #9a6516;
+  --el-color-warning-light-3: #b8935c;
+  --el-color-warning-light-5: #ccb28a;
+  --el-color-warning-light-7: #e1d1b9;
+  --el-color-warning-light-8: #ebe0d0;
+  --el-color-warning-light-9: #f5f0e8;
+  --el-color-warning-dark-2: #7b5112;
+  --el-color-warning-rgb: 154, 101, 22;
+
   --el-color-danger: #c0392b;
+  --el-color-danger-light-3: #d3746b;
+  --el-color-danger-light-5: #e09c95;
+  --el-color-danger-light-7: #ecc4bf;
+  --el-color-danger-light-8: #f2d7d5;
+  --el-color-danger-light-9: #f9ebea;
+  --el-color-danger-dark-2: #9a2e22;
+  --el-color-danger-rgb: 192, 57, 43;
+
   --el-color-info: #4f6f8f;
+  --el-color-info-light-3: #849ab1;
+  --el-color-info-light-5: #a7b7c7;
+  --el-color-info-light-7: #cad4dd;
+  --el-color-info-light-8: #dce2e9;
+  --el-color-info-light-9: #edf1f4;
+  --el-color-info-dark-2: #3f5972;
+  --el-color-info-rgb: 79, 111, 143;
 
   --el-box-shadow: 0 8px 32px rgba(30, 90, 90, 0.12);
   --el-box-shadow-light: 0 2px 12px rgba(30, 90, 90, 0.08);
@@ -151,10 +191,19 @@
   border-radius: var(--r-sm);
   font-weight: 500;
   transition: all 0.2s;
+
+  /* 焦点描边:EP 默认取 --el-color-primary-light-5(#97c4b4),对白底只有
+     1.93:1,达不到 WCAG 2.2 SC 2.4.11 对焦点指示器的 3:1 要求。
+     EP 在 .el-button / .el-button--primary 自身上重声明了这个变量,
+     :root 的覆盖无效,必须在这里直接改指 --el-color-primary(4.96:1)。 */
+  --el-button-outline-color: var(--el-color-primary);
 }
 
+/* 悬停不再位移:按钮并排时 1px 的 translateY 会让整排按钮在 hover 时
+   轻微抖动,且按钮看起来像要从卡片上"跳起来"。
+   改用背景/边框色变化表达 hover,位移留给 .pressable 这类明确按压反馈。 */
 .el-button:hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 /* primary 实色深薄荷:白字对比度 4.9:1 过 AA;
@@ -188,7 +237,9 @@
   color: var(--ink-2) !important;
 }
 
-/* —— Tag:浅底深字,避免“浅薄荷字 + 白底”看不清 —— */
+/* —— Tag:浅底深字,避免"浅薄荷字 + 白底"看不清 ——
+   语义色的底/描边由对应 light-9 / light-8 派生色给出,
+   换语义色时只改 :root 一处,这里不用同步维护。 */
 .el-tag {
   color: var(--ink-2) !important;
   background: var(--surface-soft) !important;
@@ -202,27 +253,27 @@
 }
 
 .el-tag--success {
-  color: #1f6b45 !important;
-  background: rgba(46, 125, 50, 0.1) !important;
-  border-color: rgba(46, 125, 50, 0.22) !important;
+  color: #375c2f !important;
+  background: var(--el-color-success-light-9) !important;
+  border-color: var(--el-color-success-light-7) !important;
 }
 
 .el-tag--warning {
   color: #7a4d0f !important;
-  background: rgba(154, 101, 22, 0.1) !important;
-  border-color: rgba(154, 101, 22, 0.22) !important;
+  background: var(--el-color-warning-light-9) !important;
+  border-color: var(--el-color-warning-light-7) !important;
 }
 
 .el-tag--danger {
   color: #9e2f24 !important;
-  background: rgba(192, 57, 43, 0.09) !important;
-  border-color: rgba(192, 57, 43, 0.2) !important;
+  background: var(--el-color-danger-light-9) !important;
+  border-color: var(--el-color-danger-light-7) !important;
 }
 
 .el-tag--info {
   color: #3f5f7f !important;
-  background: rgba(79, 111, 143, 0.1) !important;
-  border-color: rgba(79, 111, 143, 0.22) !important;
+  background: var(--el-color-info-light-9) !important;
+  border-color: var(--el-color-info-light-7) !important;
 }
 
 /* —— 弹窗 / 抽屉(overlay 浮层,teleport 到 body,需全局覆盖) ————————— */

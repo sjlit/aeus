@@ -191,10 +191,25 @@ body {
       }
     }
 
-    // 文件夹右侧的小箭头:小一号 + 弱化
-    .el-sub-menu__icon-arrow {
-      font-size: var(--fs-2xs);
-      color: var(--ink-3);
+    // 文件夹右侧的小箭头:小一号 + 弱化。
+    // EP 把箭头绝对定位在菜单项最右端(right: var(--el-menu-base-level-padding)),
+    // 和标签之间隔出七八十字的空白,读起来像两个不相干的元素。
+    // 这里改成相对定位、紧跟标签,让「图标 + 名称 + 箭头」成组;
+    // 同时去掉 EP 给标题预留的右侧内边距(那段 padding 本来就是给绝对定位的箭头让位的)。
+    .el-sub-menu__title {
+      padding-right: 0;
+
+      .el-sub-menu__icon-arrow {
+        position: relative;
+        right: auto;
+        top: auto;
+        margin-top: 0;
+        margin-right: 0;
+        margin-left: 6px;
+        font-size: var(--fs-2xs);
+        color: var(--ink-3);
+        flex-shrink: 0;
+      }
     }
 
     // 二级菜单的子项:缩进更深 + 字号更小,和顶层拉开层级
@@ -295,9 +310,14 @@ body {
 
 
 .topbar {
-  // 整张玻璃卡片:与 sidebar 视觉对称,sticky 留 12px 顶部边距
-  position: sticky;
-  top: 12px;
+  // 整张玻璃卡片:与 sidebar 视觉对称,顶部留 12px 边距。
+  //
+  // 这里不能用 position: sticky —— el-main 才是唯一的滚动容器
+  // (overflow-y:auto),而 topbar 是 el-main 的兄弟节点、不是它的子节点,
+  // sticky 相对滚动容器不成立,顶栏本来就不会动。
+  // 早先写的是 sticky + top:12px,结果是整张卡片被整体下推 12px,
+  // 压进 el-main 的 20px 内边距里,首屏内容与顶栏只剩 12px 间距。
+  // 改用 margin-top 表达同样的留白,不再吃掉内容间距。
   z-index: 10;
   background: var(--glass-strong);
   // sticky + blur:滚动时每帧都要重新采样模糊,半径控制在 16px 降成本
@@ -309,7 +329,7 @@ body {
   padding: 0;
   // 左右留 --el-main-padding 与 el-main 的内容区对齐,
   // 玻璃卡片不再横贯整个内容区
-  margin: 0 var(--el-main-padding) 0;
+  margin: 12px var(--el-main-padding) 0;
   // 高度由内容决定:工具栏 60px + 分隔线 + 多标签栏 48px
   height: auto;
 }
@@ -482,15 +502,16 @@ body {
 // 只剩内容区需要重排 padding/margin 与 topbar 留白。
 @media (max-width: 768px) {
 
-  // 内容区让出顶部 topbar 高度的 12px,左右贴边各 12px
+  // 内容区让出顶部 topbar 高度的 12px,左右贴边各 12px。
+  // 左右 padding 与下面 topbar 的 margin 都是 12px,两侧边缘才能对齐
+  // (之前是 14px vs 12px,差 2px,肉眼可见内容比玻璃卡窄一点)。
   .content>.el-main {
-    padding: 16px 14px;
+    padding: 16px 12px;
   }
 
   .topbar {
     // 抽屉打开时贴边,玻璃卡变窄一点
-    margin: 0 12px 12px;
-    top: 8px;
+    margin: 8px 12px 12px;
     border-radius: 10px;
   }
 }
@@ -503,6 +524,51 @@ body {
   .el-drawer__header {
     display: none;
   }
+}
+
+// 抽屉头部:标题 + 关闭按钮。
+// 抽屉里必须有可发现的关闭入口 —— 之前整个头部被去掉,
+// 用户只能靠点遮罩(在 300px 宽的抽屉下遮罩仅剩 90px,很难点中)或按 Esc。
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  // 与 .mobile-menu 的 padding 对齐,内侧再留一点,让标题不贴边
+  padding: 0 14px 12px 18px;
+  flex-shrink: 0;
+}
+
+.drawer-title {
+  font-family: var(--display);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.drawer-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  background: var(--glass-soft);
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.drawer-close:hover {
+  background: var(--acc-mint);
+  color: white;
+}
+
+.drawer-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--acc-mint) inset;
 }
 
 .sidebar-drawer .el-drawer__body {

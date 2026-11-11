@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { Close } from '@element-plus/icons-vue'
 import { useMenuStore } from '@/stores/menu'
 import { useUiStore } from '@/stores/ui'
 import { useTabsStore } from '@/stores/tabs'
@@ -56,11 +57,23 @@ watch(isMobile, (now) => {
             <SidebarContent />
         </el-aside>
 
-        <!-- 移动端:抽屉式菜单。从左侧滑出,宽度封顶 300px,
-             小屏(<=375px)再按 80vw 缩,避免在窄手机上完全盖住内容 -->
-        <el-drawer v-if="isMobile" v-model="ui.mobileSidebarOpen" direction="ltr" size="min(300px, 80vw)"
+        <!-- 移动端:抽屉式菜单。宽度封顶 280px(390px 视口下约 72%),
+             留出足够的遮罩宽度供点击关闭。
+             抽屉内自带头部(品牌 + 关闭按钮):之前用 :with-header="false"
+             把 EP 默认头部整个去掉,抽屉里一个按钮都没有,除了点遮罩/按 Esc
+             没有可发现的关闭入口。 -->
+        <el-drawer v-if="isMobile" v-model="ui.mobileSidebarOpen" direction="ltr" size="min(280px, 80vw)"
             :with-header="false" :modal="true" :append-to-body="true" class="sidebar-drawer">
             <div class="menu-chrome mobile-menu">
+                <div class="drawer-head">
+                    <span class="drawer-title">菜单</span>
+                    <button class="drawer-close" type="button" aria-label="关闭菜单" title="关闭菜单"
+                        @click="ui.closeMobileSidebar()">
+                        <el-icon>
+                            <Close />
+                        </el-icon>
+                    </button>
+                </div>
                 <SidebarContent />
             </div>
         </el-drawer>

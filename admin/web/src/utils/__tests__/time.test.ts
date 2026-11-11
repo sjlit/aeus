@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRelativeTime, formatUpdatedAt } from '../time'
+import { formatDate, formatRelativeTime, formatUpdatedAt } from '../time'
 
 const NOW = new Date(2026, 10, 6, 14, 32, 0).getTime()
 
@@ -18,5 +18,15 @@ describe('time utils', () => {
     expect(formatUpdatedAt(new Date(2026, 10, 6, 9, 5).getTime(), NOW)).toBe('09:05')
     expect(formatUpdatedAt(new Date(2026, 10, 5, 21, 8).getTime(), NOW)).toBe('11-05 21:08')
     expect(formatUpdatedAt(0, NOW)).toBe('—')
+  })
+
+  it('formatDate 同年只写月-日,跨年补年份', () => {
+    expect(formatDate(new Date(2026, 10, 5).getTime(), NOW)).toBe('11-05')
+    expect(formatDate(new Date(2025, 0, 2).getTime(), NOW)).toBe('2025-01-02')
+    expect(formatDate(0, NOW)).toBe('—')
+  })
+
+  it('formatUpdatedAt 跨年时补上年份,避免和相对时间混读', () => {
+    expect(formatUpdatedAt(new Date(2025, 0, 2, 21, 8).getTime(), NOW)).toBe('2025-01-02 21:08')
   })
 })
