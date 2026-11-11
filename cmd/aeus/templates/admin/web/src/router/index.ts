@@ -84,8 +84,17 @@ export const router = createRouter({
  * 让每个业务页面走独立 chunk,首屏不需要背全部业务代码。
  * view_path 来自服务端,形如 "@/views/system/sys_user/Index.vue",
  * 通过 normalizeGlobPath 转成 "../views/system/sys_user/Index.vue" 作为查表 key。
+ *
+ * LoginView / NotFoundView 要排除掉:它们在文件头被静态 import(登录页是
+ * 首屏入口、404 是兜底),若同时被 glob 收进动态表,Vite 8 会报
+ * INEFFECTIVE_DYNAMIC_IMPORT —— 同一文件既静态又动态引入,动态那路
+ * 永远不会拆出独立 chunk。排除后这两个文件只走静态引入。
  */
-const viewModules = import.meta.glob('../views/**/*.vue') as Record<string, () => Promise<unknown>>
+const viewModules = import.meta.glob([
+  '../views/**/*.vue',
+  '!../views/public/LoginView.vue',
+  '!../views/public/NotFoundView.vue',
+]) as Record<string, () => Promise<unknown>>
 
 /** 同一 view_path 不重复查表;命中失败也缓存,避免每次导航都打 warn。 */
 const resolvedViewCache = new Map<string, () => Promise<unknown>>()

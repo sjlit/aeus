@@ -16,7 +16,9 @@ const route = useRoute()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
-const form = reactive({ username: 'admin', password: '' })
+// 用户名不做预填:预置 "admin" 既像给凭证填充递刀,
+// 也会让人误以为输入框不可编辑。
+const form = reactive({ username: '', password: '' })
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
@@ -78,7 +80,8 @@ async function submit() {
       </el-form>
 
       <div class="footer-row">
-        <span class="live" title="系统一切正常" />
+        <span class="live" aria-hidden="true" />
+        <span class="footer-text">系统运行正常</span>
       </div>
     </div>
   </div>
@@ -211,6 +214,7 @@ h1 {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   font-size: var(--fs-2xs);
   letter-spacing: 0.04em;
   color: var(--ink-2);
@@ -220,6 +224,8 @@ h1 {
   position: relative;
 }
 
+/* 圆点只是状态的图形化标记,语义由旁边的文字承担;
+   不给 role/aria-label,读屏软件会读成“圆点”这种无意义内容。 */
 .live {
   width: 8px;
   height: 8px;
@@ -227,6 +233,7 @@ h1 {
   border-radius: 50%;
   box-shadow: 0 0 8px var(--acc-mint);
   animation: pulse 1.6s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes pulse {
