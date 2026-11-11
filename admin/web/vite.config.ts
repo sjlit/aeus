@@ -97,10 +97,17 @@ export default defineConfig({
       output: {
         // vendor 分包:EP、vue 生态、rest-ui、axios 各走独立 chunk,
         // 浏览器可独立缓存;同时保证路由懒加载 chunk 不背 vendor。
-        manualChunks: {
-          'vendor-vue': ['vue', 'vue-router', 'pinia'],
-          'vendor-rest': ['@sjlit/rest-ui'],
-          'vendor-axios': ['axios'],
+        //
+        // Vite 8 起打包器换成 Rolldown,`manualChunks` 的对象写法不再被接受
+        // (类型只剩 function 形态),改用 `codeSplitting.groups`。
+        // 注意别用 `advancedChunks` —— Rolldown 已把它标记为 deprecated,
+        // 用了会打警告。
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-vue', test: /node_modules\/(vue|vue-router|pinia)\// },
+            { name: 'vendor-rest', test: /node_modules\/@sjlit\/rest-ui\// },
+            { name: 'vendor-axios', test: /node_modules\/axios\// },
+          ],
         },
       },
     },

@@ -1,0 +1,71 @@
+version: 2
+updates:
+  # admin/web 与脚手架模板副本必须同步:模板由 `go generate ./cmd/aeus`
+  # 从 admin/web 生成,两者共用同一套依赖版本。两边都挂上 dependabot,
+  # 让版本 bump 以两个 PR 的形式同时到达,避免只升一边导致 CI 的
+  # "verify admin web template is generated" 检查失败。
+  - package-ecosystem: npm
+    directory: /admin/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # 工具链互相牵制(vite / vitest / vue-tsc / typescript 要配套升),
+      # 拆成多个 PR 会互相卡住,合成一个。
+      dev-tooling:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "vue-tsc"
+          - "@vitejs/*"
+          - "typescript"
+          - "sass"
+          - "jsdom"
+          - "unplugin-vue-components"
+      dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "vite"
+          - "vitest"
+          - "vue-tsc"
+          - "@vitejs/*"
+          - "typescript"
+          - "sass"
+          - "jsdom"
+          - "unplugin-vue-components"
+
+  - package-ecosystem: npm
+    directory: /cmd/aeus/templates/admin/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dev-tooling:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "vue-tsc"
+          - "@vitejs/*"
+          - "typescript"
+          - "sass"
+          - "jsdom"
+          - "unplugin-vue-components"
+      dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "vite"
+          - "vitest"
+          - "vue-tsc"
+          - "@vitejs/*"
+          - "typescript"
+          - "sass"
+          - "jsdom"
+          - "unplugin-vue-components"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
