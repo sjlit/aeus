@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -54,6 +55,12 @@ func withTenantDB(t *testing.T, ms ...any) (*gorm.DB, func(string) context.Conte
 
 type testTenantKey struct{}
 
+// bypassDB returns a handle that can seed/verify rows across tenants
+// without tripping the fail-closed tenant callbacks.
+func bypassDB(db *gorm.DB) *gorm.DB {
+	return db.WithContext(WithoutTenant(context.Background()))
+}
+
 func TestTenantScope_Read_Isolated(t *testing.T) {
 	db, ctx := withTenantDB(t, &models.Role{})
 	// Seed: each tenant owns a role with code "shared".
@@ -103,13 +110,13 @@ func TestTenantScope_Update_DoesNotLeak(t *testing.T) {
 	}
 
 	var t1, t2 models.Role
-	if err := db.Where("`key` = ? AND tenant_id = ?", "shared", "t1").First(&t1).Error; err != nil {
+	if err := bypassDB(db).Where("`key` = ? AND tenant_id = ?", "shared", "t1").First(&t1).Error; err != nil {
 		t.Fatal(err)
 	}
 	if t1.Name != "after-t1" {
 		t.Fatalf("t1 name after update = %q", t1.Name)
 	}
-	if err := db.Where("`key` = ? AND tenant_id = ?", "shared", "t2").First(&t2).Error; err != nil {
+	if err := bypassDB(db).Where("`key` = ? AND tenant_id = ?", "shared", "t2").First(&t2).Error; err != nil {
 		t.Fatal(err)
 	}
 	if t2.Name != "before" {
@@ -140,14 +147,14 @@ func TestTenantScope_Delete_DoesNotLeak(t *testing.T) {
 	}
 
 	var count int64
-	if err := db.Model(&models.Role{}).Count(&count).Error; err != nil {
+	if err := bypassDB(db).Model(&models.Role{}).Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 1 {
 		t.Fatalf("rows after t1 delete = %d, want 1 (t2's row must survive)", count)
 	}
 	var survivor models.Role
-	if err := db.First(&survivor).Error; err != nil {
+	if err := bypassDB(db).First(&survivor).Error; err != nil {
 		t.Fatal(err)
 	}
 	if survivor.TenantID != "t2" {
@@ -162,7 +169,7 @@ func TestTenantScope_Create_BackfillsBlankTenantID(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got models.Role
-	if err := db.Where("`key` = ?", "owner").First(&got).Error; err != nil {
+	if err := bypassDB(db).Where("`key` = ?", "owner").First(&got).Error; err != nil {
 		t.Fatal(err)
 	}
 	if got.TenantID != "acme" {
@@ -178,7 +185,7 @@ func TestTenantScope_Create_OverridesExplicitTenantID(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got models.Role
-	if err := db.Where("`key` = ?", "owner").First(&got).Error; err != nil {
+	if err := bypassDB(db).Where("`key` = ?", "owner").First(&got).Error; err != nil {
 		t.Fatal(err)
 	}
 	if got.TenantID != "acme" {
@@ -198,14 +205,14 @@ func TestTenantScope_NoResolver_NoScope(t *testing.T) {
 	}
 	installTenantScope(db, nil)
 
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "x", Name: "x"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "x", Name: "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "x", Name: "x"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "x", Name: "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	var count int64
-	if err := db.Model(&models.Role{}).Where("`key` = ?", "x").Count(&count).Error; err != nil {
+	if err := bypassDB(db).Model(&models.Role{}).Where("`key` = ?", "x").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 2 {
@@ -213,21 +220,21 @@ func TestTenantScope_NoResolver_NoScope(t *testing.T) {
 	}
 }
 
-func TestTenantScope_LoginPath_NoTenantInCtx_BypassesScope(t *testing.T) {
-	db, ctx := withTenantDB(t, &models.User{})
+func TestTenantScope_LoginPath_ExplicitWithoutTenant(t *testing.T) {
+	db, _ := withTenantDB(t, &models.User{})
 	// Two users in two tenants sharing the same uid — exactly the
 	// case AuthService.Login has to resolve before any tenant is known.
-	if err := db.Create(&models.User{TenantModel: models.TenantModel{TenantID: "t1"}, UID: "u0001", Username: "alice", RoleKey: "admin", DeptID: 1, Password: "pass1234"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.User{TenantModel: models.TenantModel{TenantID: "t1"}, UID: "u0001", Username: "alice", RoleKey: "admin", DeptID: 1, Password: "pass1234"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.User{TenantModel: models.TenantModel{TenantID: "t2"}, UID: "u0001", Username: "alice", RoleKey: "admin", DeptID: 1, Password: "pass1234"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.User{TenantModel: models.TenantModel{TenantID: "t2"}, UID: "u0001", Username: "alice", RoleKey: "admin", DeptID: 1, Password: "pass1234"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	// No tenant on ctx — simulating the Login RPC, which JWT-middleware
-	// lets through without populating claims.
+	// Login explicitly opts out of tenant scoping before it knows the
+	// tenant; from then on it filters tenant_id explicitly.
 	var u models.User
-	if err := db.WithContext(ctx("")).Where("username = ?", "alice").First(&u).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Where("username = ?", "alice").First(&u).Error; err != nil {
 		t.Fatalf("login lookup failed: %v", err)
 	}
 	if u.Username != "alice" {
@@ -270,7 +277,7 @@ func TestTenantScope_CreateSlice_BackfillsAll(t *testing.T) {
 		}
 	}
 	var count int64
-	if err := db.Model(&models.Role{}).Where("tenant_id = ?", "acme").Count(&count).Error; err != nil {
+	if err := bypassDB(db).Model(&models.Role{}).Where("tenant_id = ?", "acme").Count(&count).Error; err != nil {
 		t.Fatal(err)
 	}
 	if count != 2 {
@@ -305,10 +312,10 @@ func withClaimsDB(t *testing.T, ms ...any) (*gorm.DB, func(*auth.Claims) context
 
 func TestTenantScope_ClaimsResolver_ScopesRead(t *testing.T) {
 	db, ctx := withClaimsDB(t, &models.Role{})
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "shared", Name: "t1"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "shared", Name: "t1"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "shared", Name: "t2"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "shared", Name: "t2"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -333,27 +340,42 @@ func TestTenantScope_ClaimsResolver_ScopesRead(t *testing.T) {
 	}
 }
 
-func TestTenantScope_ClaimsResolver_NoClaims_BypassesScope(t *testing.T) {
-	// Simulates AuthService.Login: the request reaches the handler
-	// without JWT claims (login path is allowlisted in the middleware).
-	// FromClaimsResolver returns "" and the callback bails.
+func TestTenantScope_ClaimsResolver_NoClaims_FailsClosed(t *testing.T) {
+	// A tenant-scoped operation without claims must not see every
+	// tenant. It must fail with ErrTenantRequired instead.
 	db, _ := withClaimsDB(t, &models.Role{})
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "shared", Name: "t1"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "shared", Name: "t1"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "shared", Name: "t2"}).Error; err != nil {
+	if err := db.WithContext(WithoutTenant(context.Background())).Create(&models.Role{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "shared", Name: "t2"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
-	// No claims — background ctx, like Login.
 	var got models.Role
-	if err := db.Where("`key` = ?", "shared").First(&got).Error; err != nil {
-		t.Fatalf("login-shaped lookup failed: %v", err)
+	err := db.Where("`key` = ?", "shared").First(&got).Error
+	if err == nil {
+		t.Fatal("lookup without tenant context should fail")
 	}
-	// First row wins; the point is that the lookup did NOT add a
-	// tenant filter, which is the contract for the login path.
-	if got.Key != "shared" {
-		t.Fatalf("got %+v", got)
+	if !errors.Is(err, ErrTenantRequired) {
+		t.Fatalf("error = %v, want ErrTenantRequired", err)
+	}
+}
+
+func TestTenantScope_ClaimsResolver_NoClaims_CreateFailsClosed(t *testing.T) {
+	db, _ := withClaimsDB(t, &models.Role{})
+	err := db.Create(&models.Role{TenantModel: models.TenantModel{TenantID: "manual"}, Key: "owner", Name: "x"}).Error
+	if err == nil {
+		t.Fatal("create without tenant context should fail")
+	}
+	if !errors.Is(err, ErrTenantRequired) {
+		t.Fatalf("error = %v, want ErrTenantRequired", err)
+	}
+	var count int64
+	if err := bypassDB(db).Model(&models.Role{}).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("rows created = %d, want 0", count)
 	}
 }
 
@@ -366,7 +388,7 @@ func TestTenantScope_ClaimsResolver_ScopesCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got models.Role
-	if err := db.Where("`key` = ?", "owner").First(&got).Error; err != nil {
+	if err := bypassDB(db).Where("`key` = ?", "owner").First(&got).Error; err != nil {
 		t.Fatal(err)
 	}
 	if got.TenantID != "acme" {

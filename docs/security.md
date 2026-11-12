@@ -15,6 +15,10 @@ AEUS 的默认值面向本地开发。把服务暴露到生产网络前，至少
 ## JWT / RBAC
 
 - 替换 `JWT_SECRET`，不要使用示例值 `change-me`。
+- admin 模板在 `app.debug=false` 时会对开发默认值 fail-fast：默认
+  `JWT_SECRET` / `ADMIN_PASSWORD`、`auto_migrate=true`、
+  `seed_on_start=true` 都会阻止启动。生产请先执行 `make migrate` 和一次性
+  `make seed`，再以 `DEBUG=false` 启动。
 - 登录、刷新、登出链路会轮换 refresh token；客户端不要把 token 写入日志。
 - `admin.NewPermissionChecker` 默认 fail-closed：未收录进 `sys_permissions`
   的业务路由会被拒绝。新增 REST/RPC 后运行 Seed 或迁移以补齐目录。

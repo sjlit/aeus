@@ -34,7 +34,10 @@ type (
 	RegistryOptions struct {
 		// Other options for implementations of the interface
 		// can be stored in a context
-		Context   context.Context
+		Context context.Context
+		// TLSConfig is the preferred way to enable TLS. Secure is kept for
+		// backward compatibility but is rejected unless TLSConfig is set;
+		// there is no insecure "skip verification" mode.
 		TLSConfig *tls.Config
 		Addrs     []string
 		Timeout   time.Duration

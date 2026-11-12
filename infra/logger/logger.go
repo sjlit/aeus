@@ -20,13 +20,15 @@ func init() {
 
 type Logger interface {
 	With(args ...any) Logger
-	Debug(ctx context.Context, format string, args ...any) //Structured context as loosely typed key-value pairs.
+	// Debug..Error accept a message plus structured key-value pairs.
+	Debug(ctx context.Context, msg string, args ...any)
+	Info(ctx context.Context, msg string, args ...any)
+	Warn(ctx context.Context, msg string, args ...any)
+	Error(ctx context.Context, msg string, args ...any)
+	// Debugf..Errorf accept a printf-style format string and arguments.
 	Debugf(ctx context.Context, format string, args ...any)
-	Info(ctx context.Context, format string, args ...any)
 	Infof(ctx context.Context, format string, args ...any)
-	Warn(ctx context.Context, format string, args ...any)
 	Warnf(ctx context.Context, format string, args ...any)
-	Error(ctx context.Context, format string, args ...any)
 	Errorf(ctx context.Context, format string, args ...any)
 }
 

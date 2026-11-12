@@ -125,7 +125,7 @@ func RateLimit(opts RateLimitOpts) middleware.Middleware {
 				if err != nil {
 					// Fail-closed: a misbehaving limiter MUST NOT let
 					// traffic through unchecked.
-					return errs.Wrap(errs.CodeInternal, err)
+					return errs.Internal(err)
 				}
 				if !allowed {
 					if retryAfter > 0 {

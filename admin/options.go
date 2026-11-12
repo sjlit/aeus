@@ -97,12 +97,14 @@ type (
 
 func newOptions(opts ...Option) *Options {
 	options := &Options{
-		Responder:   newResponder(),
 		Logger:      logger.Default(),
 		AutoMigrate: true,
 	}
 	for _, o := range opts {
 		o(options)
+	}
+	if options.Responder == nil {
+		options.Responder = newResponder(options.Logger)
 	}
 	if options.MultiTenant && options.TenantResolver == nil {
 		options.TenantResolver = middleware.FromClaimsResolver
@@ -166,15 +168,18 @@ func WithAutoMigrate(enabled bool) Option {
 //     on a TenantModel row is automatically scoped to that id, and
 //     every create on such a model has its TenantID field forced to
 //     the resolver value (a request body cannot override it);
-//   - "", in which case no scope is applied — the operation sees
-//     every tenant's rows. This is the opt-out path for super-admin
-//     tooling, cross-tenant reporting, and the AuthService.Login
-//     RPC, which by design runs before any tenant is known.
+//   - "", in which case the operation fails closed with
+//     ErrTenantRequired. This is the safe default for missing or
+//     malformed authentication context.
+//
+// Explicit cross-tenant operations (super-admin tooling, background
+// jobs, AuthService.Login before a tenant is known) must opt in with
+// admin.WithoutTenant(ctx). Do not use an empty resolver result as a
+// bypass: a missing claims context would then silently expose every
+// tenant's rows.
 //
 // The resolver MUST be cheap and MUST NOT panic on a missing JWT —
-// a malformed request just yields "" and the operation proceeds
-// un-scoped; the resolver itself remains the gatekeeper for
-// authentication decisions.
+// return "" and the callbacks will reject the operation.
 //
 // # Default
 //

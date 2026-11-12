@@ -2,6 +2,8 @@ package admin
 
 import (
 	"errors"
+
+	"github.com/sjlit/aeus/pkg/errs"
 )
 
 var (
@@ -15,4 +17,8 @@ var (
 	// ErrRouterRequired is returned by RegisterSchemaEndpoint when the
 	// supplied *Options lacks a Router.
 	ErrRouterRequired = errors.New("router required")
+	// ErrTenantRequired is returned by tenant-scoped GORM callbacks when
+	// the operation's context has neither a tenant claim nor an explicit
+	// WithoutTenant marker.
+	ErrTenantRequired = errs.New(errs.CodeAccessDenied, "tenant context required")
 )

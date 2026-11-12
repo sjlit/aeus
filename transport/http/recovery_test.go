@@ -102,3 +102,33 @@ func TestServer_GenericErrorDoesNotLeakDetail(t *testing.T) {
 		t.Fatalf("response missing generic message: %s", rec.Body.String())
 	}
 }
+
+func TestServer_InternalErrsErrorDoesNotLeakDetail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := New()
+	s.engine.GET("/fail-internal", func(c *gin.Context) {
+		_ = c.Error(errs.Internal(errors.New("db password=super-secret")))
+	})
+
+	rec := httptest.NewRecorder()
+	s.engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fail-internal", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "super-secret") {
+		t.Fatalf("response leaked internal error: %s", rec.Body.String())
+	}
+	var env struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode envelope: %v; body=%s", err, rec.Body.String())
+	}
+	if env.Code != int(errs.CodeInternal) {
+		t.Fatalf("code = %d, want %d", env.Code, errs.CodeInternal)
+	}
+	if env.Message != "internal server error" {
+		t.Fatalf("message = %q, want generic message", env.Message)
+	}
+}

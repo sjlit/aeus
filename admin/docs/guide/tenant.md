@@ -16,10 +16,10 @@
 `middleware.Resolver` 是 `func(ctx context.Context) string`，每次 DB 操作调用一次：
 
 - 返回**非空**租户 ID：读写删除自动限定该租户，创建时 `tenant_id` 会被**强制写成 resolver 的值**（请求体不能指定别的租户）；
-- 返回 **""**：完全不做租户过滤（跨租户工具、后台任务、`AuthService.Login` 的出口）；
-- 需要显式跨租户操作时用 `admin.WithoutTenant(ctx)`，不要依赖“请求体里写 tenant_id”来绕过。
+- 返回 **""**：视为缺少租户上下文，租户模型操作 **fail-closed**，返回 `ErrTenantRequired`；
+- 需要显式跨租户操作时用 `admin.WithoutTenant(ctx)`（`Seed` / `Login` / 后台任务均已使用），不要依赖“请求体里写 tenant_id”来绕过。
 
-Resolver **必须廉价且不可 panic**——JWT 缺失时返回 `""` 即可，认证决策由中间件负责。
+Resolver **必须廉价且不可 panic**——JWT 缺失时返回 `""` 即可，认证决策由中间件负责；空值不会再隐式放行跨租户查询。
 
 ## 默认值与覆盖
 
@@ -27,7 +27,7 @@ Resolver **必须廉价且不可 panic**——JWT 缺失时返回 `""` 即可，
 
 管理界面也跟随该开关：单租户模式不注册 `Tenant` 业务模型，因此不会有 `/system/sys_tenants` REST 路由、“租户管理”菜单和对应 CRUD 权限；`sys_tenants` 表仍会迁移并由 `Seed` 写入默认租户行，供登录响应展示租户名。启用多租户后这些资源会自动恢复。
 
-覆盖示例（优先信任 `X-Tenant-Id` 请求头，兜底 JWT 租户，适用于超管工具）：
+覆盖示例（优先信任 `X-Tenant-Id` 请求头，兜底 JWT 租户，适用于超管工具；后台/系统路径仍需显式 `WithoutTenant`）：
 
 ```go
 admin.WithTenantResolver(func(ctx context.Context) string {

@@ -117,7 +117,7 @@ func TestSetup_SingleTenantPrunesLegacyTenantMenu(t *testing.T) {
 		t.Fatalf("tenant menu missing after multi Setup: %v", err)
 	}
 	var grants int64
-	if err := db.Model(&models.RolePermission{}).
+	if err := bypassDB(db).Model(&models.RolePermission{}).
 		Where("type = ? AND data = ?", models.RolePermissionTypeMenu, "SystemSysTenants").
 		Count(&grants).Error; err != nil {
 		t.Fatalf("count tenant menu grants: %v", err)
@@ -145,7 +145,7 @@ func TestSetup_SingleTenantPrunesLegacyTenantMenu(t *testing.T) {
 		t.Fatalf("tenant menu after single Setup = %v (deleted_at=%v), want hard delete", err, menu.DeletedAt)
 	}
 	grants = 0
-	if err := db.Model(&models.RolePermission{}).
+	if err := bypassDB(db).Model(&models.RolePermission{}).
 		Where("type = ? AND data = ?", models.RolePermissionTypeMenu, "SystemSysTenants").
 		Count(&grants).Error; err != nil {
 		t.Fatalf("count tenant menu grants after cleanup: %v", err)

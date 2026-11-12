@@ -52,9 +52,11 @@ func Write(w http.ResponseWriter, status int, env *Envelope) error {
 	w.WriteHeader(status)
 	body, err := json.Marshal(env)
 	if err != nil {
+		// Do not put the marshal error text on the wire: it can include
+		// unsupported concrete types or wrapped implementation details.
 		fallback, _ := json.Marshal(&Envelope{
-			Code:    1001,
-			Message: "marshal failure: " + err.Error(),
+			Code:    1005,
+			Message: "internal server error",
 		})
 		_, writeErr := w.Write(fallback)
 		return writeErr

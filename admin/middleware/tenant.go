@@ -18,12 +18,38 @@ import (
 	"github.com/sjlit/aeus/admin/auth"
 )
 
+// tenantBypassKey marks operations that intentionally span tenants:
+// Seed/Setup bootstrapping, cross-tenant admin tools, Login (before any
+// tenant is known), and test fixtures.
+type tenantBypassKey struct{}
+
+// WithoutTenant returns a context that disables tenant scoping for the
+// DB operations using it. Use it only where cross-tenant access is the
+// explicit intent; ordinary request paths must never carry it.
+func WithoutTenant(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, tenantBypassKey{}, true)
+}
+
+// TenantBypassed reports whether ctx carries the explicit WithoutTenant
+// marker.
+func TenantBypassed(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(tenantBypassKey{}).(bool)
+	return v
+}
+
 // Resolver derives the current tenant id from a request context.
 //
 // Returning a non-empty value scopes every TenantModel read/update/
 // delete to that tenant, and forces the TenantID field on TenantModel
-// creates. Returning "" opts out of scoping entirely:
-// the operation sees rows from every tenant. Use "" for:
+// creates. Returning "" is treated as a missing tenant context and the
+// operation fails closed with ErrTenantRequired. Cross-tenant operations
+// must opt in explicitly with WithoutTenant:
 //
 //   - super-admin / cross-tenant tooling,
 //   - background tasks that legitimately span tenants,
@@ -39,7 +65,9 @@ type Resolver func(ctx context.Context) string
 
 // FromClaimsResolver is the default resolver: it reads
 // *auth.Claims.TenantID off the ctx written by middleware/auth.JWT.
-// It returns "" if there is no JWT in ctx or the value is empty.
+// It returns "" if there is no JWT in ctx or the value is empty, which
+// causes tenant-scoped DB operations to fail closed. Use WithoutTenant
+// for explicit cross-tenant/system paths.
 //
 // The GORM callbacks in admin.Server.Setup invoke this directly,
 // so no additional middleware is required to scope DB ops after

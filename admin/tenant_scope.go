@@ -10,26 +10,15 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// tenantBypassKey marks operations that intentionally span tenants:
-// Seed/Setup bootstrapping, cross-tenant admin tools, and test fixtures.
-type tenantBypassKey struct{}
-
 // WithoutTenant returns a context that disables tenant scoping for the
 // DB operations using it. Use it only where cross-tenant access is the
 // explicit intent; ordinary request paths must never carry it.
 func WithoutTenant(ctx context.Context) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, tenantBypassKey{}, true)
+	return middleware.WithoutTenant(ctx)
 }
 
 func tenantBypassed(ctx context.Context) bool {
-	if ctx == nil {
-		return false
-	}
-	v, _ := ctx.Value(tenantBypassKey{}).(bool)
-	return v
+	return middleware.TenantBypassed(ctx)
 }
 
 // __tenantSchemaCache memoizes the tenant-column lookup against
@@ -70,9 +59,9 @@ const (
 //
 // A model without a `tenant_id` column (e.g. Menu, which embeds the
 // plain BaseModel) is left alone: the callback bails out early. A
-// resolver that returns "" also causes the callback to bail out, so
-// AuthService.Login — which runs without JWT claims — can still find
-// users by username/uid across tenants.
+// resolver that returns "" fails closed with ErrTenantRequired, so a
+// missing claims context can never silently turn into cross-tenant
+// access. AuthService.Login opts out explicitly with WithoutTenant.
 func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 	if resolver == nil {
 		return
@@ -100,6 +89,7 @@ func installTenantScope(db *gorm.DB, resolver middleware.Resolver) {
 		}
 		tid := resolver(tx.Statement.Context)
 		if tid == "" {
+			_ = tx.AddError(ErrTenantRequired)
 			return
 		}
 		setTenantID(tx.Statement.ReflectValue, tid)
@@ -115,18 +105,19 @@ func tenantScopingEnabled(db *gorm.DB) bool {
 }
 
 // applyTenantScope is shared by Query / Update / Delete: it calls
-// the resolver against the operation's ctx and, if a non-empty
-// tenant id is produced, appends it as a WHERE clause.
+// the resolver against the operation's ctx and appends the tenant id
+// as a WHERE clause. Models without a `tenant_id` column are skipped.
 //
-// Models without a `tenant_id` column are skipped, and so are
-// operations whose resolver returns "" (the explicit opt-out for
-// super-admin tooling and the AuthService.Login RPC).
+// An empty resolver result is not an opt-out: it means the operation
+// has no tenant context, so it fails closed with ErrTenantRequired.
+// Explicit cross-tenant operations must use WithoutTenant.
 func applyTenantScope(tx *gorm.DB, resolver middleware.Resolver) {
 	if !hasTenantIDColumn(tx.Statement.Schema) || tenantBypassed(tx.Statement.Context) {
 		return
 	}
 	tid := resolver(tx.Statement.Context)
 	if tid == "" {
+		_ = tx.AddError(ErrTenantRequired)
 		return
 	}
 	tx.Statement.Where("tenant_id = ?", tid)
@@ -175,8 +166,7 @@ func modelHasTenantIDColumn(db *gorm.DB, model any) bool {
 // resolver is the single source of truth for the active tenant: letting a
 // request body win would allow a caller to write into another tenant by
 // supplying a tenant_id that the generic REST decoder accepts. System
-// paths (Seed/Setup) opt out with WithoutTenant; Login opts out when the
-// resolver returns "" (the default claims resolver has no claims yet).
+// paths (Seed/Setup/Login) opt out explicitly with WithoutTenant.
 func setTenantID(rv reflect.Value, tid string) {
 	if !rv.IsValid() {
 		return

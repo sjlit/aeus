@@ -2,12 +2,23 @@ package etcd
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sjlit/aeus/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
+
+func TestInit_SecureRequiresTLSConfig(t *testing.T) {
+	reg := New()
+	err := reg.Init(func(o *registry.RegistryOptions) {
+		o.Secure = true
+	})
+	if err == nil || !strings.Contains(err.Error(), "Secure requires") {
+		t.Fatalf("Init error = %v, want Secure-requires-TLS error", err)
+	}
+}
 
 const testEndpoint = "localhost:2379"
 

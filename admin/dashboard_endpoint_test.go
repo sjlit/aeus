@@ -70,7 +70,7 @@ func TestDashboardEndpoint_AdminOverview(t *testing.T) {
 		{ID: "t1", Name: "租户一"},
 		{ID: "t2", Name: "租户二"},
 	} {
-		if err := db.Create(tenant).Error; err != nil {
+		if err := bypassDB(db).Create(tenant).Error; err != nil {
 			t.Fatalf("create tenant: %v", err)
 		}
 	}
@@ -78,7 +78,7 @@ func TestDashboardEndpoint_AdminOverview(t *testing.T) {
 		{TenantModel: models.TenantModel{TenantID: "t1"}, Key: "super", Name: "超级管理员", IsSuper: true},
 		{TenantModel: models.TenantModel{TenantID: "t2"}, Key: "other", Name: "其他租户角色"},
 	} {
-		if err := db.Create(role).Error; err != nil {
+		if err := bypassDB(db).Create(role).Error; err != nil {
 			t.Fatalf("create role: %v", err)
 		}
 	}
@@ -87,35 +87,35 @@ func TestDashboardEndpoint_AdminOverview(t *testing.T) {
 		{TenantModel: models.TenantModel{TenantID: "t1"}, UID: "u0002", Username: "operator", RoleKey: "super"},
 		{TenantModel: models.TenantModel{TenantID: "t2"}, UID: "u0003", Username: "other", RoleKey: "other"},
 	} {
-		if err := db.Create(user).Error; err != nil {
+		if err := bypassDB(db).Create(user).Error; err != nil {
 			t.Fatalf("create user: %v", err)
 		}
 	}
-	if err := db.Create(&models.LoginLog{
+	if err := bypassDB(db).Create(&models.LoginLog{
 		TenantModel: models.TenantModel{TenantID: "t1", BaseModel: models.BaseModel{CreatedAt: today}},
 		UID:         "u0001",
 	}).Error; err != nil {
 		t.Fatalf("create today login: %v", err)
 	}
-	if err := db.Create(&models.LoginLog{
+	if err := bypassDB(db).Create(&models.LoginLog{
 		TenantModel: models.TenantModel{TenantID: "t1", BaseModel: models.BaseModel{CreatedAt: yesterday}},
 		UID:         "u0001",
 	}).Error; err != nil {
 		t.Fatalf("create yesterday login: %v", err)
 	}
-	if err := db.Create(&models.LoginLog{
+	if err := bypassDB(db).Create(&models.LoginLog{
 		TenantModel: models.TenantModel{TenantID: "t2", BaseModel: models.BaseModel{CreatedAt: today}},
 		UID:         "u0003",
 	}).Error; err != nil {
 		t.Fatalf("create other-tenant login: %v", err)
 	}
-	if err := db.Create(&models.Audit{
+	if err := bypassDB(db).Create(&models.Audit{
 		TenantModel: models.TenantModel{TenantID: "t1", BaseModel: models.BaseModel{CreatedAt: today}},
 		UID:         "u0001", Action: "update", Module: "system", Table: "sys_users",
 	}).Error; err != nil {
 		t.Fatalf("create audit: %v", err)
 	}
-	if err := db.Create(&models.Audit{
+	if err := bypassDB(db).Create(&models.Audit{
 		TenantModel: models.TenantModel{TenantID: "t2", BaseModel: models.BaseModel{CreatedAt: today}},
 		UID:         "u0003", Action: "delete", Module: "system", Table: "sys_roles",
 	}).Error; err != nil {
@@ -182,7 +182,7 @@ func TestDashboardEndpoint_AdminOverview(t *testing.T) {
 
 func TestDashboardEndpoint_PersonalScope(t *testing.T) {
 	db, srv := newDashboardTestServer(t)
-	if err := db.Create(&models.Role{
+	if err := bypassDB(db).Create(&models.Role{
 		TenantModel: models.TenantModel{TenantID: "t1"},
 		Key:         "viewer", Name: "只读用户",
 	}).Error; err != nil {

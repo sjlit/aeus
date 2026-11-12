@@ -20,11 +20,75 @@ func (e *Error) Unwrap() error {
 	return e.cause
 }
 
+// Wrap annotates err with code and exposes err.Error() as the public
+// message. It is kept for backward compatibility; internal errors should
+// use Internal or WrapPublic so driver/DB details never reach clients.
 func Wrap(code Code, err error) error {
+	message := err.Error()
+	if isInternalCode(code) {
+		// Wrapping an internal failure must not turn its cause into a
+		// client-facing message by accident.
+		message = "internal server error"
+	}
 	return &Error{
 		Code:    code,
-		Message: err.Error(),
+		Message: message,
 		cause:   err,
+	}
+}
+
+// Internal wraps an implementation error with CodeInternal and a fixed
+// public message. The original error is retained for errors.Is/As and
+// server-side logging but is never serialized to a client.
+func Internal(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &Error{
+		Code:    CodeInternal,
+		Message: "internal server error",
+		cause:   err,
+	}
+}
+
+// WrapPublic builds an Error with an explicit client-safe message and a
+// separate internal cause.
+func WrapPublic(code Code, message string, cause error) error {
+	return &Error{
+		Code:    code,
+		Message: message,
+		cause:   cause,
+	}
+}
+
+// Public returns the code and client-safe message for err. Business
+// errors keep their message; internal/infrastructure failures collapse
+// to a generic message so their cause never reaches a response. Errors
+// outside the errs package are always treated as internal.
+func Public(err error) (Code, string) {
+	if err == nil {
+		return CodeOK, ""
+	}
+	var e *Error
+	if errors.As(err, &e) {
+		if isInternalCode(e.Code) {
+			return e.Code, "internal server error"
+		}
+		return e.Code, e.Message
+	}
+	return CodeInternal, "internal server error"
+}
+
+func isInternalCode(code Code) bool {
+	switch code {
+	case CodeInternal,
+		CodeDatabaseError,
+		CodeCacheError,
+		CodeDeadlock,
+		CodeUpstreamError:
+		return true
+	default:
+		return false
 	}
 }
 

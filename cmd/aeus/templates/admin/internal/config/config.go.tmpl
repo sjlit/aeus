@@ -98,6 +98,23 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Database.DSN) == "" {
 		return fmt.Errorf("database.dsn is empty")
 	}
+	// Development defaults are convenient for `make run`, but they must
+	// not silently reach a production process. app.debug=false is the
+	// switch that turns the scaffold into a production deployment.
+	if !c.App.Debug {
+		if c.Auth.JWTSecret == "change-me" {
+			return fmt.Errorf("auth.jwt_secret is still the development default; set a strong JWT_SECRET before running with app.debug=false")
+		}
+		if c.Auth.AdminPassword == "Admin123" {
+			return fmt.Errorf("auth.admin_password is still the development default; set ADMIN_PASSWORD or run cmd/seed with an explicit password before running with app.debug=false")
+		}
+		if c.Bootstrap.AutoMigrate {
+			return fmt.Errorf("bootstrap.auto_migrate must be false when app.debug=false; run make migrate first")
+		}
+		if c.Bootstrap.SeedOnStart {
+			return fmt.Errorf("bootstrap.seed_on_start must be false when app.debug=false; run cmd/seed as a one-off Job")
+		}
+	}
 	switch strings.ToLower(strings.TrimSpace(c.Log.Level)) {
 	case "debug", "info", "warn", "error":
 	default:

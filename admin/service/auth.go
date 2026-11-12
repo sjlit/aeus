@@ -8,6 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/sjlit/aeus/admin/auth"
+	adminmw "github.com/sjlit/aeus/admin/middleware"
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/admin/pb"
 	"github.com/sjlit/aeus/metadata"
@@ -254,6 +255,10 @@ func (s *AuthService) keyfunc() jwt.Keyfunc {
 // Login validates credentials, issues an access + refresh token pair,
 // records the attempt via LoginLogFunc, and runs the AfterLogin hook.
 func (s *AuthService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
+	// Login runs before any tenant is known. Tenant scoping must be
+	// bypassed explicitly; relying on an empty resolver result would
+	// turn every missing-claim path into cross-tenant access.
+	ctx = adminmw.WithoutTenant(ctx)
 	if err := req.Validate(); err != nil {
 		s.recordLogin(ctx, req, false, nil, "")
 		return nil, err

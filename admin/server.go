@@ -157,6 +157,22 @@ func (s *Server) getModels() []any {
 	return registered
 }
 
+// registrationDB returns the handle used while constructing a REST
+// resource. Schema metadata reads happen before a request context
+// exists, so registration normally runs with an explicit tenant bypass.
+// If a multi-tenant resolver can produce a tenant from a background
+// context (for example a custom constant/header resolver), honor it so
+// the resource's schema rows land in that tenant.
+func (s *Server) registrationDB() *gorm.DB {
+	ctx := context.Background()
+	if s.opts.MultiTenant && s.opts.TenantResolver != nil {
+		if tid := s.opts.TenantResolver(ctx); tid != "" {
+			return s.opts.DB.WithContext(ctx)
+		}
+	}
+	return s.opts.DB.WithContext(WithoutTenant(ctx))
+}
+
 // RegisterModel wires an application model onto the http server's REST
 // router.  Callers typically run Setup once at boot, then call
 // RegisterModel for each application-specific model they want exposed
@@ -192,7 +208,12 @@ func (s *Server) RegisterModel(model any, opts ...RegisterModelOption) error {
 	if s.opts.DB == nil {
 		return ErrDBRequired
 	}
-	resourceDB := s.opts.DB.Session(&gorm.Session{NewDB: true, Initialized: true})
+	// Registration is a system operation: schema metadata reads during
+	// NewResourceWithOptions run before a request context exists. Give
+	// the resource a scoped DB for construction; runtime CRUD paths
+	// still call WithContext(requestCtx), which overrides it.
+	resourceDB := s.registrationDB().
+		Session(&gorm.Session{NewDB: true, Initialized: true})
 	return s.registerModel(model, resourceDB, opts...)
 }
 
@@ -411,6 +432,7 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	if s.opts.DB == nil {
 		return ErrDBRequired
 	}
+
 	// Install tenant scope BEFORE any model is registered so every
 	// CRUD route that rest/v3 wires up is already scoped when the
 	// first request lands. AutoMigrate itself does NOT route through
@@ -465,7 +487,7 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// their old Rules when a struct tag changes. Backfill the rule added
 	// to User.RoleKey so already-initialized databases show it as
 	// required on create too.
-	if err = syncRoleKeyCreateRule(s.opts.DB); err != nil {
+	if err = syncRoleKeyCreateRule(s.opts.DB.WithContext(WithoutTenant(ctx))); err != nil {
 		return err
 	}
 	// In single-tenant mode Tenant is deliberately not registered. Remove
@@ -473,7 +495,7 @@ func (s *Server) Setup(ctx context.Context) (err error) {
 	// versions so an existing database converges to the same sidebar and
 	// permission catalog as a fresh one.
 	if !s.opts.MultiTenant {
-		if err = removeTenantManagementArtifacts(s.opts.DB); err != nil {
+		if err = removeTenantManagementArtifacts(s.opts.DB.WithContext(WithoutTenant(ctx))); err != nil {
 			return err
 		}
 	}

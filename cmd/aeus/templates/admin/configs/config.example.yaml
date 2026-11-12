@@ -21,6 +21,9 @@ auth:
   admin_password: Admin123
 
 bootstrap:
+  # Development only. With app.debug=false, Validate() requires both to be
+  # false: run `make migrate` and `make seed` as one-off steps instead of
+  # running DDL/seed on every replica at startup.
   auto_migrate: true
   seed_on_start: true
 

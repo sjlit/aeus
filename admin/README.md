@@ -8,7 +8,7 @@ admin 是 AEUS 框架的通用后台管理领域模块，基于 [rest/v3](https:
 - **JWT 认证**：登录 / 刷新 / 登出（`AuthService`），支持 Token 吊销与登录前后钩子；
 - **RBAC 接口鉴权**：`NewPermissionChecker` 对已收录进 `sys_permissions` 的 HTTP 路由按角色校验权限，**未收录路由默认拒绝（fail-closed）**；自助路由（profile / menu / password 等）由内置公开清单放行；`WithCheckerAllowlist` 是额外的显式 bypass 清单，不是“更严格”的开关（详见[接口权限校验](docs/guide/rbac.md)）；
 - **用户业务 RPC**（`UserService`）：个人资料、改密、管理员重置密码、头像、可见菜单、权限码；
-- **租户隔离（可选）**：显式 `WithMultiTenant(true)` / `WithTenantResolver(...)` 后，通过 GORM 回调为所有租户模型追加 `tenant_id` 过滤，并在创建时强制写入 resolver 的租户 ID；默认单租户不安装回调。
+- **租户隔离（可选）**：显式 `WithMultiTenant(true)` / `WithTenantResolver(...)` 后，通过 GORM 回调为所有租户模型追加 `tenant_id` 过滤，并在创建时强制写入 resolver 的租户 ID；resolver 返回空值会 fail-closed，系统路径需显式 `WithoutTenant`；默认单租户不安装回调。
 
 ## 特性
 

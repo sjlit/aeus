@@ -257,9 +257,12 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 		var span telemetry.Span
 
 		if s.tracer != nil {
-			md := metadata.FromContext(ctx)
+			// Extract directly from the HTTP headers. Attaching the metadata
+			// TeeReader happens below, after the span has started, so using
+			// MetadataCarrier here would always read from an empty Metadata
+			// and silently drop the inbound trace context.
 			ctx, span = s.tracer.Start(
-				s.tracer.Extract(ctx, telemetry.MetadataCarrier{MD: md}),
+				s.tracer.Extract(ctx, telemetry.HTTPHeaderCarrier{Header: ginCtx.Request.Header}),
 				fmt.Sprintf("%s %s", ginCtx.Request.Method, ginCtx.Request.URL.Path),
 				telemetry.WithSpanKind(telemetry.SpanKindServer),
 			)
@@ -321,28 +324,7 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 			// returned an error), writing an error envelope would append a
 			// second JSON document to the body. Log and keep the written one.
 			if !ginCtx.Writer.Written() {
-				switch {
-				case middleware.IsAbort(err):
-					var ae *errs.Error
-					if errors.As(err, &ae) {
-						abortWithEnvelope(ginCtx, ae.HTTPStatus(), int(ae.Code), ae.Message)
-					} else {
-						abortWithEnvelope(ginCtx, http.StatusOK, int(errs.CodeOK), "")
-					}
-				default:
-					var se *errs.Error
-					// errors.As unwraps wrapped errors (fmt.Errorf("%w", ...)),
-					// preserving the business code instead of degrading to 500.
-					if errors.As(err, &se) {
-						abortWithEnvelope(ginCtx, se.HTTPStatus(), int(se.Code), se.Message)
-					} else {
-						// Do not echo raw internal errors (SQL, paths,
-						// wrapped driver messages) to the client; log the
-						// detail server-side and return a stable envelope.
-						s.Logger.Errorf(ctx, "unhandled http handler error: %v", err)
-						abortWithEnvelope(ginCtx, http.StatusInternalServerError, int(errs.CodeUnavailable), "internal server error")
-					}
-				}
+				s.writeError(ctx, ginCtx, err)
 			} else {
 				s.Logger.Errorf(ctx, "response already written before error response: %v", err)
 			}
@@ -360,6 +342,34 @@ func (s *Server) requestInterceptor() gin.HandlerFunc {
 			s.metrics.RecordRequestTotal(ctx, Protocol, path, status)
 		}
 	}
+}
+
+// writeError maps an error returned by a handler or middleware onto the
+// shared envelope. Business errors keep their code/message; internal and
+// unknown errors collapse to a stable 500 without echoing server details.
+func (s *Server) writeError(ctx context.Context, ginCtx *gin.Context, err error) {
+	var ae *errs.Error
+	if middleware.IsAbort(err) {
+		if errors.As(err, &ae) {
+			code, message := errs.Public(err)
+			abortWithEnvelope(ginCtx, ae.HTTPStatus(), int(code), message)
+			return
+		}
+		// An abort without an errs.Error carries no client-safe code; treat
+		// it as an internal failure instead of reporting a successful body.
+		s.Logger.Errorf(ctx, "middleware abort without errs.Error: %v", err)
+		abortWithEnvelope(ginCtx, http.StatusInternalServerError, int(errs.CodeInternal), "internal server error")
+		return
+	}
+	if errors.As(err, &ae) {
+		code, message := errs.Public(err)
+		abortWithEnvelope(ginCtx, ae.HTTPStatus(), int(code), message)
+		return
+	}
+	// Do not echo raw internal errors (SQL, paths, wrapped driver messages)
+	// to the client; log the detail server-side and return a stable envelope.
+	s.Logger.Errorf(ctx, "unhandled http handler error: %v", err)
+	abortWithEnvelope(ginCtx, http.StatusInternalServerError, int(errs.CodeInternal), "internal server error")
 }
 
 func (s *Server) createListener() (err error) {

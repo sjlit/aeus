@@ -85,6 +85,77 @@ func TestLoadRejectsInvalidLogLevel(t *testing.T) {
 	}
 }
 
+func TestValidate_ProductionRejectsDevelopmentDefaults(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  func(*Config)
+		want string
+	}{
+		{
+			name: "jwt secret",
+			cfg:  func(c *Config) {},
+			want: "auth.jwt_secret",
+		},
+		{
+			name: "admin password",
+			cfg: func(c *Config) {
+				c.Auth.JWTSecret = "strong-secret"
+			},
+			want: "auth.admin_password",
+		},
+		{
+			name: "auto migrate",
+			cfg: func(c *Config) {
+				c.Auth.JWTSecret = "strong-secret"
+				c.Auth.AdminPassword = "strong-password"
+			},
+			want: "bootstrap.auto_migrate",
+		},
+		{
+			name: "seed on start",
+			cfg: func(c *Config) {
+				c.Auth.JWTSecret = "strong-secret"
+				c.Auth.AdminPassword = "strong-password"
+				c.Bootstrap.AutoMigrate = false
+			},
+			want: "bootstrap.seed_on_start",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Default()
+			cfg.App.Debug = false
+			tc.cfg(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want containing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidate_ProductionAcceptsExplicitSafeConfig(t *testing.T) {
+	cfg := Default()
+	cfg.App.Debug = false
+	cfg.Auth.JWTSecret = "strong-secret"
+	cfg.Auth.AdminPassword = "strong-password"
+	cfg.Bootstrap.AutoMigrate = false
+	cfg.Bootstrap.SeedOnStart = false
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
+func TestValidate_DevelopmentKeepsDefaultsUsable(t *testing.T) {
+	cfg := Default()
+	if !cfg.App.Debug {
+		t.Fatal("Default() must remain development-friendly")
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+}
+
 func TestWarnings(t *testing.T) {
 	cfg := Default()
 	if got := cfg.Warnings(); len(got) != 2 {

@@ -36,15 +36,15 @@ type Resolver func(ctx context.Context) string
 
 **返回 `""`(空字符串)**:
 
-- 完全不做租户过滤——操作看到所有租户的行。
-- 适用场景:超管 / 跨租户工具 / 后台任务 / `AuthService.Login`(登录前不知道)。
+- 视为缺少租户上下文，租户模型操作 **fail-closed**，返回 `ErrTenantRequired`（4005）。
+- 不会再隐式变成“跨租户查询”。
 
-需要显式跨租户操作时,用 `admin.WithoutTenant(ctx)` 包一层,而不是在请求体里伪造 `tenant_id`。`Seed` 内部已经使用该 bypass,保证引导数据不会被自定义 resolver 收敛到单个租户。
+需要显式跨租户操作时,用 `admin.WithoutTenant(ctx)` 包一层,而不是在请求体里伪造 `tenant_id`。`Seed` / `AuthService.Login` / 审计写入和后台任务已经使用该 bypass，保证引导数据不会被自定义 resolver 收敛到单个租户。
 
 **必须满足**:
 
 - 廉价(每个 DB 操作都会调一次);
-- 不可 panic(JWT 缺失时返回 `""` 即可);
+- 不可 panic(JWT 缺失时返回 `""` 即可，回调会拒绝该操作);
 - 认证决策不由 Resolver 负责,中间件才是。
 
 ## 10.3 默认实现
@@ -129,16 +129,16 @@ admin.WithTenantResolver(func(ctx context.Context) string {
 ### 后台任务(显式跨租户)
 
 ```go
-// 后台 goroutine,没有 claims
-db := adminDB.WithContext(context.Background()) // ctx 无 claims → resolver 返回 "" → 不限租户
+// 后台 goroutine,没有 claims：显式使用 bypass
+db := adminDB.WithContext(admin.WithoutTenant(context.Background()))
 db.Find(&rows)
 ```
 
 ### AuthService.Login
 
-天然在未隔离模式运行:
+显式在未隔离模式运行:
 
-- `/auth/login` 在 JWT allowlist 上,ctx 无 claims → resolver 返回 `""` → 跨租户查找用户(同 username 多租户同名用户时按 `tenant_id` 显式过滤,见 `service/auth.go:259`)。
+- `/auth/login` 在 JWT allowlist 上,`AuthService.Login` 内部使用 `WithoutTenant(ctx)` 跨租户查找用户(同 username 多租户同名用户时再按 `tenant_id` 显式过滤,见 `service/auth.go:259`)。
 - 一旦登录成功,JWT 持有 `tid`,后续请求被 resolver 锁定到该租户。
 
 ## 10.7 调试与排错
@@ -148,5 +148,5 @@ db.Find(&rows)
 | 数据"消失" | 检查 `WithTenantResolver` 是否返回了非预期值;确认 `*auth.Claims.TenantID` 与表中 `tenant_id` 一致 |
 | 跨租户看到数据 | 检查中间件是否把 JWT claims 写入 ctx;检查 resolver 是否错误返回 `""` |
 | 全局模型报错 "no column tenant_id" | rest/v3 旧版本无条件追加;升级 admin 确保 `modelHasTenantIDColumn` 守卫生效 |
-| 创建时 `tenant_id` 空 | resolver 返回了空字符串;Create 回调不会强制写入(空 = 不限租户 ≠ 默认租户) |
+| 创建时 `tenant_id` 空 | resolver 返回了空字符串;Create 回调会 fail-closed 并返回 `ErrTenantRequired`。系统路径请显式 `WithoutTenant` 并在模型上写 `TenantID` |
 | 删除时出现递归 | `purgeRolePermissions` 必须用 `NewDB + SkipHooks` 会话 |

@@ -92,7 +92,7 @@ func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
 			if span != nil && !middleware.IsAbort(err) {
 				span.SetError(err)
 			}
-			err = mapGRPCError(err)
+			err = s.mapGRPCError(ctx, err)
 		}
 		s.flushOutgoingMD(ctx, outgoing)
 		s.recordMetrics(ctx, info.FullMethod, start, err)
@@ -118,7 +118,7 @@ func (s *Server) streamServerInterceptor() grpc.StreamServerInterceptor {
 			if span != nil && !middleware.IsAbort(err) {
 				span.SetError(err)
 			}
-			err = mapGRPCError(err)
+			err = s.mapGRPCError(ctx, err)
 		}
 		s.flushOutgoingMD(ctx, outgoing)
 		s.recordMetrics(ctx, info.FullMethod, start, err)
@@ -163,24 +163,30 @@ func (s *Server) attachMetadata(ctx context.Context, fullMethod string) (context
 }
 
 // mapGRPCError converts a framework error into the gRPC status form:
-//   - a *errs.Error becomes status.Error(code, msg);
-//   - an Abort wrapper collapses to OK (the abort has already been written);
-//   - any other error is returned unchanged.
-func mapGRPCError(err error) error {
+//   - a *errs.Error becomes status.Error(code, public message);
+//   - an Abort without an errs.Error collapses to codes.Aborted;
+//   - any other error is logged and replaced with codes.Internal plus a
+//     generic message, so SQL/driver details never reach the client.
+func (s *Server) mapGRPCError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 	var ae *errs.Error
 	if middleware.IsAbort(err) {
 		if errors.As(err, &ae) {
-			return status.Error(codes.Code(ae.GRPCStatus()), ae.Message)
+			_, message := errs.Public(err)
+			return status.Error(codes.Code(ae.GRPCStatus()), message)
 		}
-		return status.Error(codes.OK, "")
+		return status.Error(codes.Aborted, "request aborted")
 	}
 	if errors.As(err, &ae) {
-		return status.Error(codes.Code(ae.GRPCStatus()), ae.Message)
+		_, message := errs.Public(err)
+		return status.Error(codes.Code(ae.GRPCStatus()), message)
 	}
-	return err
+	if s.Logger != nil {
+		s.Logger.Errorf(ctx, "unhandled grpc handler error: %v", err)
+	}
+	return status.Error(codes.Internal, "internal server error")
 }
 
 // recordMetrics records request duration and total. err drives the status label.

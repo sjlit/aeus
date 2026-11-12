@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/sjlit/aeus/middleware"
@@ -34,6 +36,55 @@ func TestUnaryServerInterceptor_ErrorMapping(t *testing.T) {
 	}
 	if st.Code() != codes.NotFound {
 		t.Fatalf("want code %v, got %v", codes.NotFound, st.Code())
+	}
+}
+
+func TestUnaryServerInterceptor_UnknownErrorDoesNotLeakDetail(t *testing.T) {
+	svr := New(WithAddress(":0"))
+	svr.Use(func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context) error {
+			return errors.New("db password=super-secret")
+		}
+	})
+
+	interceptor := svr.unaryServerInterceptor()
+	info := &grpc.UnaryServerInfo{FullMethod: "/test.Test/Method"}
+	_, err := interceptor(context.Background(), nil, info, func(ctx context.Context, req any) (any, error) {
+		return nil, nil
+	})
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected grpc status error, got %v", err)
+	}
+	if st.Code() != codes.Internal {
+		t.Fatalf("code = %v, want %v", st.Code(), codes.Internal)
+	}
+	if strings.Contains(st.Message(), "super-secret") {
+		t.Fatalf("status leaked internal error: %q", st.Message())
+	}
+}
+
+func TestUnaryServerInterceptor_AbortWithoutErrsError(t *testing.T) {
+	svr := New(WithAddress(":0"))
+	svr.Use(func(next middleware.Handler) middleware.Handler {
+		return func(ctx context.Context) error {
+			return middleware.Abort(errors.New("stop"))
+		}
+	})
+
+	interceptor := svr.unaryServerInterceptor()
+	info := &grpc.UnaryServerInfo{FullMethod: "/test.Test/Method"}
+	_, err := interceptor(context.Background(), nil, info, func(ctx context.Context, req any) (any, error) {
+		return nil, nil
+	})
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("expected grpc status error, got %v", err)
+	}
+	if st.Code() != codes.Aborted {
+		t.Fatalf("code = %v, want %v", st.Code(), codes.Aborted)
 	}
 }
 

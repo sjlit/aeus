@@ -2,8 +2,8 @@ package etcd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"path"
 	"sync"
 
@@ -69,9 +69,9 @@ func (e *etcdRegistry) Init(opts ...registry.RegistryOption) (err error) {
 	if e.options.TLSConfig != nil {
 		cfg.TLS = e.options.TLSConfig
 	} else if e.options.Secure {
-		cfg.TLS = &tls.Config{
-			InsecureSkipVerify: true, // TODO: 生产环境应配置有效 TLS 证书
-		}
+		// Never silently downgrade certificate verification. Callers that
+		// need TLS must provide a validated config (RootCAs/ServerName).
+		return fmt.Errorf("etcd: Secure requires a TLS config; pass registry.WithTLS")
 	}
 	if e.prefix == "" {
 		e.prefix = "/micro/service/"

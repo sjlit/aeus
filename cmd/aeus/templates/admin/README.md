@@ -85,12 +85,16 @@ static `dev` value.
 
 ## Production migration
 
-`bootstrap.auto_migrate=true` is convenient in development but should be
-off in production:
+`bootstrap.auto_migrate=true` is convenient in development. With
+`app.debug=false`, `Config.Validate()` rejects the development defaults:
+`JWT_SECRET=change-me`, `ADMIN_PASSWORD=Admin123`, `auto_migrate=true`,
+and `seed_on_start=true` all fail fast. Use explicit steps instead:
 
 ```bash
 make migrate                 # create/update the schema explicitly
-AUTO_MIGRATE=false make run
+make seed                    # one-off bootstrap of admin/menus/permissions
+DEBUG=false AUTO_MIGRATE=false SEED_ON_START=false \
+  JWT_SECRET=... ADMIN_PASSWORD=... make run
 ```
 
 `make seed` runs the idempotent seed outside the server process. In a

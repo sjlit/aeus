@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/sjlit/aeus/infra/logger"
 	"github.com/sjlit/aeus/pkg/errs"
 )
 
@@ -27,7 +28,7 @@ func decodeEnvelope(t *testing.T, body []byte) (int, string) {
 func callRespond(t *testing.T, data any) (int, string) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	res := newResponder()
+	res := newResponder(logger.Default())
 	res.Respond(rec, httptest.NewRequest(http.MethodGet, "/", nil), data)
 	return decodeEnvelope(t, rec.Body.Bytes())
 }
@@ -49,6 +50,16 @@ func TestRespond_DirectErrorsError(t *testing.T) {
 // which the old single-step type assertion couldn't unwrap. The frontend
 // used to see code=1001 (Invalid) instead of the real 4003 (PermissionDenied),
 // routing the response into the wrong branch.
+func TestRespond_InternalErrorsErrorHidesDetail(t *testing.T) {
+	code, msg := callRespond(t, errs.Internal(errors.New("db password=super-secret")))
+	if code != int(errs.CodeInternal) {
+		t.Fatalf("code = %d, want %d", code, errs.CodeInternal)
+	}
+	if msg != "internal server error" {
+		t.Fatalf("msg = %q, want generic internal message", msg)
+	}
+}
+
 func TestRespond_WrappedWithFmtErrorf(t *testing.T) {
 	wrapped := fmt.Errorf("role delete failed: %w", errs.ErrPermissionDenied)
 	code, msg := callRespond(t, wrapped)
@@ -82,17 +93,16 @@ func TestRespond_DoubleWrapped(t *testing.T) {
 	}
 }
 
-// TestRespond_PlainError keeps the Invalid fallback: when no *errs.Error
-// lives anywhere in the chain, the wire must still report a non-OK code.
+// TestRespond_PlainError ensures a plain error is treated as internal:
+// the client gets a stable code/message and never sees the raw text.
 func TestRespond_PlainError(t *testing.T) {
-	plain := errors.New("boom")
+	plain := errors.New("db password=super-secret")
 	code, msg := callRespond(t, plain)
-	if code != int(errs.CodeInvalid) {
-		t.Errorf("code = %d, want %d", code, errs.CodeInvalid)
+	if code != int(errs.CodeInternal) {
+		t.Errorf("code = %d, want %d", code, errs.CodeInternal)
 	}
-	if msg != "boom" {
-		t.Errorf("msg = %q, want %q (raw err.Error() when no *errs.Error found)",
-			msg, "boom")
+	if msg != "internal server error" {
+		t.Errorf("msg = %q, want generic internal message", msg)
 	}
 }
 
@@ -102,7 +112,7 @@ func TestRespond_PlainError(t *testing.T) {
 // non-2xx status codes.
 func TestRespond_BusinessErrorKeepsHTTP200(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newResponder().Respond(rec, httptest.NewRequest(http.MethodGet, "/", nil), errs.ErrPermissionDenied)
+	newResponder(logger.Default()).Respond(rec, httptest.NewRequest(http.MethodGet, "/", nil), errs.ErrPermissionDenied)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -117,7 +127,7 @@ func TestRespond_BusinessErrorKeepsHTTP200(t *testing.T) {
 func TestRespond_Success(t *testing.T) {
 	payload := map[string]any{"hello": "world"}
 	rec := httptest.NewRecorder()
-	res := newResponder()
+	res := newResponder(logger.Default())
 	res.Respond(rec, httptest.NewRequest(http.MethodGet, "/", nil), payload)
 
 	if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {

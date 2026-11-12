@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/sjlit/aeus/infra/logger"
 	"github.com/sjlit/aeus/pkg/errs"
 	responsepkg "github.com/sjlit/aeus/pkg/response"
 	"github.com/sjlit/rest/v3"
@@ -20,16 +21,23 @@ func (f responderFunc) Respond(w http.ResponseWriter, r *http.Request, data any)
 }
 
 // newResponder returns the default rest.Responder: the admin envelope
-// writer.
-func newResponder() rest.Responder {
-	return responderFunc(respond)
+// writer. The logger is used to retain details that are deliberately
+// withheld from the client.
+func newResponder(lg logger.Logger) rest.Responder {
+	if lg == nil {
+		lg = logger.Default()
+	}
+	return responderFunc(func(w http.ResponseWriter, r *http.Request, data any) {
+		respond(lg, w, r, data)
+	})
 }
 
 // respond turns data into an envelope and writes it via writeEnvelope.
 // When data is an error, the business code is recovered from the
-// deepest *errs.Error in its Unwrap chain; anything else is a
-// success with code 0 and data as the payload.
-func respond(w http.ResponseWriter, r *http.Request, data any) {
+// deepest *errs.Error in its Unwrap chain. Internal/infrastructure
+// failures and plain errors collapse to CodeInternal with a generic
+// message; their cause is logged instead of serialized.
+func respond(lg logger.Logger, w http.ResponseWriter, r *http.Request, data any) {
 	code := errs.CodeOK
 	message := ""
 	payload := data
@@ -40,19 +48,16 @@ func respond(w http.ResponseWriter, r *http.Request, data any) {
 		// wrapped errors used to fall back to errs.CodeInvalid (=1001)
 		// and lose the real business code — the frontend then misroutes
 		// the response (e.g. 4003 PermissionDenied → 1001 Invalid →
-		// toast instead of "jump to login").  errors.As is the same
-		// pattern pkg/errs itself uses inside IsCode
-		// (pkg/errs/error.go:107-113).  Plain errors (no
-		// *errs.Error anywhere in the chain) keep the Invalid
-		// fallback so the wire never reports a misleading 0/OK.
-		code = errs.CodeInvalid
+		// toast instead of "jump to login").
 		var e *errs.Error
 		if errors.As(err, &e) {
-			code = e.Code
-			message = e.Message
-		}
-		if message == "" {
-			message = err.Error()
+			code, message = errs.Public(err)
+		} else {
+			code = errs.CodeInternal
+			message = "internal server error"
+			if lg != nil {
+				lg.Errorf(r.Context(), "admin responder: unhandled error: %v", err)
+			}
 		}
 		payload = nil
 	}

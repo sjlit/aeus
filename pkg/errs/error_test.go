@@ -43,6 +43,84 @@ func TestWrap(t *testing.T) {
 	}
 }
 
+func TestInternal(t *testing.T) {
+	inner := errors.New("db password=secret")
+	err := Internal(inner)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatal("Internal error does not unwrap to *Error")
+	}
+	if e.Code != CodeInternal {
+		t.Fatalf("Code = %d, want %d", e.Code, CodeInternal)
+	}
+	if e.Message != "internal server error" {
+		t.Fatalf("Message = %q, want generic message", e.Message)
+	}
+	if !errors.Is(err, inner) {
+		t.Fatal("Internal must retain the cause")
+	}
+	if Internal(nil) != nil {
+		t.Fatal("Internal(nil) must return nil")
+	}
+}
+
+func TestWrap_InternalCodeDoesNotExposeCause(t *testing.T) {
+	inner := errors.New("db password=secret")
+	err := Wrap(CodeInternal, inner)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatal("Wrap error does not unwrap to *Error")
+	}
+	if e.Message != "internal server error" {
+		t.Fatalf("Message = %q, want generic message", e.Message)
+	}
+	if e.Error() == "" || !errors.Is(err, inner) {
+		t.Fatal("cause must remain available for logging/errors.Is")
+	}
+}
+
+func TestWrapPublic(t *testing.T) {
+	inner := errors.New("driver detail")
+	err := WrapPublic(CodeInvalid, "invalid request", inner)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatal("WrapPublic error does not unwrap to *Error")
+	}
+	if e.Code != CodeInvalid || e.Message != "invalid request" {
+		t.Fatalf("got code=%d message=%q", e.Code, e.Message)
+	}
+	if !errors.Is(err, inner) {
+		t.Fatal("WrapPublic must retain the cause")
+	}
+}
+
+func TestPublic(t *testing.T) {
+	cases := []struct {
+		name    string
+		err     error
+		want    Code
+		message string
+	}{
+		{"nil", nil, CodeOK, ""},
+		{"business", New(CodeNotFound, "user not found"), CodeNotFound, "user not found"},
+		{"wrapped business", fmt.Errorf("repo: %w", New(CodePermissionDenied, "no access")), CodePermissionDenied, "no access"},
+		{"internal", Internal(errors.New("sql: password=secret")), CodeInternal, "internal server error"},
+		{"database", New(CodeDatabaseError, "dial tcp 10.0.0.1:5432"), CodeDatabaseError, "internal server error"},
+		{"plain", errors.New("raw secret"), CodeInternal, "internal server error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, message := Public(tc.err)
+			if code != tc.want {
+				t.Fatalf("code = %d, want %d", code, tc.want)
+			}
+			if message != tc.message {
+				t.Fatalf("message = %q, want %q", message, tc.message)
+			}
+		})
+	}
+}
+
 func TestNew(t *testing.T) {
 	got := New(0, "success")
 	if got.Code != 0 {

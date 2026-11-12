@@ -113,7 +113,11 @@ func (r *auditRecorder) record(ctx context.Context, scope *rest.RuntimeScope, ac
 		Table:  truncateUTF8(scope.TableName, _auditNameMaxBytes),
 		Data:   auditData(action, diff, deleted),
 	}
-	if err := r.db.WithContext(context.WithoutCancel(ctx)).Create(&row).Error; err != nil {
+	// The audit row already carries its tenant id from RuntimeScope.
+	// Bypass the tenant callback explicitly: audit writes may run after
+	// the request context lost its claims (or from a system path), and
+	// must not fail closed just because the resolver is empty.
+	if err := r.db.WithContext(WithoutTenant(context.WithoutCancel(ctx))).Create(&row).Error; err != nil {
 		r.log.Warn(ctx, "write operation audit failed",
 			"error", err.Error(),
 			"action", action,
