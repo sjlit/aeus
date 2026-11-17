@@ -104,7 +104,7 @@ const hasItems = computed(() => props.items.length > 0)
 }
 
 .text-btn:hover {
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
 }
 
 .activity-list {
@@ -200,7 +200,7 @@ const hasItems = computed(() => props.items.length > 0)
   height: 44px;
   border-radius: 13px;
   background: var(--surface-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: 21px;
 }
 

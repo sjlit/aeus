@@ -431,7 +431,7 @@ function viewAllAudits(): void {
   padding: 10px 14px;
   border: 1px solid rgba(154, 101, 22, 0.18);
   border-radius: var(--r-sm);
-  background: rgba(212, 160, 74, 0.08);
+  background: var(--warning-tint);
   color: var(--el-color-warning);
   font-size: var(--fs-sm);
 }

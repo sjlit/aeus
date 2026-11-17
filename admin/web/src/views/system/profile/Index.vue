@@ -309,7 +309,7 @@ const activeTab = ref('profile')
     overflow: hidden;
     display: grid;
     place-items: center;
-    background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+    background: var(--grad-warm);
     box-shadow: 0 6px 18px var(--shadow-soft);
     margin-bottom: 14px;
 }
@@ -321,7 +321,7 @@ const activeTab = ref('profile')
 }
 
 .avatar-fallback {
-    color: white;
+    color: var(--on-solid);
     font-weight: 700;
     font-size: var(--fs-2xl);
     letter-spacing: 0.02em;

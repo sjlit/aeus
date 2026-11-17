@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Expand, Fold, Menu, Search } from '@element-plus/icons-vue'
+import { Expand, Fold, Menu, Monitor, Moon, Search, Sunny } from '@element-plus/icons-vue'
 import { useUiStore } from '../../stores/ui'
 import { useMediaQuery } from '../../composables/useMediaQuery'
 import UserMenu from './UserMenu.vue'
@@ -44,6 +44,21 @@ const toggleLabel = computed(() => {
 const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.userAgent)
     ? '⌘'
     : 'Ctrl'
+
+// 主题入口:图标按当前模式切换,下拉三态可显式选择
+const themeIcon = computed(() => {
+    if (ui.theme === 'light') return Sunny
+    if (ui.theme === 'dark') return Moon
+    return Monitor
+})
+const themeLabel = computed(() => {
+    if (ui.theme === 'light') return '浅色'
+    if (ui.theme === 'dark') return '深色'
+    return '跟随系统'
+})
+function onThemeCommand(cmd: string) {
+    if (cmd === 'light' || cmd === 'dark' || cmd === 'system') ui.setTheme(cmd)
+}
 </script>
 
 <template>
@@ -85,6 +100,27 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
                     <Search />
                 </el-icon>
             </button>
+            <el-dropdown trigger="click" @command="onThemeCommand">
+                <button class="icon-btn theme-btn" type="button" :aria-label="`主题:${themeLabel}`"
+                    :title="`主题:${themeLabel}`">
+                    <el-icon>
+                        <component :is="themeIcon" />
+                    </el-icon>
+                </button>
+                <template #dropdown>
+                    <el-dropdown-menu>
+                        <el-dropdown-item command="system" :disabled="ui.theme === 'system'">
+                            <el-icon><Monitor /></el-icon>跟随系统
+                        </el-dropdown-item>
+                        <el-dropdown-item command="light" :disabled="ui.theme === 'light'">
+                            <el-icon><Sunny /></el-icon>浅色
+                        </el-dropdown-item>
+                        <el-dropdown-item command="dark" :disabled="ui.theme === 'dark'">
+                            <el-icon><Moon /></el-icon>深色
+                        </el-dropdown-item>
+                    </el-dropdown-menu>
+                </template>
+            </el-dropdown>
             <UserMenu />
         </div>
     </div>
@@ -134,8 +170,8 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 }
 
 .icon-btn:hover {
-    background: var(--acc-mint);
-    color: white;
+    background: var(--acc-mint-solid);
+    color: var(--on-solid);
     transform: scale(1.05);
 }
 
@@ -168,7 +204,7 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 }
 
 .crumb-link:hover {
-    color: var(--acc-mint);
+    color: var(--acc-mint-text);
 }
 
 .crumb-current {
@@ -210,13 +246,13 @@ const modKey = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(nav
 }
 
 .searchbox:focus-within {
-    background: white;
+    background: var(--surface);
     border-color: var(--acc-mint);
     box-shadow: var(--ring);
 }
 
 .searchbox:hover {
-    background: white;
+    background: var(--surface);
     border-color: var(--acc-mint);
     box-shadow: var(--ring-soft);
     transform: translateY(-1px);

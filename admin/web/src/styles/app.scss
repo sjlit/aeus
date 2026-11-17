@@ -86,7 +86,7 @@ body {
       width: 24px;
       height: 24px;
       background: var(--grad-warm);
-      color: white;
+      color: var(--on-solid);
       border-radius: 6px;
       display: grid;
       place-items: center;
@@ -97,7 +97,7 @@ body {
       line-height: 1;
       letter-spacing: 0;
       transform: rotate(-6deg);
-      box-shadow: 0 3px 10px rgba(244, 164, 132, 0.35);
+      box-shadow: 0 3px 10px var(--glow-brand);
       flex-shrink: 0;
     }
   }
@@ -182,7 +182,7 @@ body {
     // 文字/图标走 currentColor,淡染上的 #245f4c 对比度 ~7:1(AA)。
     .el-menu-item.is-active {
       background: var(--menu-active-tint) !important;
-      color: var(--acc-mint-deeper) !important;
+      color: var(--acc-mint-text) !important;
       font-weight: 600;
 
       &::before {
@@ -233,7 +233,7 @@ body {
       // 圆点沿用 --menu-active-1
       .el-menu-item.is-active {
         background: var(--menu-active-tint-soft) !important;
-        color: var(--acc-mint-deeper) !important;
+        color: var(--acc-mint-text) !important;
         font-weight: 600;
         box-shadow: none;
 
@@ -390,7 +390,7 @@ body {
   width: 18px;
   height: 18px;
   background: var(--grad-warm);
-  color: white;
+  color: var(--on-solid);
   border-radius: 5px;
   font-family: var(--display);
   font-style: italic;
@@ -399,7 +399,7 @@ body {
   line-height: 1;
   letter-spacing: 0;
   transform: rotate(-6deg);
-  box-shadow: 0 2px 6px rgba(244, 164, 132, 0.3);
+  box-shadow: 0 2px 6px var(--glow-brand);
   flex-shrink: 0;
 }
 
@@ -493,7 +493,7 @@ body {
 
 .sidebar-pop .el-menu .el-menu-item.is-active {
   background: var(--menu-active-tint) !important;
-  color: var(--acc-mint-deeper) !important;
+  color: var(--acc-mint-text) !important;
   font-weight: 600;
 }
 
@@ -562,8 +562,8 @@ body {
 }
 
 .drawer-close:hover {
-  background: var(--acc-mint);
-  color: white;
+  background: var(--acc-mint-solid);
+  color: var(--on-solid);
 }
 
 .drawer-close:focus-visible {

@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
     position: fixed;
     inset: 0;
     z-index: 2100;
-    background: rgba(30, 60, 60, 0.28);
+    background: var(--scrim);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     display: grid;
@@ -215,7 +215,7 @@ onBeforeUnmount(() => {
     -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-lg);
-    box-shadow: 0 24px 64px rgba(30, 60, 60, 0.28);
+    box-shadow: var(--overlay-shadow);
     overflow: hidden;
     animation: palette-in 0.16s ease;
 }
@@ -306,7 +306,7 @@ onBeforeUnmount(() => {
     width: 3px;
     height: 16px;
     border-radius: 2px;
-    background: var(--acc-mint-deep);
+    background: var(--acc-mint-text);
 }
 
 .p-item-icon {
@@ -347,7 +347,7 @@ onBeforeUnmount(() => {
     display: flex;
     gap: 16px;
     padding: 10px 16px;
-    border-top: 1px dashed rgba(30, 90, 90, 0.15);
+    border-top: 1px dashed var(--dash-line);
     font-size: var(--fs-xs);
     color: var(--ink-3);
 }

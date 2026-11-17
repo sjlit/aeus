@@ -90,12 +90,12 @@ defineEmits<{
 }
 
 .text-btn:hover {
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
 }
 
 .text-btn--strong {
   margin-top: 14px;
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-weight: 600;
 }
 
@@ -139,7 +139,7 @@ defineEmits<{
   height: 34px;
   border-radius: 10px;
   background: var(--surface-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: var(--fs-md);
 }
 
@@ -207,7 +207,7 @@ defineEmits<{
   height: 48px;
   border-radius: 14px;
   background: var(--surface-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: 22px;
 }
 

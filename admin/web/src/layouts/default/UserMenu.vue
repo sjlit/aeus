@@ -69,7 +69,7 @@ function onCommand(cmd: string) {
 }
 
 .user-menu-trigger:hover {
-    background: white;
+    background: var(--surface);
     border-color: var(--acc-mint);
     box-shadow: 0 2px 10px var(--shadow-soft);
 }
@@ -81,7 +81,7 @@ function onCommand(cmd: string) {
     background: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
     display: grid;
     place-items: center;
-    color: white;
+    color: var(--on-solid);
     font-weight: 600;
     font-size: var(--fs-2xs);
     flex-shrink: 0;

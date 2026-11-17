@@ -9,10 +9,10 @@
   /* 背景全部透明 / 半透明,让毛玻璃透出渐变底色 */
   --el-bg-color: transparent;
   --el-bg-color-page: transparent;
-  --el-bg-color-overlay: #ffffff;
+  --el-bg-color-overlay: var(--overlay-bg);
 
-  --el-fill-color-blank: rgba(255, 255, 255, 0.72);
-  --el-fill-color-light: rgba(255, 255, 255, 0.5);
+  --el-fill-color-blank: var(--glass);
+  --el-fill-color-light: var(--glass-soft);
   --el-fill-color-lighter: rgba(255, 255, 255, 0.32);
   --el-fill-color-extra-light: rgba(255, 255, 255, 0.18);
 
@@ -20,14 +20,14 @@
   --el-border-color-light: rgba(30, 90, 90, 0.1);
   --el-border-color-lighter: rgba(30, 90, 90, 0.06);
 
-  --el-text-color-primary: #1e3a3a;
-  --el-text-color-regular: #3a5a58;
-  --el-text-color-secondary: #5a7673;
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-2);
+  --el-text-color-secondary: var(--ink-3);
   --el-text-color-placeholder: #6b8a88;
 
   /* 主色 = 深薄荷。浅薄荷 #6cc5a8 在白底只有约 2:1 对比度,
      继续作为文字/标签色会不可读;浅色只保留给装饰和淡染底色。 */
-  --el-color-primary: #2f7d63;
+  --el-color-primary: var(--acc-mint-solid);
   --el-color-primary-light-3: #6aa791;
   --el-color-primary-light-5: #97c4b4;
   --el-color-primary-light-7: #c3dfd6;
@@ -81,19 +81,105 @@
   --el-color-info-dark-2: #3f5972;
   --el-color-info-rgb: 79, 111, 143;
 
-  --el-box-shadow: 0 8px 32px rgba(30, 90, 90, 0.12);
-  --el-box-shadow-light: 0 2px 12px rgba(30, 90, 90, 0.08);
+  --el-box-shadow: 0 8px 32px var(--shadow-soft);
+  --el-box-shadow-light: 0 2px 12px var(--shadow-soft);
 
   --el-border-radius-base: 10px;
   --el-font-family: var(--body);
+}
+
+/* =========================================================
+   Element Plus 深色 token
+   EP 把 light-N / rgb 等派生值编译成字面量,必须整套覆盖;
+   浅底语义色(light-9)在暗色下换成混黑的深底,而不是近白。
+   ========================================================= */
+[data-theme='dark'] {
+  --el-fill-color-lighter: rgba(184, 228, 216, 0.05);
+  --el-fill-color-extra-light: rgba(184, 228, 216, 0.03);
+
+  --el-border-color: rgba(184, 228, 216, 0.14);
+  --el-border-color-light: rgba(184, 228, 216, 0.1);
+  --el-border-color-lighter: rgba(184, 228, 216, 0.06);
+
+  --el-text-color-placeholder: #93ada7;
+
+  --el-color-primary: #6cc5a8;
+  --el-color-primary-light-3: #8ad4ba;
+  --el-color-primary-light-5: #a9e2ce;
+  --el-color-primary-light-7: #c7efe1;
+  --el-color-primary-light-8: #d9f5eb;
+  --el-color-primary-light-9: #1b3a32;
+  --el-color-primary-dark-2: #4aa789;
+
+  --el-color-success: #6cc07a;
+  --el-color-success-light-3: #8fd09a;
+  --el-color-success-light-5: #b0dfb7;
+  --el-color-success-light-7: #d0efd4;
+  --el-color-success-light-8: #e0f5e2;
+  --el-color-success-light-9: #1b2f20;
+  --el-color-success-dark-2: #4f9c5c;
+  --el-color-success-rgb: 108, 192, 122;
+
+  --el-color-warning: #d8ad68;
+  --el-color-warning-light-3: #e2c48c;
+  --el-color-warning-light-5: #ebd6ae;
+  --el-color-warning-light-7: #f3e6d0;
+  --el-color-warning-light-8: #f7efe0;
+  --el-color-warning-light-9: #322718;
+  --el-color-warning-dark-2: #b88e4e;
+  --el-color-warning-rgb: 216, 173, 104;
+
+  --el-color-danger: #e8948a;
+  --el-color-danger-light-3: #efb1aa;
+  --el-color-danger-light-5: #f4cbc6;
+  --el-color-danger-light-7: #f8e0dd;
+  --el-color-danger-light-8: #fbedeb;
+  --el-color-danger-light-9: #331d1b;
+  --el-color-danger-dark-2: #c46e64;
+  --el-color-danger-rgb: 232, 148, 138;
+
+  --el-color-info: #91b7d8;
+  --el-color-info-light-3: #afcbe3;
+  --el-color-info-light-5: #c8dcee;
+  --el-color-info-light-7: #deeaf5;
+  --el-color-info-light-8: #eaf2f9;
+  --el-color-info-light-9: #1a2836;
+  --el-color-info-dark-2: #6d95b8;
+  --el-color-info-rgb: 145, 183, 216;
+
+  --el-box-shadow: 0 8px 32px var(--shadow);
+  --el-box-shadow-light: 0 2px 12px var(--shadow-soft);
+
+  /* --- 防御性覆盖:EP 里用 --el-color-primary 作"背景+白字"的组件 ---
+     dark 主题下 primary 是浅薄荷(#6cc5a8),直接配白字只有约 2:1。
+     本项目当前未用 radio/checkbox button、tree 拖拽,但主题系统应保证
+     后续引入时不会退化成浅底白字,统一改回深薄荷底 + 白字。
+     EP 把前两组变量定义在组件自身上,必须同选择器 + 更高特异性覆盖,
+     挂在 :root 上会被组件级定义盖掉。 */
+  .el-radio-button {
+    --el-radio-button-checked-bg-color: var(--acc-mint-solid);
+    --el-radio-button-checked-text-color: var(--on-solid);
+    --el-radio-button-checked-border-color: var(--acc-mint-solid);
+  }
+
+  .el-checkbox-button {
+    --el-checkbox-button-checked-bg-color: var(--acc-mint-solid);
+    --el-checkbox-button-checked-text-color: var(--on-solid);
+    --el-checkbox-button-checked-border-color: var(--acc-mint-solid);
+  }
+
+  .el-tree-node.is-drop-inner > .el-tree-node__content .el-tree-node__label {
+    background: var(--acc-mint-solid) !important;
+    color: var(--on-solid) !important;
+  }
 }
 
 // 浮层统一实色面:白底 + teal 描边,不再用毛玻璃——backdrop-filter 在
 // 弹窗开启动画和身后页面滚动时反复重绘,是浮层渲染成本的大头;
 // 玻璃质感保留给页面骨架(卡片/输入框/侧栏/顶栏)。
 // 白色 --glass-border 在实色底上不可见,描边一律用 teal 系。
-@mixin glass-surface($radius: var(--r-lg), $shadow: 0 24px 64px rgba(30, 60, 60, 0.28)) {
-  background: #fff !important;
+@mixin glass-surface($radius: var(--r-lg), $shadow: var(--overlay-shadow)) {
+  background: var(--overlay-bg) !important;
   border: 1px solid var(--el-border-color-light) !important;
   border-radius: $radius !important;
   box-shadow: $shadow !important;
@@ -155,13 +241,13 @@
 }
 
 .el-menu-item.is-active {
-  background: rgba(255, 255, 255, 0.7) !important;
+  background: var(--menu-active-glass) !important;
   color: var(--ink) !important;
   box-shadow: 0 2px 8px var(--shadow-soft) !important;
 }
 
 .el-menu-item:hover {
-  background: rgba(255, 255, 255, 0.4) !important;
+  background: var(--glass-soft) !important;
 }
 
 // 玻璃态 wrapper 上下 padding 用 4px(对齐 select),inner 高度相应减 8px,
@@ -209,28 +295,32 @@
 /* primary 实色深薄荷:白字对比度 4.9:1 过 AA;
    双色相渐变只保留给装饰元素(text-gradient / tab 激活条) */
 .el-button--primary:not(.is-link) {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
   border: none !important;
-  color: white !important;
+  color: var(--on-solid) !important;
 }
 
 .el-button--primary:not(.is-link):hover,
 .el-button--primary:not(.is-link):active {
-  background: var(--acc-mint-deeper) !important;
+  background: var(--acc-mint-solid-hover) !important;
 }
 
+/* 禁用态:灰底 + 灰字,与启用态的深薄荷+白字明确区分。
+   不能只改背景 —— --on-solid(白)会继承下来,浅底白字对比度不足。 */
 .el-button--primary.is-disabled:not(.is-link) {
-  background: var(--el-color-primary-light-5) !important;
+  background: var(--disabled-solid-bg) !important;
+  border-color: transparent !important;
+  color: var(--disabled-solid-text) !important;
 }
 
 .el-button--primary.is-link {
   background: transparent !important;
   border: none !important;
-  color: var(--acc-mint-deep) !important;
+  color: var(--acc-mint-text) !important;
 }
 
 .el-button--primary.is-link:hover {
-  color: var(--acc-mint-deeper) !important;
+  color: var(--acc-mint-text) !important;
 }
 
 .el-checkbox {
@@ -247,38 +337,38 @@
 }
 
 .el-tag--primary {
-  color: var(--acc-mint-deeper) !important;
+  color: var(--tag-primary-text) !important;
   background: var(--menu-active-tint) !important;
   border-color: rgba(47, 125, 99, 0.24) !important;
 }
 
 .el-tag--success {
-  color: #375c2f !important;
+  color: var(--tag-success-text) !important;
   background: var(--el-color-success-light-9) !important;
   border-color: var(--el-color-success-light-7) !important;
 }
 
 .el-tag--warning {
-  color: #7a4d0f !important;
+  color: var(--tag-warning-text) !important;
   background: var(--el-color-warning-light-9) !important;
   border-color: var(--el-color-warning-light-7) !important;
 }
 
 .el-tag--danger {
-  color: #9e2f24 !important;
+  color: var(--tag-danger-text) !important;
   background: var(--el-color-danger-light-9) !important;
   border-color: var(--el-color-danger-light-7) !important;
 }
 
 .el-tag--info {
-  color: #3f5f7f !important;
+  color: var(--tag-info-text) !important;
   background: var(--el-color-info-light-9) !important;
   border-color: var(--el-color-info-light-7) !important;
 }
 
 /* —— 弹窗 / 抽屉(overlay 浮层,teleport 到 body,需全局覆盖) ————————— */
 .el-overlay {
-  background: rgba(30, 60, 60, 0.28) !important;
+  background: var(--scrim) !important;
 }
 
 .el-dialog {
@@ -301,7 +391,7 @@
 }
 
 .el-drawer {
-  background: #fff !important;
+  background: var(--overlay-bg) !important;
   border-left: 1px solid var(--el-border-color-light) !important;
 }
 
@@ -440,7 +530,7 @@
 }
 
 .el-tabs__item.is-active {
-  color: var(--acc-mint-deep) !important;
+  color: var(--acc-mint-text) !important;
   font-weight: 600 !important;
 }
 
@@ -467,13 +557,21 @@
   color: var(--ink) !important;
 }
 
+/* 激活页码:深薄荷底 + 白字(4.9:1)。
+   不能依赖 --el-color-primary —— dark 主题下它是浅薄荷,配白字只剩约 2:1。 */
+.el-pagination .el-pager li.is-active {
+  background: var(--acc-mint-solid) !important;
+  border-color: transparent !important;
+  color: var(--on-solid) !important;
+}
+
 /* —— 开关(激活色继承主题 primary) ————————— */
 .el-switch__core {
   border-radius: var(--r-pill) !important;
 }
 
 .el-switch.is-checked .el-switch__core {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
   border-color: transparent !important;
 }
 
@@ -500,7 +598,7 @@
    方块四边全可见 = 看起来两个三角形 */
 .el-popper.is-dark .el-popper__arrow::before,
 .el-tooltip__popper .el-popper__arrow::before {
-  background: #fff;
+  background: var(--overlay-bg);
   border-color: var(--el-border-color-light);
 }
 
@@ -553,13 +651,13 @@
 
 /* —— Loading(全屏 / 区域遮罩) ————————— */
 .el-loading-mask {
-  background: rgba(255, 255, 255, 0.45) !important;
+  background: var(--loading-mask) !important;
   backdrop-filter: blur(2px) !important;
   -webkit-backdrop-filter: blur(2px) !important;
 }
 
 .el-loading-spinner .path {
-  stroke: var(--acc-mint-deep) !important;
+  stroke: var(--acc-mint-solid) !important;
 }
 
 .el-loading-spinner .el-loading-text {
@@ -580,12 +678,12 @@
 
 .el-date-table td.available:hover,
 .el-date-table td.today span {
-  color: var(--acc-mint-deep) !important;
+  color: var(--acc-mint-text) !important;
 }
 
 .el-date-table td.current:not(.disabled) span {
-  background: var(--acc-mint-deep) !important;
-  color: white !important;
+  background: var(--acc-mint-solid) !important;
+  color: var(--on-solid) !important;
 }
 
 .el-picker-panel__icon-btn,
@@ -604,13 +702,13 @@
 }
 
 .el-radio__input.is-checked .el-radio__inner {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
   border-color: transparent !important;
 }
 
 .el-checkbox__input.is-checked .el-checkbox__inner,
 .el-checkbox__input.is-indeterminate .el-checkbox__inner {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
   border-color: transparent !important;
 }
 
@@ -628,7 +726,7 @@
 }
 
 .el-progress-bar__inner {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
 }
 
 /* —— Alert ————————— */
@@ -663,8 +761,8 @@
 /* —— Badge ————————— */
 .el-badge__content {
   border: none !important;
-  background: var(--acc-mint-deep) !important;
-  color: white !important;
+  background: var(--acc-mint-solid) !important;
+  color: var(--on-solid) !important;
 }
 
 /* —— Upload ————————— */
@@ -728,7 +826,7 @@
 
 .el-step__title.is-process,
 .el-step__title.is-finish {
-  color: var(--acc-mint-deep) !important;
+  color: var(--acc-mint-text) !important;
 }
 
 .el-step__description {
@@ -737,9 +835,9 @@
 
 .el-step__head.is-process .el-step__icon,
 .el-step__head.is-finish .el-step__icon {
-  background: var(--acc-mint-deep) !important;
+  background: var(--acc-mint-solid) !important;
   border-color: transparent !important;
-  color: white !important;
+  color: var(--on-solid) !important;
 }
 
 .el-step__line {
@@ -763,8 +861,8 @@
   --su-placeholder-text-color: var(--el-text-color-placeholder);
   --su-placeholder-text-size: var(--fs-xs);
   --su-form-control-border-color: var(--el-border-color);
-  --su-text-color-available: var(--acc-mint-deep);
-  --su-text-color-link: var(--acc-mint-deep);
+  --su-text-color-available: var(--acc-mint-text);
+  --su-text-color-link: var(--acc-mint-text);
   --su-radius: var(--r-sm);
   --su-shadow: 0 2px 12px var(--shadow-soft);
   --su-shadow-hover: 0 8px 28px var(--shadow);

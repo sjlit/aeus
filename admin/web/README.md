@@ -80,6 +80,24 @@ window.__AEUS_CONFIG__ = {
 - Vite 会把 `public/` 原样复制到 `dist/`；部署后直接修改 `dist/app-config.js` 并刷新即可，不必重新构建。
 - 生产环境建议给该文件设置 `Cache-Control: no-cache`，否则改完可能被浏览器缓存。
 
+## 主题
+
+顶栏右侧的主题按钮提供三态：**跟随系统 / 浅色 / 深色**。选择持久化到
+localStorage 的 `aeus.theme`，刷新后保持；`跟随系统` 会响应
+`prefers-color-scheme` 变化，显式选择则不受系统变化影响。
+
+实现分层：
+
+- `src/styles/style.scss` 的 `:root` 与 `[data-theme='dark']` 定义语义 token
+  （背景、文字、玻璃、强调色等）；字号/字体/几何/动效两主题共用。
+- `src/styles/glass.scss` 为 Element Plus 提供浅/深两套 token 覆盖
+  （EP 的 `light-N`、`rgb` 等派生值是编译期字面量，必须整套覆盖）。
+- `src/utils/theme.ts` 负责解析与应用，`index.html` 的首帧内联脚本在样式生效前
+  设好 `data-theme` 与 `color-scheme`，避免闪色。
+
+新增样式请只引用语义 token，不要再写死 `rgba(30, 90, 90, …)` / `#fff` 一类字面值，
+否则深色主题会漏改。
+
 ## 关键端点速查
 
 前端实际只依赖后端**五类**端点（按使用频率）：

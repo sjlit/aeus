@@ -105,7 +105,7 @@ const summary = computed(() => {
         <h2 id="trend-title" class="panel-title">登录趋势</h2>
         <p class="panel-sub">近 {{ windowDays }} 天 · 今日 {{ today }} 次</p>
       </div>
-      <span class="trend-delta" :class="{ 'is-down': delta < 0 }">{{ deltaText }}</span>
+      <span class="trend-delta" :class="{ 'is-down': delta < 0, 'is-flat': delta === 0 }">{{ deltaText }}</span>
     </header>
 
     <div v-if="hasData && chart" class="chart-wrap">
@@ -118,8 +118,8 @@ const summary = computed(() => {
       >
         <defs>
           <linearGradient id="dashboard-login-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#2f7d63" stop-opacity="0.18" />
-            <stop offset="100%" stop-color="#2f7d63" stop-opacity="0" />
+            <stop offset="0%" class="chart-fill-stop" stop-opacity="0.18" />
+            <stop offset="100%" class="chart-fill-stop" stop-opacity="0" />
           </linearGradient>
         </defs>
 
@@ -200,6 +200,12 @@ const summary = computed(() => {
   color: var(--el-color-danger);
 }
 
+/* 持平是中性状态,不该显示成"成功"绿 */
+.trend-delta.is-flat {
+  background: var(--el-color-info-light-9);
+  color: var(--el-color-info);
+}
+
 .chart-wrap {
   margin-top: 8px;
 }
@@ -209,6 +215,11 @@ const summary = computed(() => {
   width: 100%;
   height: auto;
   overflow: visible;
+}
+
+/* 面积渐变走主题 token,切深色时自动跟随 */
+.chart-fill-stop {
+  stop-color: var(--chart-fill);
 }
 
 .chart text {
@@ -225,7 +236,7 @@ const summary = computed(() => {
 }
 
 .chart-line {
-  stroke: var(--acc-mint-deep);
+  stroke: var(--acc-mint-text);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -233,7 +244,7 @@ const summary = computed(() => {
 
 .chart-points circle {
   fill: var(--surface);
-  stroke: var(--acc-mint-deep);
+  stroke: var(--acc-mint-text);
   stroke-width: 2;
 }
 
@@ -258,7 +269,7 @@ const summary = computed(() => {
   height: 44px;
   border-radius: 13px;
   background: var(--surface-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: 21px;
 }
 

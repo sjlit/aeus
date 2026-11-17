@@ -141,11 +141,12 @@ async function submit() {
 .brand-mark {
   width: 28px;
   height: 28px;
-  background: linear-gradient(135deg, var(--acc-mint), var(--acc-lilac));
+  /* 与侧栏品牌方块 / .mark-a / 用户头像统一走暖色渐变 */
+  background: var(--grad-warm);
   border-radius: 8px;
   display: grid;
   place-items: center;
-  color: white;
+  color: var(--on-solid);
   font-weight: 700;
   font-size: var(--fs-base);
   box-shadow: 0 4px 12px rgba(108, 197, 168, 0.4);
@@ -183,7 +184,7 @@ h1 {
   border-radius: var(--r-md);
   padding: 4px 14px;
   box-shadow: 0 0 0 1px var(--glass-border) inset;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--glass-soft);
   transition: box-shadow 0.2s ease, background 0.2s ease;
 }
 
@@ -192,7 +193,7 @@ h1 {
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--glass-strong);
   box-shadow: var(--ring), 0 0 0 1px var(--acc-mint) inset;
 }
 
@@ -220,7 +221,7 @@ h1 {
   color: var(--ink-2);
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px dashed rgba(30, 90, 90, 0.15);
+  border-top: 1px dashed var(--dash-line);
   position: relative;
 }
 
