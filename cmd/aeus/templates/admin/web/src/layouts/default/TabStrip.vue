@@ -22,6 +22,21 @@ const contextMenuTab = ref<Tab | null>(null)
 const contextMenuRef = ref<HTMLElement | null>(null)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 let closeContextMenuOnOutsideClick: (() => void) | null = null
+// 键盘打开时记录锚点,关闭后把焦点还回去
+let contextMenuAnchor: HTMLElement | null = null
+let contextMenuRestoreFocus = false
+
+// 读屏播报:标签切换/关闭等操作的结果
+const announcement = ref('')
+let announceSeq = 0
+function announce(message: string) {
+  const seq = ++announceSeq
+  announcement.value = ''
+  nextTick(() => {
+    // 连续操作时只应用最后一条,避免排队的旧回调覆盖新消息、造成重复播报
+    if (seq === announceSeq) announcement.value = message
+  })
+}
 
 // 拖拽状态
 const dragTab = ref<Tab | null>(null)
@@ -65,6 +80,21 @@ function onTabsListKeydown(e: KeyboardEvent) {
             nextTick(() => focusActiveTab())
             return
         }
+        case 'F10':
+            // 只有 Shift+F10 才接管;普通 F10 直接放行,不拦截浏览器默认行为
+            if (e.shiftKey) {
+                e.preventDefault()
+                const current = list[currentIdx]
+                if (current) openContextMenuForKeyboard(current, target)
+            }
+            return
+        case 'ContextMenu':
+            e.preventDefault()
+            {
+                const current = list[currentIdx]
+                if (current) openContextMenuForKeyboard(current, target)
+            }
+            return
         default:
             return
     }
@@ -85,11 +115,13 @@ function onTabsListKeydown(e: KeyboardEvent) {
 function switchTab(tab: Tab) {
     tabsStore.setActiveTab(tab.path)
     router.push({ path: tab.path, query: tab.query })
+    announce(`已切换到 ${tab.title}`)
 }
 
 function closeTab(tab: Tab) {
     if (!tab.closable) return
     tabsStore.removeTab(tab.path)
+    announce(`已关闭 ${tab.title}`)
     if (route.path === tab.path) {
         const newActive = tabsStore.tabs.find(t => t.path === tabsStore.activeTab)
         if (newActive) {
@@ -134,18 +166,33 @@ function closeContextMenu() {
         document.removeEventListener('click', closeContextMenuOnOutsideClick)
         closeContextMenuOnOutsideClick = null
     }
+    // 键盘打开的菜单:关闭后把焦点还给原来的标签。
+    // 必须 nextTick 后再判断 —— "关闭当前/全部"会移除锚点标签,而 DOM 更新是异步的:
+    // 此刻 isConnected 可能仍为 true,直接 focus 会落在一个即将消失的元素上。
+    // 锚点不在了就回退到当前激活标签(此时 store 已更新)。
+    const anchor = contextMenuAnchor
+    if (contextMenuRestoreFocus) {
+        nextTick(() => {
+            if (anchor?.isConnected) anchor.focus()
+            else focusActiveTab()
+        })
+    }
+    contextMenuRestoreFocus = false
+    contextMenuAnchor = null
 }
 
-function openContextMenu(e: MouseEvent, tab: Tab) {
-    e.preventDefault()
+/** 在指定坐标打开菜单;键盘触发时记录锚点以便关闭后归还焦点。 */
+function openContextMenuAt(x: number, y: number, tab: Tab, anchor?: HTMLElement) {
     contextMenuTab.value = tab
     // 估算菜单尺寸,靠近视口右下角时向内收,避免右键菜单被裁掉。
     const menuWidth = 184
     const menuHeight = 260
     contextMenuPosition.value = {
-        x: Math.max(8, Math.min(e.clientX, window.innerWidth - menuWidth - 8)),
-        y: Math.max(8, Math.min(e.clientY, window.innerHeight - menuHeight - 8)),
+        x: Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8)),
+        y: Math.max(8, Math.min(y, window.innerHeight - menuHeight - 8)),
     }
+    contextMenuAnchor = anchor ?? null
+    contextMenuRestoreFocus = Boolean(anchor)
     contextMenuVisible.value = true
     nextTick(() => {
         // 键盘用户从第一个菜单项开始;Esc 可关闭。
@@ -155,12 +202,37 @@ function openContextMenu(e: MouseEvent, tab: Tab) {
     })
 }
 
+function openContextMenu(e: MouseEvent, tab: Tab) {
+    e.preventDefault()
+    openContextMenuAt(e.clientX, e.clientY, tab)
+}
+
+/** Shift+F10 / ContextMenu 键:以标签左下角为锚点打开同一套菜单。 */
+function openContextMenuForKeyboard(tab: Tab, anchor: HTMLElement) {
+    const rect = anchor.getBoundingClientRect()
+    openContextMenuAt(rect.left, rect.bottom, tab, anchor)
+}
+
+/** 菜单内 ↑↓ 循环移动焦点;Esc 由模板上的处理器关闭。 */
+function onContextMenuKeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const items = Array.from(contextMenuRef.value?.querySelectorAll<HTMLElement>('.menu-item') ?? [])
+    if (!items.length) return
+    const current = items.indexOf(document.activeElement as HTMLElement)
+    const next = e.key === 'ArrowDown'
+        ? (current + 1) % items.length
+        : (current - 1 + items.length) % items.length
+    items[next]?.focus()
+}
+
 function onContextMenuAction(action: string) {
     const tab = contextMenuTab.value
     if (!tab) return
     switch (action) {
         case 'refresh':
             tabsStore.refreshTab(tab.path)
+            announce(`已刷新 ${tab.title}`)
             break
         case 'close':
             closeTab(tab)
@@ -170,15 +242,19 @@ function onContextMenuAction(action: string) {
             if (route.path !== tab.path) {
                 router.push({ path: tab.path, query: tab.query })
             }
+            announce('已关闭其他标签页')
             break
         case 'closeLeft':
             tabsStore.removeLeftTabs(tab.path)
+            announce('已关闭左侧标签页')
             break
         case 'closeRight':
             tabsStore.removeRightTabs(tab.path)
+            announce('已关闭右侧标签页')
             break
         case 'closeAll':
             tabsStore.removeAllTabs()
+            announce('已关闭全部标签页')
             const homeTab = tabsStore.tabs[0]
             if (homeTab) {
                 router.push({ path: homeTab.path, query: homeTab.query })
@@ -243,6 +319,7 @@ watch(
 </script>
 
 <template>
+    <span class="sr-only" role="status" aria-live="polite">{{ announcement }}</span>
     <div v-if="isMobile" class="tabs-mobile">
         <el-select :model-value="tabsStore.activeTab" size="small" class="tab-select" @update:model-value="(val: string) => {
             const tab = tabsStore.tabs.find(t => t.path === val)
@@ -298,7 +375,7 @@ watch(
             <div v-if="contextMenuVisible" ref="contextMenuRef" class="context-menu" role="menu" :style="{
                 left: contextMenuPosition.x + 'px',
                 top: contextMenuPosition.y + 'px',
-            }" @keydown.esc.stop.prevent="closeContextMenu">
+            }" @keydown.esc.stop.prevent="closeContextMenu" @keydown="onContextMenuKeydown">
                 <button class="menu-item" role="menuitem" type="button" @click="onContextMenuAction('refresh')">
                     <el-icon>
                         <Refresh />
@@ -343,6 +420,19 @@ watch(
 </template>
 
 <style scoped>
+/* 仅供读屏软件播报,视觉上隐藏但保留在可访问性树中 */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .tabs-row {
     display: flex;
     align-items: center;
@@ -528,7 +618,7 @@ watch(
     -webkit-backdrop-filter: blur(16px) saturate(160%);
     border: 1px solid var(--glass-border);
     border-radius: var(--r-md);
-    box-shadow: 0 12px 40px rgba(60, 40, 90, 0.18);
+    box-shadow: var(--overlay-shadow);
     padding: 4px;
     min-width: 160px;
 }

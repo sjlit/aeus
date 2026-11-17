@@ -94,12 +94,12 @@ const subtitle = computed(() => {
 }
 
 .text-btn:hover {
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
 }
 
 .text-btn--strong {
   margin-top: 8px;
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-weight: 600;
 }
 
@@ -126,7 +126,7 @@ const subtitle = computed(() => {
 }
 
 .quick-item:hover {
-  border-color: rgba(47, 125, 99, 0.24);
+  border-color: var(--accent-border);
   background: var(--menu-active-tint-soft);
 }
 
@@ -143,7 +143,7 @@ const subtitle = computed(() => {
   height: 30px;
   border-radius: 9px;
   background: var(--surface-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: 15px;
 }
 
@@ -214,7 +214,7 @@ const subtitle = computed(() => {
 
 .footer-btn:hover {
   background: var(--menu-active-tint-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
 }
 
 @media (max-width: 480px) {

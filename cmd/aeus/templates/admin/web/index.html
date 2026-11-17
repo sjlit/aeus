@@ -4,28 +4,59 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>__AEUS_NAME__</title>
+  <script>
+    /* 首帧前定主题:读持久化值 + 系统偏好,设 data-theme/color-scheme。
+       与 src/utils/theme.ts 的 key 和解析规则保持一致,避免 FOUC。 */
+    (function () {
+      try {
+        var m = localStorage.getItem('aeus.theme');
+        if (m !== 'light' && m !== 'dark' && m !== 'system') m = 'system';
+        var dark = m === 'dark' || (m === 'system' && window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var root = document.documentElement;
+        root.setAttribute('data-theme', dark ? 'dark' : 'light');
+        root.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) { /* 隐私模式/存储不可用:保持默认浅色 */ }
+    })();
+  </script>
   <style>
     /* Vue 挂载前占位:bootstrap 期间的 loading。
        #app 有内容后会被覆盖,这里无需清理。 */
     html, body { margin: 0; }
+    :root {
+      --boot-bg: #f9fcfb;
+      --boot-glow-1: #e3f3ea;
+      --boot-glow-2: #fde9e0;
+      --boot-ink: #5b7a78;
+      --boot-mark: #6cc5a8;
+      --boot-mark-glow: rgba(108, 197, 168, 0.4);
+    }
+    [data-theme='dark'] {
+      --boot-bg: #0d1719;
+      --boot-glow-1: #12362f;
+      --boot-glow-2: #3a2420;
+      --boot-ink: #93ada7;
+      --boot-mark: #6cc5a8;
+      --boot-mark-glow: rgba(108, 197, 168, 0.22);
+    }
     .boot {
       position: fixed; inset: 0;
       display: grid; place-items: center;
       /* 与 style.scss 的 --bg-base 及极光底色对齐,避免启动瞬间闪另一套色调 */
       background:
-        radial-gradient(at 20% 10%, #e3f3ea 0%, transparent 50%),
-        radial-gradient(at 80% 0%, #fde9e0 0%, transparent 55%),
-        #f9fcfb;
+        radial-gradient(at 20% 10%, var(--boot-glow-1) 0%, transparent 50%),
+        radial-gradient(at 80% 0%, var(--boot-glow-2) 0%, transparent 55%),
+        var(--boot-bg);
       font-family: 'Inter Tight Variable', 'Inter Tight', system-ui, sans-serif;
-      color: #5b7a78;
+      color: var(--boot-ink);
       font-size: 12px;
       letter-spacing: 0.2em;
       text-transform: uppercase;
     }
     .boot::before {
       content: ''; width: 10px; height: 10px;
-      background: #6cc5a8; border-radius: 2px;
-      margin-right: 12px; box-shadow: 0 0 16px #6cc5a866;
+      background: var(--boot-mark); border-radius: 2px;
+      margin-right: 12px; box-shadow: 0 0 16px var(--boot-mark-glow);
       animation: boot-pulse 1.2s ease-in-out infinite;
     }
     /* 名字不能叫 pulse:keyframes 是全局的,会覆盖组件里同名动画。 */

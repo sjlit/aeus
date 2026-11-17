@@ -8,6 +8,8 @@ import App from './App.vue'
 import { router, ensureMenuRoutes, goToLogin } from './router'
 import { bindHttpContext, http } from './api/http'
 import { useAuthStore } from './stores/auth'
+import { useUiStore } from './stores/ui'
+import { onSystemThemeChange } from './utils/theme'
 import { setTabsRouter } from './stores/tabs'
 import { SchemaUIPlugin, SchemaUIConfig } from '@sjlit/rest-ui'
 import '@sjlit/rest-ui/dist/style.css'
@@ -39,6 +41,14 @@ app.use(SchemaUIPlugin, <SchemaUIConfig>{
 })
 
 const auth = useAuthStore()
+const ui = useUiStore()
+// 首帧已由 index.html 内联脚本设好 data-theme;这里同步一次并注册系统偏好监听。
+// 仅"跟随系统"模式下响应系统变化,用户显式选择 light/dark 时不受影响。
+ui.initTheme()
+onSystemThemeChange(() => {
+  if (ui.theme === 'system') ui.initTheme()
+})
+
 // 多标签的 cachedViews 依赖 router.getRoutes(),必须在首航前注入
 // (依赖注入模式,避免 store → router 的循环依赖)
 setTabsRouter(router)

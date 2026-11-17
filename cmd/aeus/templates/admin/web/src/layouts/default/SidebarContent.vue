@@ -91,12 +91,16 @@ watch(defaultOpeneds, async (openeds) => {
                         </el-menu-item>
                     </el-sub-menu>
                     <template v-else-if="isSectionContainer(node)">
+                        <!-- 折叠态的 title 插槽:EP 只对 ElMenu 直接子项生成 tooltip
+                             (parentMenu.type.name === 'ElMenu'),所以这里和下方叶子项需要,
+                             而 el-sub-menu 内的子项不需要。展开态不能提供,否则名称重复渲染。 -->
                         <el-menu-item v-for="child in node.children!" :key="child.uri || child.view_path || child.name"
                             :index="child.uri">
                             <el-icon v-if="resolveIcon(child.icon)">
                                 <component :is="resolveIcon(child.icon)" />
                             </el-icon>
                             <span>{{ child.name }}</span>
+                            <template v-if="ui.sidebarCollapsed" #title>{{ child.name }}</template>
                         </el-menu-item>
                     </template>
                     <el-sub-menu v-else-if="node.children && node.children.length" :index="subIndex(node)"
@@ -119,6 +123,7 @@ watch(defaultOpeneds, async (openeds) => {
                             <component :is="resolveIcon(node.icon)" />
                         </el-icon>
                         <span>{{ node.name }}</span>
+                        <template v-if="ui.sidebarCollapsed" #title>{{ node.name }}</template>
                     </el-menu-item>
                 </template>
             </el-menu>

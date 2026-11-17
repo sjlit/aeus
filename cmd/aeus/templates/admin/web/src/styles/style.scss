@@ -3,6 +3,7 @@
 // 共用色系 · 4 个布局都引用此
 // =========================================================
 :root {
+  color-scheme: light;
   // 背景色系对齐参考项目(旧 dashboard 的 aurora 默认主题):
   // 三层 radial 拼色取调淡版,底色提亮
   --bg-1: #e3f3ea;
@@ -24,15 +25,14 @@
   --glass-strong: rgba(255, 255, 255, 0.85);
   --glass-soft: rgba(255, 255, 255, 0.5);
   --glass-border: rgba(255, 255, 255, 0.75);
+  /* EP el-menu 激活项玻璃底(浅色沿用原 0.7,不跟随 --glass-strong 的 0.85) */
+  --menu-active-glass: rgba(255, 255, 255, 0.7);
   --shadow: rgba(30, 90, 90, 0.16);
   --shadow-soft: rgba(30, 90, 90, 0.08);
   --acc-mint: #6cc5a8;
   --acc-lilac: #9b85c4;
   --acc-peach: #f4a484;
-  /* 深一档的 mint:链接/悬浮态用,替代散落的 #2f7d63 / #245f4c */
-  --acc-mint-deep: #2f7d63;
-  --acc-mint-deeper: #245f4c;
-  /* 暖色渐变:品牌方块(.brand::before)/ hero em / .mark-a 共用 */
+  /* 暖色渐变:品牌方块(.brand::before)/ hero em / .mark-a / 头像共用 */
   --grad-warm: linear-gradient(135deg, var(--acc-peach), var(--acc-lilac));
   /* 扩展色板:aura 光晕变体与 .dot-attention 状态点用,
      取值与 motion.scss 里同色系的 rgba 光晕对齐 */
@@ -48,6 +48,40 @@
   /* 聚焦/悬浮光环:acc-mint 的 15%/20% 透明版本 */
   --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.15);
   --ring: 0 0 0 3px rgba(108, 197, 168, 0.2);
+
+  /* ---- 角色拆分:同一个薄荷色在"实心背景"与"文字"上需要不同的暗色取值 ----
+     浅色下这几者相等;dark 块里 --acc-mint-text 换成浅薄荷,
+     保证暗底上的链接/激活文字达到 AA。实心按钮继续用深薄荷 + 白字。 */
+  --acc-mint-text: #2f7d63;        /* 文字 / 链接 / 激活态 */
+  --acc-mint-solid: #2f7d63;       /* 实心按钮 / 开关 / 进度条 / 徽标 */
+  --acc-mint-solid-hover: #245f4c; /* 实心按钮 hover */
+  --on-solid: #ffffff;             /* 实心背景上的前景 */
+
+  /* ---- 散落字面值的归口:dark 块统一覆盖,组件不再写死 rgba ---- */
+  --dot-color: rgba(255, 255, 255, 0.5);    /* body::after / .dots 点阵 */
+  --dot-dark-color: rgba(30, 90, 90, 0.4);  /* .dots--dark(深色玻璃上) */
+  --glow-brand: rgba(244, 164, 132, 0.35);  /* 品牌方块投影 */
+  --glow-mint: rgba(108, 197, 168, 0.4);    /* .mark-a / 激活 tab 投影 */
+  --scrim: rgba(30, 60, 60, 0.28);          /* 遮罩 overlay */
+  --dash-line: rgba(30, 90, 90, 0.15);      /* 虚线分隔 */
+  --chart-fill: #2f7d63;                    /* 趋势图面积渐变 */
+  --loading-mask: rgba(255, 255, 255, 0.45);
+  --accent-border: rgba(47, 125, 99, 0.24); /* 薄荷描边(hover 卡片) */
+  --warning-tint: rgba(212, 160, 74, 0.08); /* 警示提示底 */
+  /* 禁用态实心按钮:明显"灰掉"的底+字,避免浅薄荷底配白字看不清 */
+  --disabled-solid-bg: #e3eae8;
+  --disabled-solid-text: #7d968f;
+
+  /* Tag 文字色:EP 的 light-N 只给底色,字色需自带(浅底深字) */
+  --tag-primary-text: #245f4c;
+  --tag-success-text: #375c2f;
+  --tag-warning-text: #7a4d0f;
+  --tag-danger-text: #9e2f24;
+  --tag-info-text: #3f5f7f;
+
+  /* 浮层面:dialog / message / popper / messagebox */
+  --overlay-bg: #ffffff;
+  --overlay-shadow: 0 24px 64px rgba(30, 60, 60, 0.28);
   /* 字体由 @fontsource-variable 自托管(main.ts 引入),族名带 "Variable" 后缀。
      西文走自托管字体,中文回退到系统中文字体(苹方/雅黑/思源)。
      mono 也补上 CJK 回退:当前 mono 只用于 Latin,但避免以后中文误落进
@@ -76,6 +110,73 @@
   --r-md: 16px;
   --r-sm: 12px;
   --r-pill: 100px;
+}
+
+/* =========================================================
+   dark · 深色主题
+   只覆盖颜色类 token;字号/字体/几何/动效随 :root 继承。
+   system 偏好由 index.html 的内联脚本在首帧前决定 data-theme。
+   ========================================================= */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* 三层极光底色:深松绿主调,极光球靠低透明度发光 */
+  --bg-base: #0d1719;
+  --bg-1: #12362f;
+  --bg-2: #2a2340;
+  --bg-3: #3a2420;
+
+  --ink: #e8f3f0;
+  --ink-2: #bfd6d0;
+  --ink-3: #93ada7;
+  --sidebar-ink: #bcd4ce;
+
+  /* 内容面比背景略亮,保持"纸面"层级 */
+  --surface: #142426;
+  --surface-soft: #1b3032;
+  --line: rgba(184, 228, 216, 0.14);
+  --line-soft: rgba(184, 228, 216, 0.08);
+
+  /* 暗色玻璃:深底半透明 + 浅青绿描边,避免白玻璃在暗底上发惨白 */
+  --glass: rgba(20, 38, 40, 0.72);
+  --glass-strong: rgba(18, 34, 36, 0.88);
+  --glass-soft: rgba(184, 228, 216, 0.07);
+  --glass-border: rgba(184, 228, 216, 0.14);
+  --menu-active-glass: rgba(18, 34, 36, 0.88);
+
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-soft: rgba(0, 0, 0, 0.28);
+
+  /* 浅薄荷文字:暗底约 6.5:1;实心按钮仍用深薄荷 + 白字 */
+  --acc-mint-text: #7fd8b7;
+  --menu-active-1: #6cc5a8;
+  --menu-active-tint: rgba(108, 197, 168, 0.18);
+  --menu-active-tint-soft: rgba(108, 197, 168, 0.1);
+  --ring-soft: 0 0 0 3px rgba(108, 197, 168, 0.22);
+  --ring: 0 0 0 3px rgba(108, 197, 168, 0.3);
+
+  --dot-color: rgba(184, 228, 216, 0.35);
+  --dot-dark-color: rgba(184, 228, 216, 0.22);
+  --glow-brand: rgba(244, 164, 132, 0.22);
+  --glow-mint: rgba(108, 197, 168, 0.22);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --dash-line: rgba(184, 228, 216, 0.16);
+  --chart-fill: #4bb895;
+  --loading-mask: rgba(13, 23, 25, 0.55);
+  --accent-border: rgba(108, 197, 168, 0.28);
+  --warning-tint: rgba(216, 173, 104, 0.14);
+  --disabled-solid-bg: #223336;
+  --disabled-solid-text: #6d8880;
+
+  /* Tag:深底 + 亮字 */
+  --tag-primary-text: #7fd8b7;
+  --tag-success-text: #86c97a;
+  --tag-warning-text: #d8ad68;
+  --tag-danger-text: #e8948a;
+  --tag-info-text: #91b7d8;
+
+  --overlay-bg: #162628;
+  --overlay-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -127,7 +228,7 @@ body::after {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
   opacity: 0.18;

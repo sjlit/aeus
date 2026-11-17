@@ -72,8 +72,8 @@ const tagProps = computed(() => (props.to ? { to: props.to } : {}))
 }
 
 .stat-card--link:hover {
-  border-color: rgba(47, 125, 99, 0.28);
-  box-shadow: 0 14px 34px rgba(30, 90, 90, 0.12);
+  border-color: var(--accent-border);
+  box-shadow: 0 14px 34px var(--shadow-soft);
   transform: translateY(-1px);
 }
 
@@ -102,7 +102,7 @@ const tagProps = computed(() => (props.to ? { to: props.to } : {}))
   height: 32px;
   border-radius: 10px;
   background: var(--menu-active-tint-soft);
-  color: var(--acc-mint-deep);
+  color: var(--acc-mint-text);
   font-size: var(--fs-md);
 }
 
