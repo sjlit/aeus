@@ -21,23 +21,25 @@ httpSrv.Use(mwauth.JWT(
 
 | 顺序 | 中间件 | 作用 |
 |---|---|---|
-| 1 | `JWT(...)` | 解析 token,把 claims 写入 ctx |
-| 2 | `WithPermissionChecker(...)` | 在 claims 入 ctx **之前**执行(见下) |
+| 1 | `JWT(...)` | 解析 token;验证通过后先把 claims 写入 ctx |
+| 2 | `WithPermissionChecker(...)` | 在 claims 已入 ctx 之后执行(见下) |
 
 ## 9.2 执行时机
 
-`NewPermissionChecker` 的签名是 `PermissionCheckerFunc = func(ctx, claims jwt.Claims) error`——它**接收解析出的 claims 作为参数**,不依赖 `auth.ClaimsFromContext`。
+`NewPermissionChecker` 的签名是 `PermissionCheckerFunc = func(ctx, claims jwt.Claims) error`——它接收解析出的 claims 作为参数,同时也**可以**通过 `auth.ClaimsFromContext(ctx)` 读取。
 
-执行发生在 token 验证通过之后、`auth.ClaimsFromContext` 可用之前。代码顺序在 `middleware/auth/jwt.go` 中是固定的:
+执行发生在 token 验证通过之后、claims 已写入 ctx 之后、handler 之前。代码顺序在 `middleware/auth/jwt.go` 中是固定的:
 
 ```
 1. ParseWithClaims + signature verify
-2. Run PermissionChecker(ctx, claims)   ← admin.NewPermissionChecker 在这里跑
-3. 把 claims 写入 ctx
+2. 把 claims 写入 ctx
+3. Run PermissionChecker(ctx, claims)   ← admin.NewPermissionChecker 在这里跑
 4. next.ServeHTTP(ctx)
 ```
 
-业务 RPC handler 与 GORM 租户回调都从 ctx 读 claims,此时它们已经可用。
+因此 checker 内部通过 ctx 做租户作用域查询时,GORM 租户回调可以正常读取 claims;业务 RPC handler 同样直接可用。
+
+> 自定义 checker 建议优先使用第二个参数 `claims`;如果使用 ctx,`auth.ClaimsFromContext` 同样可用。两种方式都拿不到租户时请 fail-closed,不要 `return nil`。
 
 ## 9.3 请求标识
 

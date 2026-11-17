@@ -131,3 +131,64 @@ func TestLogin_AllowsMissingTenantTable(t *testing.T) {
 		t.Errorf("TenantName = %q, want fallback to tenant id t1", res.TenantName)
 	}
 }
+
+// TestLogin_RejectsSoftDeletedTenant: REST deletes are soft deletes, so
+// the row (and its users) still exists. A deleted tenant must not keep
+// authenticating its users.
+func TestLogin_RejectsSoftDeletedTenant(t *testing.T) {
+	db := newLoginDB(t)
+	if err := db.Create(&models.Tenant{ID: "t1", Name: "已删租户", Status: "enabled"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Delete(&models.Tenant{ID: "t1"}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := loginAsAdmin(t, db).Login(context.Background(),
+		&pb.LoginRequest{Username: "admin", Password: "admin123"})
+	wantPkError(t, err, errs.CodePermissionDenied)
+}
+
+// TestRefreshToken_RejectsDisabledTenant: disabling a tenant must stop
+// existing refresh tokens from minting new access tokens, not just new
+// logins.
+func TestRefreshToken_RejectsDisabledTenant(t *testing.T) {
+	db := newLoginDB(t)
+	if err := db.Create(&models.Tenant{ID: "t1", Name: "停用租户", Status: "enabled"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := loginAsAdmin(t, db)
+	login, err := svc.Login(context.Background(),
+		&pb.LoginRequest{Username: "admin", Password: "admin123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&models.Tenant{}).Where("id = ?", "t1").
+		Update("status", "disabled").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.RefreshToken(context.Background(), &pb.RefreshTokenRequest{RefreshToken: login.RefreshToken})
+	wantPkError(t, err, errs.CodePermissionDenied)
+}
+
+// TestRefreshToken_RejectsSoftDeletedTenant mirrors the login gate for
+// refresh tokens after a tenant is deleted through the REST API.
+func TestRefreshToken_RejectsSoftDeletedTenant(t *testing.T) {
+	db := newLoginDB(t)
+	if err := db.Create(&models.Tenant{ID: "t1", Name: "已删租户", Status: "enabled"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	svc := loginAsAdmin(t, db)
+	login, err := svc.Login(context.Background(),
+		&pb.LoginRequest{Username: "admin", Password: "admin123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Delete(&models.Tenant{ID: "t1"}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = svc.RefreshToken(context.Background(), &pb.RefreshTokenRequest{RefreshToken: login.RefreshToken})
+	wantPkError(t, err, errs.CodePermissionDenied)
+}

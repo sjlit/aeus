@@ -87,3 +87,5 @@ httpSrv.Use(mw.JWT(
     mw.WithAllow("/auth/login", "/auth/refresh-token"),
 ))
 ```
+
+自定义 `WithPermissionChecker` 在 token 验证通过后执行，此时 claims **已经写入 ctx**，可通过 `auth.FromContext(ctx)` 读取；checker 的第二个参数也携带同一份 claims。返回错误会中止请求，`next` 不会执行。

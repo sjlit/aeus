@@ -30,6 +30,11 @@ const (
 
 type Option func(*options)
 
+// PermissionCheckerFunc authorizes an authenticated request after token
+// verification. The verified claims are already stored in ctx (readable
+// through FromContext), so tenant-scoped DB reads inside the checker are
+// scoped to the caller automatically. The claims argument mirrors the
+// same value for callers that prefer an explicit parameter.
 type PermissionCheckerFunc func(ctx context.Context, claims jwt.Claims) (err error)
 
 type Validate interface {
@@ -73,6 +78,10 @@ func WithClaims(claims any) Option {
 	}
 }
 
+// WithPermissionChecker installs an authorization hook that runs after
+// token verification. Claims are already available in ctx when it runs;
+// the same claims are also passed as the second argument. Returning an
+// error aborts the request before next is invoked.
 func WithPermissionChecker(fn PermissionCheckerFunc) Option {
 	return func(o *options) {
 		o.permissionChecker = fn
@@ -175,12 +184,17 @@ func JWT(keyFunc jwt.Keyfunc, cbs ...Option) middleware.Middleware {
 			if !ti.Valid {
 				return errs.ErrPermissionDenied
 			}
+			// Store claims before authorization checks: permission
+			// checkers (and any tenant-scoped DB reads they perform)
+			// must see the authenticated identity. The claims argument
+			// is still passed for callers that prefer an explicit
+			// parameter.
+			ctx = NewContext(ctx, ti.Claims)
 			if opts.permissionChecker != nil {
 				if err = opts.permissionChecker(ctx, ti.Claims); err != nil {
 					return err
 				}
 			}
-			ctx = NewContext(ctx, ti.Claims)
 			return next(ctx)
 		}
 	}

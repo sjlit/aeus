@@ -7,8 +7,10 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sjlit/aeus/admin/auth"
+	"github.com/sjlit/aeus/admin/middleware"
 	"github.com/sjlit/aeus/admin/models"
 	"github.com/sjlit/aeus/metadata"
+	mwauth "github.com/sjlit/aeus/middleware/auth"
 	"github.com/sjlit/aeus/pkg/errs"
 	"gorm.io/gorm"
 )
@@ -260,6 +262,32 @@ func TestPermissionChecker_CrossTenantIsolation(t *testing.T) {
 
 	checker := NewPermissionChecker(db)
 	err := checker(permCtx("http", "PUT", "/system/sys_user/:id"), &auth.Claims{Role: "admin", TenantID: "t2"})
+	if !errs.IsCode(err, errs.CodePermissionDenied) {
+		t.Fatalf("t2 leaked t1's grant: want code %d, got %v", errs.CodePermissionDenied, err)
+	}
+}
+
+// TestPermissionChecker_WithFailClosedTenantScope covers the production
+// wiring: Setup installs the tenant callbacks, the JWT middleware stores
+// claims in ctx BEFORE invoking the checker, and the grant query reads a
+// tenant-scoped model (sys_role_permissions). Both the callback and the
+// explicit tenant_id predicate must keep tenants isolated.
+func TestPermissionChecker_WithFailClosedTenantScope(t *testing.T) {
+	db := newTestDB(t)
+	installTenantScope(db, middleware.FromClaimsResolver)
+	// Seed through a bypass handle: the fixture rows belong to t1, but
+	// seeding runs without a request context.
+	seedPermCatalog(t, bypassDB(db), "t1", "admin")
+
+	checker := NewPermissionChecker(db)
+	t1 := &auth.Claims{Role: "admin", TenantID: "t1"}
+	if err := checker(mwauth.NewContext(permCtx("http", "PUT", "/system/sys_user/:id"), t1), t1); err != nil {
+		t.Fatalf("granted role denied with tenant scope installed: %v", err)
+	}
+
+	// The explicit tenant filter must still isolate tenants.
+	t2 := &auth.Claims{Role: "admin", TenantID: "t2"}
+	err := checker(mwauth.NewContext(permCtx("http", "PUT", "/system/sys_user/:id"), t2), t2)
 	if !errs.IsCode(err, errs.CodePermissionDenied) {
 		t.Fatalf("t2 leaked t1's grant: want code %d, got %v", errs.CodePermissionDenied, err)
 	}

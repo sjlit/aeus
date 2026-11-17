@@ -6,7 +6,7 @@
 mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 ```
 
-**执行时机**：checker 在 JWT 中间件 **token 验证通过之后、claims 写入 ctx 之前**运行（`middleware/auth/jwt.go`）——它以参数形式接收解析出的 claims，**不能**依赖 `auth.ClaimsFromContext`；后续 handler 与 GORM 租户回调才从 ctx 读 claims。
+**执行时机**：checker 在 JWT 中间件 **token 验证通过之后、claims 写入 ctx 之后**运行（`middleware/auth/jwt.go`）——它以参数形式接收解析出的 claims，也可以直接通过 `auth.ClaimsFromContext(ctx)` 读取；handler 与 GORM 租户回调同样从 ctx 读 claims，此时都已可用。
 
 **请求标识**：`metadata.RequestMethod + " " + metadata.RequestRoute`。transport/http 写入的 `RequestRoute` 是 gin 的 **FullPath 路由模板**（如 `PUT /system/sys_user/:id`），与 `permissionCode` 生成 `sys_permissions.data` 的 `"<METHOD> <URI>"` 格式同构，二者精确匹配。仅有 `RequestPath`、没有 `RequestRoute` 的嵌入方会回退到 `RequestPath`；NoRoute/静态请求的 `RequestRoute` 为空，checker 直接放行。
 
@@ -26,7 +26,7 @@ mwauth.WithPermissionChecker(admin.NewPermissionChecker(db)),
 - **目标级守卫**：通用 REST 的角色变更、super 角色/用户的 status 更新和删除都要求调用者自身是 super；仅靠路由级 `sys_permissions` 不够，否则拥有用户管理权限的非 super 角色可以禁用/删除超管；
 - **`WithCheckerAllowlist` 是 bypass**：命中即跳过目录与角色校验。它不会让检查更严格；新增 bypass 必须能说明“该路由由其他机制保护或本就公开”；
 - **基础设施路由**：NoRoute/静态文件（`RequestRoute` 为空）、`/health`、`/ready`、`/metrics`、`/mcp`、`*/openapi.json` 不属于业务 API，checker 直接放行，仍由 JWT 负责认证；否则 fail-closed 会把静态资源/404 误报成 403；JWT 的 `WithAllow("/assets/*")` 等需要放行静态资源本身；
-- **租户隔离显式化**：授权查询显式过滤 `tenant_id`——checker 运行时 claims 尚未进入 ctx，GORM 租户回调不会自动过滤，不显式传会导致跨租户串权；
+- **租户隔离显式化**：授权查询显式过滤 `tenant_id`。checker 运行时 claims 已在 ctx 中，GORM 租户回调也会自动补上作用域；显式条件保证即使回调未安装（单租户模式或直接调用 checker）也不会跨租户串权；
 - **接线保护**：claims 不是 `*auth.Claims` 时直接拒绝（`4005 AccessDenied`），把中间件接线错误暴露在请求上而不是静默放行；
 - **边界**：`type=button` / `type=data_scope` 的权限不参与接口鉴权；`/auth/*` 在 `WithAllow` 列表上直接短路，不进 checker（`/auth/logout` 也应加入该列表，见下方会话说明）；
 - **超管授权窗口**：角色授权由 `admin.Seed` 每次启动补齐（以调用时刻的全局目录为准），新模型注册后需先 `Setup` 后 `Seed`，见[P0 一键集成](../../README.md#p0-一键集成搭配-dashboardweb)的时序约定。

@@ -181,12 +181,13 @@ func NewAuthService(opts ...AuthServiceOption) *AuthService {
 }
 
 // resolveTenant returns the display name and status of the given
-// tenant in a single sys_tenants read, shared by Login's status gate
-// and the LoginResponse display fields. Backward-compatible fallbacks:
-// a missing table (database predating the tenant model) or a missing
-// row (legacy orphan tenant ids) yields the tenant id as name and an
-// empty status, which Login treats as enabled — pre-existing databases
-// keep logging in.
+// tenant in a single sys_tenants read, shared by Login's status gate,
+// LoginResponse's display fields, and RefreshToken's re-check.
+// Backward-compatible fallbacks: a missing table (database predating
+// the tenant model) or a missing row (legacy orphan tenant ids) yields
+// the tenant id as name and an empty status, which Login treats as
+// enabled — pre-existing databases keep logging in. A soft-deleted
+// tenant reports "disabled" because its row and users still exist.
 func (s *AuthService) resolveTenant(ctx context.Context, tenantID string) (name, status string) {
 	if tenantID == "" || s.opts.DB == nil {
 		return tenantID, ""
@@ -196,14 +197,22 @@ func (s *AuthService) resolveTenant(ctx context.Context, tenantID string) (name,
 		return tenantID, ""
 	}
 	var row struct {
-		Name   string
-		Status string
+		Name    string
+		Status  string
+		Deleted bool
 	}
+	// Table() skips GORM's soft-delete scope, so deleted_at is selected
+	// explicitly: a soft-deleted tenant must read as disabled even though
+	// the row (and its users) still physically exist. Missing rows keep
+	// the legacy "enabled" fallback for pre-tenant databases.
 	if err := db.Table("sys_tenants").
-		Select("name", "status").
+		Select("name", "status", "deleted_at IS NOT NULL AS deleted").
 		Where("id = ?", tenantID).
 		Scan(&row).Error; err != nil || row.Name == "" {
 		return tenantID, ""
+	}
+	if row.Deleted {
+		return row.Name, "disabled"
 	}
 	return row.Name, row.Status
 }
@@ -376,6 +385,10 @@ func (s *AuthService) recordLogin(ctx context.Context, req *pb.LoginRequest,
 // RefreshToken exchanges a valid refresh token for a fresh access
 // token.
 func (s *AuthService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest) (*pb.RefreshTokenResponse, error) {
+	// Refresh-token runs on the JWT allowlist, before any claims are in
+	// ctx. Both status lookups below filter tenant_id explicitly, so
+	// bypass the fail-closed tenant callbacks (same rationale as Login).
+	ctx = adminmw.WithoutTenant(ctx)
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -392,10 +405,11 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 		// claim existed) is not a valid refresh token.
 		return nil, errs.ErrAccessDenied
 	}
-	// Re-check user and role status on every refresh so a disabled
-	// account stops minting access tokens, not just stops logging in.
-	// /auth/refresh-token sits on the JWT allowlist — no claims in ctx,
-	// so both lookups filter tenant_id explicitly.
+	// Re-check user, role and tenant status on every refresh so a
+	// disabled account/role/tenant stops minting access tokens, not just
+	// stops logging in. /auth/refresh-token sits on the JWT allowlist —
+	// no claims in ctx, so the user/role lookups filter tenant_id
+	// explicitly.
 	var user models.User
 	if err := s.opts.DB.WithContext(ctx).
 		Where("uid = ? AND tenant_id = ?", refreshClaims.UID, refreshClaims.TenantID).
@@ -419,6 +433,12 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequ
 	}
 	if role.Status == "disabled" {
 		return nil, ErrRoleDisabled
+	}
+	// A disabled or deleted tenant must stop token rotation too, not just
+	// new logins; otherwise a refresh token keeps minting access tokens
+	// until its 48h lifetime ends.
+	if _, tenantStatus := s.resolveTenant(ctx, user.TenantID); tenantStatus == "disabled" {
+		return nil, errs.Newf(errs.CodePermissionDenied, "tenant is disabled")
 	}
 	// Rotate: atomically claim the old jti BEFORE minting anything —
 	// RevokeIfNotRevoked serializes concurrent refreshes of the same

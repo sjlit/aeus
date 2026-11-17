@@ -49,9 +49,9 @@ const grantsMarker = "SUM(id)"
 //	    mw.WithAllow("/auth/login", "/auth/refresh-token"),
 //	)
 //
-// The checker runs after token verification but BEFORE claims are
-// stored in ctx (see middleware/auth.JWT), so it takes the parsed
-// claims as an argument and must NOT rely on auth.ClaimsFromContext.
+// The checker runs after token verification; claims are already stored
+// in ctx (see middleware/auth.JWT), and the parsed claims are also
+// passed as an argument. Either source is safe to use.
 //
 // # Matching
 //
@@ -97,9 +97,11 @@ const grantsMarker = "SUM(id)"
 //
 // # Isolation
 //
-// The grant loader filters tenant_id explicitly: the GORM tenant
-// callbacks cannot backfill a scope here because claims are not yet in
-// ctx when the checker runs.
+// The grant loader filters tenant_id explicitly. Claims are in ctx by
+// the time the checker runs, so the GORM tenant callback also scopes
+// the query; the explicit predicate keeps the authorization decision
+// correct even when the callback is not installed (single-tenant mode
+// or direct callers).
 func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionCheckerFunc {
 	if db == nil {
 		panic("admin: NewPermissionChecker requires a non-nil *gorm.DB")
@@ -218,7 +220,10 @@ func NewPermissionChecker(db *gorm.DB, opts ...CheckerOption) mwauth.PermissionC
 		}
 
 		// Catalogued: the role must hold the matching grant on the
-		// caller's tenant.
+		// caller's tenant. The explicit tenant_id predicate makes the
+		// decision independent of the GORM callback wiring; with claims
+		// already in ctx the callback adds the same scope as a second
+		// layer.
 		grantKey := "perm:grant:" + ac.TenantID + ":" + ac.Role
 		grantSet, err := dbcache.Try(grants, ctx, grantKey, func(tx *gorm.DB) (map[string]struct{}, error) {
 			var datas []string

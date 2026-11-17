@@ -35,7 +35,9 @@ jwtMW := auth.JWT(keyFunc,
     auth.WithAllow("/auth/login", "/auth/refresh-token"), // 精确/"*"/"<prefix>*"
     auth.WithClaims(MyClaims{}),
     auth.WithPermissionChecker(func(ctx context.Context, c jwt.Claims) error {
-        // 业务权限校验
+        // 业务权限校验。此时 claims 已写入 ctx：
+        //   c, ok := auth.FromContext(ctx)
+        // 查询租户表时可直接依赖 GORM 租户回调，或显式用 claims 过滤。
         return nil
     }),
 )
